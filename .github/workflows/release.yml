@@ -1,0 +1,82 @@
+# Release PROD (contrats infra C1-C9) : tag vX.Y.Z -> verification de version, CI_CMD, paquet .deb, GitHub Release.
+# Ne deploie jamais (C8) : l'installation sur le Pi de prod reste /deploy prod.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  checking:
+    name: Verify version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version from tag (C2 — the tag is the source of truth)
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Tag $GITHUB_REF_NAME is not SemVer vX.Y.Z"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: pyproject.toml version must equal the tag (never modified here)
+        run: |
+          FILE_VERSION=$(grep -E '^version *= *"' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "pyproject.toml: $FILE_VERSION — tag: ${{ steps.version.outputs.VERSION }}"
+          [ "$FILE_VERSION" = "${{ steps.version.outputs.VERSION }}" ] || { echo "Version mismatch"; exit 1; }
+
+  build:
+    name: CI + package .deb
+    runs-on: ubuntu-latest
+    needs: checking
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: CI_CMD (C3/C11 — same script as the branch CI)
+        run: scripts/ci.sh
+      - name: Build Debian package (C4)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq dpkg-dev
+          scripts/build-deb.sh "${{ needs.checking.outputs.version }}"
+          mkdir -p release
+          cp dist/btmux_${{ needs.checking.outputs.version }}_all.deb "release/btmux-${{ needs.checking.outputs.version }}.deb"
+          cp dist/btmux-${{ needs.checking.outputs.version }}-py3-none-any.whl "release/btmux-${{ needs.checking.outputs.version }}.whl"
+          (cd release && sha256sum * > "btmux-${{ needs.checking.outputs.version }}.sha256")
+          ls -l release/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release/
+          retention-days: 1
+
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [checking, build]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: release
+      - name: Release notes from CHANGELOG.md (C5)
+        run: |
+          VERSION="${{ needs.checking.outputs.version }}"
+          NOTES=$(awk "/^## \\[$VERSION\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md 2>/dev/null || true)
+          [ -n "$NOTES" ] || NOTES="Release v$VERSION"
+          printf '%s\n' "$NOTES" > release_notes.md
+          cat release_notes.md
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Blue-Multiplex v${{ needs.checking.outputs.version }}
+          body_path: release_notes.md
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,95 @@
+{
+  "name": "Blue-Multiplex",
+  "team_name": "blue-multiplex-team",
+  "org": "CCoupel",
+  "project": "Blue-Multiplex",
+  "description": "Multiplexeur Bluetooth audio sur Raspberry Pi (btmux) : les PC et telephones voient le Pi comme un casque (A2DP sink + HFP HF), les casques le voient comme une source (A2DP source + HFP AG) ; bascule de source purement logicielle via PipeWire, flux bidirectionnel (micro), aucun logiciel cote sources.",
+  "version": "0.1.0",
+  "initialized_at": "2026-10-13T10:30:00+02:00",
+  "initialized_from": "workshop",
+  "template_version": { "tag": "v3.18.6", "commit": "7df2831148b4d548102c372184a52691b0f26098" },
+  "src_dir": "src",
+  "version_file": "pyproject.toml",
+  "stack": {
+    "backend": { "language": "python", "framework": "asyncio", "runtime": ">=3.12", "notes": "dbus-fast (BlueZ), PipeWire via pw-dump/pw-link/pw-metadata ou script Lua WirePlumber (choix phase 0), API HTTP FastAPI ou aiohttp, CLI btmuxctl" },
+    "frontend": { "language": "javascript", "framework": null, "notes": "Web UI minimale, HTML/CSS/JS vanilla servie par l'API — prevue plus tard, pas en v1" },
+    "mobile": null,
+    "firmware": null,
+    "plugin": null,
+    "database": { "primary": null, "orm": null, "notes": "Configuration YAML /etc/btmux/config.yaml, aucune base de donnees" },
+    "target": { "hardware": "Raspberry Pi 4/5, 2 dongles USB BT 5.x (RTL8761B)", "os": "Raspberry Pi OS / Debian Trixie 64 bits", "system": "BlueZ, PipeWire >= 1.2, WirePlumber 0.5, systemd" }
+  },
+  "infrastructure": {
+    "cicd": "github-actions",
+    "environments": [
+      {
+        "name": "QUALIF",
+        "order": 1,
+        "publish": { "mode": "promote", "target": "build/qualif_v{X.Y.Z}/" },
+        "deploy":  { "mechanism": "vps", "target": "pi@btmux-qualif.local:/opt/btmux", "notes": "Pi de qualification — scripts/deploy.sh : scp de la wheel, uv pip install, unites systemd, restart" }
+      },
+      {
+        "name": "PROD",
+        "order": 2,
+        "publish": { "mode": "rebuild-ci", "trigger": "git-tag", "pipeline": ".github/workflows/release.yml", "artifact": "paquet .deb (btmux_X.Y.Z_all.deb) attache a la GitHub Release" },
+        "deploy":  { "mechanism": "vps", "target": "pi@btmux.local:/opt/btmux", "notes": "Pi de production — telechargement du .deb de la release, scp, dpkg -i, restart" }
+      }
+    ]
+  },
+  "testing": {
+    "backend": ["pytest"],
+    "frontend": [],
+    "e2e": [],
+    "components": {
+      "bluez": ["src/btmux/bluez/**"],
+      "pipewire": ["src/btmux/pipewire/**"],
+      "routing": ["src/btmux/routing/**"],
+      "api": ["src/btmux/api/**"],
+      "cli": ["src/btmux/cli/**"],
+      "config": ["src/btmux/config/**"],
+      "packaging": ["debian/**", "systemd/**", "scripts/**"]
+    },
+    "regression_at_qa": "gated",
+    "full_regression_at": "qualif",
+    "coverage_min": 70,
+    "lot_max_tests": 50,
+    "perf": { "a2dp_latency_ms_max": 300, "source_switch_ms_max": 1000, "a2dp_to_hfp_switch_ms_max": 2000 }
+  },
+  "security": {
+    "concerns": ["api-token", "pairing-closed-by-default", "dependencies"]
+  },
+  "commands": {
+    "build": "uv build",
+    "test": "uv run pytest",
+    "lint": "uv run ruff check . && uv run ruff format --check .",
+    "audit": "uv run pip-audit",
+    "ci": "scripts/ci.sh",
+    "typecheck": "uv run mypy src",
+    "coverage": "uv run pytest --cov=btmux --cov-report=term-missing",
+    "test_fast": "uv run pytest -m \"not slow\"",
+    "test_targeted": "uv run pytest {TARGETS}",
+    "smoke": ""
+  },
+  "docs": {
+    "mockup_dir": "docs/mockup",
+    "cadrage": "docs/cadrage.md"
+  },
+  "marketing": {
+    "site": "auto"
+  },
+  "agents": {
+    "idle_ttl_minutes": 15,
+    "idle_warning_interval_minutes": 5,
+    "generic": []
+  },
+  "workshop": {
+    "users": "L'auteur (usage perso, un Pi qualif + un Pi prod) ; projet open source public pour d'autres bricoleurs",
+    "deadline": "Aucune — au rythme disponible, milestones decoupes par valeur livree",
+    "risks": [
+      "Double role HFP (HF sur hci-src + AG sur hci-hp) sur un meme Pi avec le backend natif PipeWire — risque de devoir passer par oFono pour le role HF",
+      "Latence et qualite audio sur double saut Bluetooth + resampling PipeWire (objectif < 300 ms A2DP)",
+      "Relais AVRCP et controle d'appel (ATA/AT+CHUP) entre deux piles distinctes, peu documente"
+    ],
+    "regulatory": "Aucune — LAN perso, jeton API statique, appairage ferme par defaut"
+  }
+}

@@ -1,0 +1,23 @@
+# Pre-validation (contrat infra C10) : push sur milestone/* et a la demande — lecture seule, ne publie rien.
+name: CI branch
+
+on:
+  push:
+    branches: ['milestone/**', 'hotfix/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI (scripts/ci.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: CI_CMD
+        run: scripts/ci.sh
