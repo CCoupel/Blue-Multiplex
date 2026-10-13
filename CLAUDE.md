@@ -61,6 +61,9 @@ plusieurs sources dans un casque (architecture prévue, non implémentée).
 **Environnements** : `QUALIF` = Pi de qualification (wheel promue, déploiement SSH + script) → `PROD` = Pi de
 production (tag `vX.Y.Z`, la CI rebuild et attache un paquet `.deb` à la GitHub Release, installation par `dpkg`).
 
+**Site marketing** : prévu (`gh-pages`, GitHub Pages), cadrage validé dans `docs/marketing-cadrage.md` ; initialisé par
+l'agent marketing à la première release, maquette validée au GATE 4d.
+
 **Outillage** : `uv`, `ruff`, `mypy`, `pytest` ; tests dépendant du matériel (BlueZ/PipeWire réels) marqués `hardware`
 et exécutés sur le Pi de qualif, jamais en CI.
 
@@ -105,6 +108,7 @@ et exécutés sur le Pi de qualif, jamais en CI.
 | `/start-session` | Démarrer la session (team, mémoire, backlog) |
 | `/end-session` | Clôturer la session (mémoire, git, dissolution team) |
 | `/team-status` | État des agents, fermeture sélective |
+| `/team-delete` | Dissolution de la team (agents) |
 | `/feature <desc>` | Nouveau workflow feature |
 | `/bugfix <desc>` | Workflow correction de bug |
 | `/hotfix <desc>` | Correction urgente prod |
@@ -116,6 +120,7 @@ et exécutés sur le Pi de qualif, jamais en CI.
 | `/qa [scope]` | Validation QA |
 | `/secu [scope]` | Audit sécurité |
 | `/backlog [desc]` | Consulter / traiter les GitHub Issues |
+| `/marketing` | Site marketing (worktree `gh-pages`) et communication de release |
 | `/milestone status` | Progression du milestone actif |
 | `/progression` | État d'avancement des agents en cours |
 | `/context-audit [scope]` | Audit doc (doublons, refs cassées) |
