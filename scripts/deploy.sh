@@ -16,7 +16,8 @@ ENV_FILE=".claude/agents/environments/${ENV_NAME}.env"
   || { echo "deploy: systemd/btmuxd.service ou config/config.example.yaml absent" >&2; exit 1; }
 
 # shellcheck disable=SC1090
-set -a; . "$ENV_FILE"; set +a
+# tr -d '\r' : tolere un .env ecrit avec des fins de ligne CRLF (edite sous Windows)
+set -a; . <(tr -d '\r' < "$ENV_FILE"); set +a
 : "${SSH_KEY_PATH:?SSH_KEY_PATH absent de $ENV_FILE}" "${DEPLOY_HOST:?DEPLOY_HOST absent de $ENV_FILE}"
 
 SSH_OPTS=(-i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
@@ -31,6 +32,18 @@ ssh "${SSH_OPTS[@]}" "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" <<'RE
 set -euo pipefail
 dir="$1"; wheel="$2"
 trap 'rm -rf "$dir"' EXIT
+# Prerequis cote Pi : python >= 3.12 (requires-python) et python3-venv (ensurepip)
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' \
+  || { echo "deploy: python3 >= 3.12 requis, trouve $(python3 --version 2>&1)" >&2; exit 1; }
+if ! dpkg -s python3-venv >/dev/null 2>&1; then
+  echo "deploy: installation de python3-venv"
+  sudo apt-get install -y python3-venv || { sudo apt-get update && sudo apt-get install -y python3-venv; }
+fi
+# Venv a moitie cree par un echec precedent (pas de pip) : on le recree
+if [ -e /opt/btmux ] && [ ! -x /opt/btmux/bin/pip ]; then
+  echo "deploy: /opt/btmux incomplet, recreation"
+  sudo rm -rf /opt/btmux
+fi
 sudo python3 -m venv --upgrade-deps /opt/btmux
 sudo /opt/btmux/bin/pip install --quiet --upgrade "$dir/$wheel"   # wheel + dependances
 sudo /opt/btmux/bin/pip install --quiet --force-reinstall --no-deps "$dir/$wheel"   # redeploiement meme version effectif

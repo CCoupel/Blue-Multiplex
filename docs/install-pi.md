@@ -82,6 +82,7 @@ vge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; }  # $1
 [ "$(uname -m)" = aarch64 ] && ok "64 bits" || ko "architecture $(uname -m)"
 pw=$(pw-cli --version 2>/dev/null | awk '/libpipewire/{print $2}'); vge "${pw:-0}" 1.2 && ok "pipewire $pw" || ko "pipewire ${pw:-absent} (>= 1.2)"
 wp=$(wireplumber --version 2>/dev/null | awk '/libwireplumber/{print $NF}'); vge "${wp:-0}" 0.5 && ok "wireplumber $wp" || ko "wireplumber ${wp:-absent} (>= 0.5)"
+python3 -c 'import ensurepip' 2>/dev/null && ok "python3-venv (ensurepip)" || ko "python3-venv absent (apt install python3-venv)"
 py=$(python3 -c 'import platform;print(platform.python_version())'); vge "$py" 3.12 && ok "python $py" || ko "python $py (>= 3.12)"
 systemctl is-active --quiet bluetooth && ok "bluetooth.service actif" || ko "bluetooth.service inactif"
 [ "$(loginctl show-user pi -p Linger --value 2>/dev/null)" = yes ] && ok "linger pi" || ko "linger pi absent"
