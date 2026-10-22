@@ -17,3 +17,4 @@
 | tests/integration/cli/btmuxctl/ | integration | cli | Stub btmuxctl (code 1) | feature | |
 | tests/procedures/packaging/deb-deploy/ | procedure | packaging | Build .deb, unite systemd, deploy.sh qualif, smoke | feature | critical |
 | tests/procedures/install/pi-qualif/ | procedure | packaging | Provisionnement du Pi de qualification | feature | |
+| tests/procedures/spikes/05-exposure/ | procedure | bluez | Spike #5 : exposition casque generique en mono-adaptateur (BT interne, provisoire) | feature | hardware |
