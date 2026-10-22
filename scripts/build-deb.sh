@@ -24,6 +24,8 @@ chmod 755 "$STAGE"   # dpkg-deb refuse 777 (mktemp sur drvfs/WSL)
 install -d -m 755 "$STAGE/DEBIAN" "$STAGE/usr/share/btmux" "$STAGE/lib/systemd/system" "$STAGE/etc/btmux"
 install -m 644 "$WHEEL" "$STAGE/usr/share/btmux/"
 [ -d systemd ] && install -m 644 systemd/*.service "$STAGE/lib/systemd/system/"
+install -d "$STAGE/usr/lib/btmux"
+install -m 755 scripts/btmux-set-user.sh "$STAGE/usr/lib/btmux/set-user.sh"
 [ -f config/config.example.yaml ] && install -m 644 config/config.example.yaml "$STAGE/etc/btmux/config.example.yaml"
 
 cat > "$STAGE/DEBIAN/control" <<CTRL
@@ -45,6 +47,20 @@ cat > "$STAGE/DEBIAN/postinst" <<'POST'
 set -e
 python3 -m venv --upgrade-deps /opt/btmux
 /opt/btmux/bin/pip install --quiet --upgrade /usr/share/btmux/btmux-*.whl
+# Utilisateur de service : $BTMUX_USER, sinon l'utilisateur qui a lance sudo, sinon "ubuntu".
+# Un drop-in deja present (choix de l'administrateur) n'est pas ecrase sauf si BTMUX_USER est fourni.
+svc_user="${BTMUX_USER:-}"
+if [ -z "$svc_user" ] && [ ! -f /etc/systemd/system/btmuxd.service.d/user.conf ]; then
+  svc_user="${SUDO_USER:-ubuntu}"
+  [ "$svc_user" = root ] && svc_user=ubuntu
+fi
+if [ -n "$svc_user" ]; then
+  if id "$svc_user" >/dev/null 2>&1; then
+    /usr/lib/btmux/set-user.sh "$svc_user"
+  else
+    echo "btmux: utilisateur '$svc_user' inconnu — relancer /usr/lib/btmux/set-user.sh <utilisateur>" >&2
+  fi
+fi
 systemctl daemon-reload
 if [ -f /etc/btmux/config.yaml ]; then systemctl restart btmuxd.service || true; fi
 POST

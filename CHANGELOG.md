@@ -10,7 +10,7 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
 - `btmuxd --version`, `btmuxd --config <path>`, `btmuxd --check-config` (codes de sortie 0 / 2) (#1, #4).
 - Module `btmux.config` : schéma `/etc/btmux/config.yaml`, liste `adapters` (un seul adaptateur en v0.1.0),
   appareils, `default_routes`, bloc `api` ; validation V1–V10, erreurs collectées une par ligne (#4).
-- Unité systemd `btmuxd.service` (utilisateur `pi`, session PipeWire via `loginctl enable-linger`) (#2).
+- Unité systemd `btmuxd.service` (session PipeWire de l'utilisateur de service via `loginctl enable-linger` ; utilisateur paramétrable par drop-in `scripts/btmux-set-user.sh`) (#2).
 - Exemple de configuration `config/config.example.yaml` (#2).
 - Paquet Debian `btmux_<X.Y.Z>_all.deb` (`scripts/build-deb.sh`) et déploiement sur le Pi de qualification
   (`scripts/deploy.sh`), sans rebuild ni publication (#2).
@@ -19,6 +19,7 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
 ### Changed
 - `btmuxd --config <path>` (sans `--check-config`) ne sort plus en 0 après validation : le daemon reste vivant
   jusqu'à SIGTERM/SIGINT (code 0), pour que l'unité systemd soit réellement active (#2, #4).
+- Cible du Pi : Ubuntu Server 26.04 LTS arm64 (au lieu de Raspberry Pi OS / Debian Trixie) ; utilisateur de service `ubuntu` par défaut, paramétrable via `BTMUX_USER` (#2 #3).
 
 ### Fixed
 - Corrections de revue de code du lot 1 (#2, #4) :

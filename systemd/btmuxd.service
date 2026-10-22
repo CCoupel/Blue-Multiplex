@@ -7,9 +7,10 @@ Requires=dbus.service
 
 [Service]
 Type=simple
-# Decision D2 : unite systeme executee sous l'utilisateur "pi", qui accede a sa session PipeWire
-# (loginctl enable-linger pi). Adapter l'UID dans XDG_RUNTIME_DIR et user@<uid> si pi n'est pas 1000.
-User=pi
+# Decision D2 : unite systeme executee sous un utilisateur normal, qui accede a sa session PipeWire
+# (loginctl enable-linger <user>). Valeurs par defaut = premier utilisateur d'Ubuntu Server (ubuntu, uid 1000) ;
+# l'utilisateur reel est fixe par le drop-in genere par scripts/btmux-set-user.sh (deploy.sh / postinst du .deb).
+User=ubuntu
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
 Restart=on-failure

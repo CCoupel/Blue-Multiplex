@@ -38,7 +38,7 @@ Par défaut, le staging se fait dans `_work/tmp/` (gitignoré).
 Le paquet `btmux_<X.Y.Z>_all.deb` est attaché à chaque GitHub Release. Il installe la wheel, l'unité systemd
 `btmuxd.service` et la configuration d'exemple ; le venv `/opt/btmux` est créé sur le Pi.
 
-1. Provisionner le Pi (OS, Bluetooth, PipeWire, session `pi` avec linger) : [docs/install-pi.md](docs/install-pi.md).
+1. Provisionner le Pi (Ubuntu Server 26.04 LTS arm64, Bluetooth, PipeWire, session de l'utilisateur de service avec linger) : [docs/install-pi.md](docs/install-pi.md).
 2. Copier et adapter la configuration : `config/config.example.yaml` → `/etc/btmux/config.yaml`
    (renseigner l'adresse MAC du contrôleur, jamais `hci0`), puis vérifier :
 
@@ -51,5 +51,6 @@ Le paquet `btmux_<X.Y.Z>_all.deb` est attaché à chaque GitHub Release. Il inst
 
 Déploiement sur le Pi de qualification depuis une wheel déjà construite : `scripts/deploy.sh <env> <wheel>`.
 Le fichier d'environnement `.claude/agents/environments/<env>.env` (modèle : `qualif.env.example` dans le même
-répertoire) fournit `SSH_KEY_PATH` et `DEPLOY_HOST`. Le script est idempotent et ne remplace jamais une
+répertoire) fournit `SSH_KEY_PATH`, `DEPLOY_HOST` (`ubuntu@btmux-qualif.local`) et, en option, `BTMUX_USER` (utilisateur de service
+de `btmuxd`, défaut = partie utilisateur de `DEPLOY_HOST`). Le script est idempotent et ne remplace jamais une
 configuration existante.
