@@ -130,7 +130,7 @@
     "coverage": "uv run pytest --cov=btmux --cov-report=term-missing",
     "test_fast": "uv run pytest -m \"not slow\"",
     "test_targeted": "uv run pytest {TARGETS}",
-    "smoke": "ssh -i $SSH_KEY_PATH pi@btmux-qualif.local 'systemctl is-active btmuxd && /opt/btmux/bin/btmuxd --version && /opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config'"
+    "smoke": "set -a; . .claude/agents/environments/qualif.env; set +a; ssh -i \"$SSH_KEY_PATH\" \"$DEPLOY_HOST\" 'systemctl is-active btmuxd && /opt/btmux/bin/btmuxd --version && /opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config'"
   },
   "docs": {
     "mockup_dir": "docs/mockup",

@@ -16,7 +16,7 @@ et relues par `scripts/deploy.sh` lui-meme.
 | Variable | Usage |
 |----------|-------|
 | `SSH_KEY_PATH` | Cle privee `ssh`/`scp` vers le Pi de qualif (aussi utilisee par `commands.smoke`) |
-| `DEPLOY_HOST` | `user@host` cible, `pi@btmux-qualif.local` |
+| `DEPLOY_HOST` | `user@host` cible (ex. `pi@192.168.1.176`, valeur dans `qualif.env`) — aussi utilisee par `commands.smoke`, qui source `qualif.env` lui-meme |
 
 Variable absente -> STOP, remonter au teamleader (ne jamais coder de valeur).
 
