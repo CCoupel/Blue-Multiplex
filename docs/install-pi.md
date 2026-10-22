@@ -159,7 +159,7 @@ le dongle RTL8761B n'est pas disponible. Les valeurs de la cible (dongle) resten
 | AAC | absent (cf. codecs) |
 | `config.txt` | `disable-bt` retiré ; `disable-wifi` non posé (SSH par Wi-Fi) |
 | Réseau | `eth0` sans câble ; SSH par Wi-Fi (`wlan0`) — **antenne 2,4 GHz partagée avec le Bluetooth** |
-| Dongle RTL8761B | non disponible (à relever : MAC, `btmgmt`, SCO) |
+| Dongle RTL8761B | non disponible (à relever : MAC, `btmgmt`, SCO). Clés USB testées le 2026-10-22 : ANT+ USBStick2 (0fcf:1008), manette Xbox 360 (045e:028e), Wi-Fi RTL8192EU (2357:0109, « BT=0 ») — **aucune n'est un adaptateur Bluetooth** (pas de `btusb`, un seul contrôleur) |
 
 > `dtoverlay=disable-wifi` est à poser **après** branchement de l'Ethernet (sinon le Pi devient injoignable en
 > SSH), puis redémarrer.
