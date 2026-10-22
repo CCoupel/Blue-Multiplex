@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 
 ENV_NAME="${1:?usage: deploy.sh <env> <wheel>}"
 WHEEL="${2:?usage: deploy.sh <env> <wheel>}"
-ENV_FILE=".claude/agents/environments/${ENV_NAME}.env"
+ENV_FILE="${BTMUX_ENV_FILE:-.claude/agents/environments/${ENV_NAME}.env}"   # BTMUX_ENV_FILE : tests
 
 [ -f "$WHEEL" ] || { echo "deploy: wheel introuvable: $WHEEL" >&2; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "deploy: $ENV_FILE absent (modele: ${ENV_NAME}.env.example)" >&2; exit 1; }
@@ -27,6 +27,8 @@ BTMUX_USER="${BTMUX_USER:-$default_user}"
 # Validation des entrees AVANT tout ssh/scp : elles finissent dans une ligne de commande distante.
 [[ "$BTMUX_USER" =~ ^[a-z0-9_][a-z0-9_-]*$ ]] || { echo "deploy: BTMUX_USER invalide: $BTMUX_USER" >&2; exit 1; }
 WHEEL_NAME="$(basename "$WHEEL")"
+[ "$BTMUX_USER" != root ] \
+  || { echo "deploy: l'utilisateur de service ne peut pas etre root (BTMUX_USER ou DEPLOY_HOST)" >&2; exit 2; }
 [[ "$WHEEL_NAME" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "deploy: nom de wheel invalide: $WHEEL_NAME" >&2; exit 1; }
 [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9._@-]+$ && "$DEPLOY_HOST" != -* ]] \
   || { echo "deploy: DEPLOY_HOST invalide: $DEPLOY_HOST" >&2; exit 1; }
