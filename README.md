@@ -48,9 +48,21 @@ Le paquet `btmux_<X.Y.Z>_all.deb` est attaché à chaque GitHub Release. Il inst
 
    Le schéma de référence est dans [contracts/config-schema.md](contracts/config-schema.md).
 3. Installer le paquet : `sudo dpkg -i btmux_<X.Y.Z>_all.deb`, puis `sudo systemctl enable --now btmuxd`.
+   L'utilisateur de service de `btmuxd` (celui dont la session PipeWire est utilisée, linger activé) est, dans
+   l'ordre : `BTMUX_USER` s'il est fourni, sinon l'utilisateur qui lance `sudo`, sinon `ubuntu`. Pour le choisir :
+
+   ```bash
+   sudo BTMUX_USER=<utilisateur> dpkg -i btmux_<X.Y.Z>_all.deb
+   ```
+
+   Un drop-in `/etc/systemd/system/btmuxd.service.d/user.conf` déjà présent n'est pas écrasé sans `BTMUX_USER`.
+   Pour le modifier plus tard : `sudo /usr/lib/btmux/set-user.sh <utilisateur>` puis `sudo systemctl daemon-reload`
+   et `sudo systemctl restart btmuxd`. Le compte root est refusé.
 
 Déploiement sur le Pi de qualification depuis une wheel déjà construite : `scripts/deploy.sh <env> <wheel>`.
 Le fichier d'environnement `.claude/agents/environments/<env>.env` (modèle : `qualif.env.example` dans le même
 répertoire) fournit `SSH_KEY_PATH`, `DEPLOY_HOST` (`ubuntu@btmux-qualif.local`) et, en option, `BTMUX_USER` (utilisateur de service
 de `btmuxd`, défaut = partie utilisateur de `DEPLOY_HOST`). Le script est idempotent et ne remplace jamais une
-configuration existante.
+configuration existante. Prérequis côté Pi : l'utilisateur SSH doit pouvoir lancer `sudo` **sans mot de passe**
+(`NOPASSWD`, `BatchMode=yes` interdit toute invite) et le Pi doit avoir accès à `apt` et à PyPI (installation de
+`python3-venv` si absent et des dépendances Python).

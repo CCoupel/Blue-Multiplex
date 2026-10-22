@@ -35,3 +35,14 @@ def test_invalid_user_rejected(tmp_path: Path, bad: str) -> None:
     proc = _run(bad, tmp_path)
     assert proc.returncode == 2
     assert not (tmp_path / "user.conf").exists()
+
+
+def test_uid_zero_rejected(tmp_path: Path) -> None:
+    proc = _run("root", tmp_path, uid="0")
+    assert proc.returncode == 2
+    assert "refuse" in proc.stderr
+    assert not (tmp_path / "user.conf").exists()
+
+
+def test_non_numeric_uid_rejected(tmp_path: Path) -> None:
+    assert _run("alice", tmp_path, uid="12x").returncode == 2

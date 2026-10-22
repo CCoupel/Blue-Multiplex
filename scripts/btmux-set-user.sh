@@ -10,6 +10,9 @@ case "$user" in
   *[!a-z0-9_-]* | -* | "") echo "btmux-set-user: nom d'utilisateur invalide: $user" >&2; exit 2 ;;
 esac
 uid="${BTMUX_UID:-$(id -u "$user")}" || { echo "btmux-set-user: utilisateur inconnu: $user" >&2; exit 1; }
+case "$uid" in
+  0 | "" | *[!0-9]*) echo "btmux-set-user: uid $uid refuse (root ou invalide) pour $user" >&2; exit 2 ;;
+esac
 dir="${BTMUX_DROPIN_DIR:-/etc/systemd/system/btmuxd.service.d}"
 mkdir -p "$dir"
 cat > "$dir/user.conf" <<CONF

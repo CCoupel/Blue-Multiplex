@@ -24,15 +24,24 @@ set -a; . <(tr -d '\r' < "$ENV_FILE"); set +a
 case "$DEPLOY_HOST" in *@*) default_user="${DEPLOY_HOST%@*}" ;; *) default_user=ubuntu ;; esac
 BTMUX_USER="${BTMUX_USER:-$default_user}"
 
-SSH_OPTS=(-i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+# Validation des entrees AVANT tout ssh/scp : elles finissent dans une ligne de commande distante.
+[[ "$BTMUX_USER" =~ ^[a-z0-9_][a-z0-9_-]*$ ]] || { echo "deploy: BTMUX_USER invalide: $BTMUX_USER" >&2; exit 1; }
 WHEEL_NAME="$(basename "$WHEEL")"
+[[ "$WHEEL_NAME" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "deploy: nom de wheel invalide: $WHEEL_NAME" >&2; exit 1; }
+[[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9._@-]+$ && "$DEPLOY_HOST" != -* ]] \
+  || { echo "deploy: DEPLOY_HOST invalide: $DEPLOY_HOST" >&2; exit 1; }
+
+SSH_OPTS=(-i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 
 echo "== deploy $ENV_NAME -> $DEPLOY_HOST ($WHEEL_NAME, service user: $BTMUX_USER)"
-REMOTE_DIR=$(ssh "${SSH_OPTS[@]}" "$DEPLOY_HOST" "mktemp -d /tmp/btmux-deploy.XXXXXX")
-scp "${SSH_OPTS[@]}" -q "$WHEEL" systemd/btmuxd.service config/config.example.yaml scripts/btmux-set-user.sh "$DEPLOY_HOST:$REMOTE_DIR/"
+REMOTE_DIR=$(ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "mktemp -d /tmp/btmux-deploy.XXXXXX")
+[[ "$REMOTE_DIR" =~ ^/tmp/btmux-deploy\.[A-Za-z0-9]+$ ]] || { echo "deploy: repertoire distant inattendu: $REMOTE_DIR" >&2; exit 1; }
+# Nettoyage distant garanti des la creation du repertoire (scp ou script distant en echec)
+trap 'ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "rm -rf $REMOTE_DIR" >/dev/null 2>&1 || true' EXIT
+scp "${SSH_OPTS[@]}" -q -- "$WHEEL" systemd/btmuxd.service config/config.example.yaml scripts/btmux-set-user.sh "$DEPLOY_HOST:$REMOTE_DIR/"
 
 # Script distant : lu depuis stdin (aucun fichier intermediaire), argument = nom de la wheel.
-ssh "${SSH_OPTS[@]}" "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" "$BTMUX_USER" <<'REMOTE'
+ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" "$BTMUX_USER" <<'REMOTE'
 set -euo pipefail
 dir="$1"; wheel="$2"; svc_user="$3"
 trap 'rm -rf "$dir"' EXIT
