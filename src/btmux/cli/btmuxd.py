@@ -7,8 +7,10 @@ import sys
 from collections.abc import Sequence
 
 from btmux import __version__
+from btmux.config import ConfigError, load_config
 
 DEFAULT_CONFIG = "/etc/btmux/config.yaml"
+EXIT_CONFIG_ERROR = 2
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,10 +30,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    build_parser().parse_args(argv)
-    # Validation de la config branchee en T1.5 (module btmux.config).
-    print(f"btmuxd {__version__}: not implemented yet", file=sys.stderr)
-    return 1
+    args = build_parser().parse_args(argv)
+    try:
+        load_config(args.config)
+    except ConfigError as exc:
+        for line in exc.errors:
+            print(line, file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    if args.check_config:
+        print(f"config OK: {args.config}")
+        return 0
+    print(f"btmuxd {__version__}: daemon not implemented yet (v0.3.0)")
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover
