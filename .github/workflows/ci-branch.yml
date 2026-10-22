@@ -11,13 +11,18 @@ permissions:
 
 jobs:
   ci:
-    name: CI (scripts/ci.sh)
+    # 3.12 = plancher requires-python ; 3.14 = Python d'Ubuntu Server 26.04 (cible du Pi)
+    name: CI (scripts/ci.sh, Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.14']
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
           enable-cache: true
       - name: CI_CMD
         run: scripts/ci.sh
