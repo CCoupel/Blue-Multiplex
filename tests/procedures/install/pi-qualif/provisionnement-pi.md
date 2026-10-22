@@ -74,7 +74,7 @@
 
 | Étape | Action | Résultat attendu | Obtenu | OK ? |
 |-------|--------|------------------|--------|------|
-| 1 | Sans installation préalable : `scripts/btmux-set-user.sh $U` avec `BTMUX_DROPIN_DIR=$(mktemp -d)` (essai à blanc, depuis le poste ou le Pi) | Affiche `btmux-set-user: btmuxd.service -> User=$U (uid …)` ; `user.conf` contient `User=$U`, `XDG_RUNTIME_DIR=/run/user/<uid>`, `After=`/`Wants=` `user@<uid>.service` | | |
+| 1 | Sans installation préalable : `BTMUX_DROPIN_DIR=$(mktemp -d -p _work/tmp) BTMUX_UID=1000 scripts/btmux-set-user.sh $U` (essai à blanc ; `BTMUX_UID` évite que le script résolve l'utilisateur via `id -u`, donc fonctionne sur le poste où `$U` n'existe pas ; `mkdir -p _work/tmp` au préalable, supprimer le dossier ensuite) | Affiche `btmux-set-user: btmuxd.service -> User=$U (uid …)` ; `user.conf` contient `User=$U`, `XDG_RUNTIME_DIR=/run/user/1000`, `After=`/`Wants=` `user@1000.service` | | |
 | 2 | `scripts/btmux-set-user.sh 'Bad User'` | Code 2, message « nom d'utilisateur invalide » | | |
 | 3 | Après un déploiement (procédure `deb-deploy`) : `systemctl cat btmuxd` | Unité livrée + drop-in `/etc/systemd/system/btmuxd.service.d/user.conf` généré pour `$U` | | |
 
