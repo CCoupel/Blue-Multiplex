@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import signal
+import subprocess
+import sys
+import time
+
 from specsupport import output_of
 
 
@@ -46,12 +51,31 @@ def test_check_config_unknown_key_exits_2(run_btmuxd_cfg, write_config, valid_co
     assert "config: unknown key 'bogus'" in output_of(proc)
 
 
-def test_without_check_config_valid_config_exits_0_daemon_not_implemented(
-    run_btmuxd_cfg, write_config, valid_config
+def test_without_check_config_valid_config_stays_alive_until_sigterm(
+    run_btmuxd_cfg, write_config, valid_config, tmp_path
 ):
-    proc = run_btmuxd_cfg("--config", str(write_config(valid_config)))
-    assert proc.returncode == 0, output_of(proc)
-    assert "daemon not implemented yet (v0.3.0)" in output_of(proc)
+    """Contrat (CHANGED 2026-10-22) : le daemon reste vivant, SIGTERM -> arret propre, code 0."""
+    path = write_config(valid_config)
+    code = "import sys; from btmux.cli.btmuxd import main; sys.exit(main())"
+    proc = subprocess.Popen(
+        [sys.executable, "-c", code, "--config", str(path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=tmp_path,
+    )
+    try:
+        assert proc.stdout is not None
+        first = proc.stdout.readline()
+        assert "started — no daemon logic yet (v0.3.0)" in first
+        time.sleep(0.5)
+        assert proc.poll() is None, "le daemon ne doit pas sortir seul"
+        proc.send_signal(signal.SIGTERM)
+        assert proc.wait(timeout=10) == 0
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
 
 
 def test_without_check_config_invalid_config_exits_2(run_btmuxd_cfg, write_config, valid_config):

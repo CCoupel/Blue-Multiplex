@@ -97,5 +97,3 @@ def test_cli_check_config(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
     )
     assert btmuxd.main(["--config", str(cfg), "--check-config"]) == 0
     assert f"config OK: {cfg}" in capsys.readouterr().out
-    assert btmuxd.main(["--config", str(cfg)]) == 0
-    assert "daemon not implemented yet (v0.3.0)" in capsys.readouterr().out

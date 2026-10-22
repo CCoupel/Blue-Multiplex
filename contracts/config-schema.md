@@ -48,8 +48,11 @@ Toutes les erreurs sont collectées et affichées (une par ligne) avant de sorti
 ```
 btmuxd --version                      # affiche "btmuxd <version>" ; code 0
 btmuxd --config <path> --check-config # valide et sort : 0 (OK, affiche "config OK: <path>") / 2 (erreurs)
-btmuxd --config <path>                # v0.1.0 : valide la config puis sort 0 avec le message
-                                      # "btmuxd <version>: daemon not implemented yet (v0.3.0)" — aucun accès BlueZ/PipeWire
+btmuxd --config <path>                # v0.1.0 : valide la config (invalide -> erreurs "config: ..." sur stderr, code 2,
+                                      # sans démarrer) ; sinon affiche sur stdout
+                                      # "btmuxd <version> started — no daemon logic yet (v0.3.0)" et RESTE VIVANT
+                                      # (boucle asyncio en attente, aucun accès BlueZ/PipeWire/réseau) ;
+                                      # SIGTERM/SIGINT -> affiche "btmuxd <version> stopped", code 0
 btmuxctl                              # stub : affiche "btmuxctl: not implemented (v0.3.0)", code 1
 ```
 

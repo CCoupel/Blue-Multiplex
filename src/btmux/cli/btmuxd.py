@@ -6,7 +6,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from btmux import __version__
+from btmux import __version__, daemon
 from btmux.config import ConfigError, load_config
 
 DEFAULT_CONFIG = "/etc/btmux/config.yaml"
@@ -40,8 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check_config:
         print(f"config OK: {args.config}")
         return 0
-    print(f"btmuxd {__version__}: daemon not implemented yet (v0.3.0)")
-    return 0
+    return daemon.run()
 
 
 if __name__ == "__main__":  # pragma: no cover
