@@ -6,7 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${1:?usage: build-deb.sh <X.Y.Z>}"
-WHEEL=$(ls dist/btmux-"$VERSION"-py3-none-any.whl)
+WHEEL=$(ls dist/btmux-"$VERSION"*-py3-none-any.whl | sort -V | tail -1)  # glob : accepte la wheel de dev X.Y.Z.a (R2)
+[ -n "$WHEEL" ] || { echo "wheel dist/btmux-${VERSION}*-py3-none-any.whl introuvable" >&2; exit 1; }
 STAGE=$(mktemp -d -p "${TMPDIR:-/tmp}" btmux-deb.XXXXXX); trap 'rm -rf "$STAGE"' EXIT
 
 install -d "$STAGE/DEBIAN" "$STAGE/usr/share/btmux" "$STAGE/lib/systemd/system" "$STAGE/etc/btmux"

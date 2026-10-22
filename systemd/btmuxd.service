@@ -1,0 +1,19 @@
+[Unit]
+Description=btmuxd — multiplexeur audio Bluetooth
+Documentation=https://github.com/CCoupel/Blue-Multiplex
+After=bluetooth.service user@1000.service dbus.service
+Wants=bluetooth.service user@1000.service
+Requires=dbus.service
+
+[Service]
+Type=simple
+# Decision D2 : unite systeme executee sous l'utilisateur "pi", qui accede a sa session PipeWire
+# (loginctl enable-linger pi). Adapter l'UID dans XDG_RUNTIME_DIR et user@<uid> si pi n'est pas 1000.
+User=pi
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

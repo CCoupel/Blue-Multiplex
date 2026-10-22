@@ -1,0 +1,27 @@
+# Exemple de configuration btmuxd — copie vers /etc/btmux/config.yaml puis adapter.
+# Validation : btmuxd --config /etc/btmux/config.yaml --check-config
+# Schema de reference : contracts/config-schema.md
+
+# v0.1.0 : un seul adaptateur Bluetooth, qui porte les deux roles.
+adapters:
+  - mac: "AA:BB:CC:00:00:01"   # adresse du controleur (bluetoothctl list) — jamais hci0/hci1
+    name: "btmux"              # nom Bluetooth annonce (1..248 octets UTF-8)
+    roles: [sources, headsets] # sources = vu comme un casque ; headsets = vu comme une source
+
+# Appareils connus (liste, peut etre vide). alias : [a-z0-9][a-z0-9-]{0,31}
+devices:
+  - { mac: "11:22:33:44:55:01", alias: "pc-pro",    kind: source,  priority: 10 }
+  - { mac: "11:22:33:44:55:02", alias: "tel-perso", kind: source,  priority: 20 }
+  - { mac: "11:22:33:44:55:03", alias: "xm5",       kind: headset }
+
+# Route par defaut : alias du casque -> alias de la source
+default_routes:
+  xm5: pc-pro
+
+# API HTTP (optionnel) — valeurs par defaut ci-dessous
+api:
+  listen: "0.0.0.0:8088"
+  token_file: /etc/btmux/token
+
+mqtt:
+  enabled: false
