@@ -1,0 +1,16 @@
+# Fixture valide complete : tous les champs du schema, y compris les optionnels.
+adapters:
+  - mac: "aa:bb:cc:00:00:01"        # minuscules : doit etre normalisee en majuscules (V1)
+    name: "btmux"
+    roles: [sources, headsets]
+devices:
+  - { mac: "11:22:33:44:55:01", alias: "pc-pro",    kind: source,  priority: 10 }
+  - { mac: "11:22:33:44:55:02", alias: "tel-perso", kind: source,  priority: 20 }
+  - { mac: "11:22:33:44:55:03", alias: "xm5",       kind: headset }
+default_routes:
+  xm5: pc-pro
+api:
+  listen: "127.0.0.1:9000"
+  token_file: /etc/btmux/token
+mqtt:
+  enabled: false
