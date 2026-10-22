@@ -118,32 +118,38 @@ systemctl is-active --quiet bluetooth && ok "bluetooth.service actif" || ko "blu
 [ -S "/run/user/$uid/pipewire-0" ] && ok "socket PipeWire $svc" || ko "socket /run/user/$uid/pipewire-0 absente"
 ls /lib/firmware/rtl_bt/ 2>/dev/null | grep -q 8761b && ok "firmware rtl8761b présent" || ko "firmware rtl8761b absent"
 sudo dmesg 2>/dev/null | grep -q rtl_bt && ok "firmware rtl_bt chargé" || ko "pas de trace rtl_bt (dmesg)"
-n=$(bluetoothctl list | grep -c '^Controller'); [ "$n" -eq 1 ] && ok "1 contrôleur: $(bluetoothctl list)" || ko "$n contrôleur(s) (1 attendu)"
+bl=$(timeout 8 bluetoothctl list </dev/null 2>/dev/null)   # timeout : bluetoothctl attend sans contrôleur
+n=$(printf '%s\n' "$bl" | grep -c '^Controller'); [ "$n" -eq 1 ] && ok "1 contrôleur: $bl" || ko "$n contrôleur(s) (1 attendu)"
 ip -br link | grep -q '^wlan' && ko "interface wlan présente (Wi-Fi à désactiver)" || ok "pas de Wi-Fi"
 exit $fail
 ```
 
 ## 9. Versions installées
 
-Relevé du **2026-10-22** sur `pi-qualif` (lecture seule, `ubuntu@192.168.1.94`) — état **après flash et premier
-démarrage uniquement** ; les étapes §3 (config.txt, Ethernet), §4 (paquets), §5 (linger) et §6 (dongle) n'ont pas
-encore été faites. Les lignes « à relever » sont à compléter après ces étapes (rejouer le script du §8).
+Relevé du **2026-10-22** sur `pi-qualif` (`ubuntu@192.168.1.94`) après provisionnement par SSH (§3 à §5, hors
+`disable-wifi`) et redémarrage. **Le dongle RTL8761B n'était pas encore branché** : les lignes « à relever » se
+complètent après son branchement (rejouer le script du §8).
 
 | Élément | Relevé |
 |---------|--------|
-| Matériel | Raspberry Pi 3 Model B Rev 1.2 |
-| OS | Ubuntu 26.04.1 LTS (`resolute`), aarch64 |
-| Noyau | 7.0.0-1020-raspi (#20-Ubuntu, 2026-09-11) |
-| Hostname | `pi-qualif.local` (le hostname lui-même contient `.local` ; préférer `pi-qualif`) |
-| Utilisateur de service | `ubuntu` (uid 1000), `sudo` sans mot de passe (`sudo -n true` OK), accès apt et PyPI OK |
-| python3 | 3.14.3-0ubuntu2 (interpréteur 3.14.4) ; `python3-venv` **absent** (`ensurepip` indisponible) |
-| linux-firmware | 20260319.git217ca6e4.1ubuntu — `rtl_bt/rtl8761b{,u}_{fw,config}.bin.zst` présents |
-| bluez, pipewire, wireplumber, libspa-0.2-bluetooth, avahi-daemon | à relever (absents avant §4) |
-| Dongle RTL8761B | à relever (non branché : `lsusb` sans Realtek) ; Bluetooth intégré actif (BCM43430A1, hci0 UART) tant que `disable-bt` n'est pas posé |
-| MAC du contrôleur | à relever (§6) |
-| Capacités `btmgmt info` / liens SCO | à relever |
-| AAC (`pw-dump \| grep -i aac`) | à relever |
-| Linger / socket PipeWire | `Linger=no`, pas de `/run/user/1000/pipewire-0` (avant §4 et §5) |
-| Réseau | `eth0` sans câble ; SSH passe par **Wi-Fi** (`wlan0`) |
+| Matériel | Raspberry Pi 3 Model B Rev 1.2 (894 Mo de RAM utilisables) |
+| OS / noyau | Ubuntu 26.04.1 LTS (`resolute`), aarch64 — noyau 7.0.0-1020-raspi |
+| Hostname | `pi-qualif` (via `hostnamectl` ; `preserve_hostname: true` posé pour cloud-init) |
+| Utilisateur de service | `ubuntu` (uid 1000), `sudo` sans mot de passe, `Linger=yes` |
+| `pipewire`, `pipewire-audio`, `libspa-0.2-bluetooth` | 1.6.2-1ubuntu1.2 |
+| `wireplumber` | 0.5.13-1ubuntu1.1 |
+| `bluez` | 5.85-4ubuntu0.4 |
+| `python3`, `python3-venv` | 3.14.3-0ubuntu2 (`ensurepip` OK) |
+| `linux-firmware` | 20260319.git217ca6e4.1ubuntu — `rtl_bt/rtl8761b{,u}_{fw,config}.bin.zst` présents |
+| `avahi-daemon` | 0.8-18ubuntu1.1 (actif) |
+| PipeWire / WirePlumber | **services utilisateur** actifs (socket, pipewire, wireplumber, pipewire-pulse), `/run/user/1000/pipewire-0` présent après reboot sans session ; aucune unité système (pas de `--system`) ; `wpctl status` : sink « Dummy Output » |
+| Codecs Bluetooth de `libspa-0.2-bluetooth` | sbc, aptx, faststream, g722, ldac, lc3, opus, HFP cvsd/mSBC/LC3 — **pas d'AAC** (`libspa-codec-bluez5-aac.so` absent, `pw-dump \| grep -ci aac` = 0) |
+| `config.txt` | `dtoverlay=disable-bt` posé ; `disable-wifi` **non posé** (voir ci-dessous) |
+| Bluetooth intégré | désactivé (aucun contrôleur, `btmgmt info` : « Index list with 0 items », `bluetooth.service` inactif faute de contrôleur) |
+| Dongle RTL8761B | **à relever** (absent de `lsusb`) |
+| MAC du contrôleur, capacités `btmgmt info`, liens SCO | **à relever** (dongle) |
+| Réseau | `eth0` sans câble ; SSH par Wi-Fi (`wlan0`) |
 
-> Attention : brancher l'Ethernet **avant** de poser `dtoverlay=disable-wifi`, sinon le Pi devient injoignable en SSH.
+> `dtoverlay=disable-wifi` est à poser **après** branchement de l'Ethernet (sinon le Pi devient injoignable en
+> SSH), puis redémarrer.
+> `bluetoothctl list` attend indéfiniment quand aucun contrôleur n'existe : le script du §8 utilise `timeout`.
