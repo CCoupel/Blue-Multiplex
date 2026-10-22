@@ -1,4 +1,4 @@
-"""Modeles typés de la configuration (Pydantic v2, strict) — construits après validation."""
+"""Modèles typés de la configuration (Pydantic v2, `extra="forbid"`, immuables)."""
 
 from __future__ import annotations
 

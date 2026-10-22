@@ -76,7 +76,7 @@ def _adapters(raw: Any, err: _Errors) -> list[Adapter]:
             err.add(f"{where}.name: required, 1..{MAX_NAME_BYTES} bytes (UTF-8)")
         roles = _roles(item.get("roles"), where, err)
         if mac is not None and name_ok and roles:
-            result.append(Adapter(mac=mac, name=str(name), roles=tuple(roles)))  # type: ignore[arg-type]
+            result.append(Adapter.model_validate({"mac": mac, "name": name, "roles": tuple(roles)}))
     return result
 
 
@@ -148,7 +148,9 @@ def _devices(raw: Any, err: _Errors) -> list[Device]:
             if kind == "source" and priority is None:
                 priority = DEFAULT_PRIORITY
             result.append(
-                Device(mac=mac, alias=str(alias), kind=kind, priority=priority)  # type: ignore[arg-type]
+                Device.model_validate(
+                    {"mac": mac, "alias": alias, "kind": kind, "priority": priority}
+                )
             )
     return result
 
@@ -163,6 +165,9 @@ def _routes(raw: Any, devices: list[Device], err: _Errors) -> dict[str, str]:
     sources = {d.alias for d in devices if d.kind == "source"}
     routes: dict[str, str] = {}
     for head, src in raw.items():
+        if not isinstance(head, str) or not isinstance(src, str):
+            err.add(f"default_routes: expected alias strings (got {head!r}: {src!r})")
+            continue
         if head not in headsets:
             err.add(f"default_routes: unknown headset alias '{head}'")
         elif src not in sources:

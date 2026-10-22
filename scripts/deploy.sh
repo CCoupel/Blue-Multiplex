@@ -21,18 +21,19 @@ set -a; . "$ENV_FILE"; set +a
 
 SSH_OPTS=(-i "$SSH_KEY_PATH" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 WHEEL_NAME="$(basename "$WHEEL")"
-REMOTE_DIR="/tmp/btmux-deploy"
 
 echo "== deploy $ENV_NAME -> $DEPLOY_HOST ($WHEEL_NAME)"
-ssh "${SSH_OPTS[@]}" "$DEPLOY_HOST" "rm -rf $REMOTE_DIR && mkdir -p $REMOTE_DIR"
+REMOTE_DIR=$(ssh "${SSH_OPTS[@]}" "$DEPLOY_HOST" "mktemp -d /tmp/btmux-deploy.XXXXXX")
 scp "${SSH_OPTS[@]}" -q "$WHEEL" systemd/btmuxd.service config/config.example.yaml "$DEPLOY_HOST:$REMOTE_DIR/"
 
 # Script distant : lu depuis stdin (aucun fichier intermediaire), argument = nom de la wheel.
 ssh "${SSH_OPTS[@]}" "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" <<'REMOTE'
 set -euo pipefail
 dir="$1"; wheel="$2"
+trap 'rm -rf "$dir"' EXIT
 sudo python3 -m venv --upgrade-deps /opt/btmux
-sudo /opt/btmux/bin/pip install --quiet --upgrade "$dir/$wheel"
+sudo /opt/btmux/bin/pip install --quiet --upgrade "$dir/$wheel"   # wheel + dependances
+sudo /opt/btmux/bin/pip install --quiet --force-reinstall --no-deps "$dir/$wheel"   # redeploiement meme version effectif
 sudo install -d -m 755 /etc/btmux
 sudo install -m 644 "$dir/config.example.yaml" /etc/btmux/config.example.yaml
 if [ ! -f /etc/btmux/config.yaml ]; then
@@ -41,16 +42,15 @@ if [ ! -f /etc/btmux/config.yaml ]; then
 fi
 sudo install -m 644 "$dir/btmuxd.service" /etc/systemd/system/btmuxd.service
 sudo systemctl daemon-reload
-sudo systemctl enable btmuxd.service >/dev/null 2>&1
+sudo systemctl enable btmuxd.service
 sudo systemctl restart btmuxd.service
 sleep 2
-if systemctl is-active --quiet btmuxd.service; then
-  echo "deploy: btmuxd.service actif"
-else
-  # v0.1.0 : le daemon valide la config puis sort 0 (non implemente) ; ce n'est pas une erreur.
+if ! systemctl is-active --quiet btmuxd.service; then
   echo "deploy: btmuxd.service inactif ($(systemctl show -p Result --value btmuxd.service))" >&2
+  journalctl -u btmuxd.service -n 20 --no-pager >&2 || true
+  exit 1
 fi
+echo "deploy: btmuxd.service actif"
 /opt/btmux/bin/btmuxd --version
-rm -rf "$dir"
 REMOTE
 echo "== deploy $ENV_NAME termine"

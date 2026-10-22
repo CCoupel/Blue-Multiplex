@@ -97,3 +97,10 @@ def test_cli_check_config(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
     )
     assert btmuxd.main(["--config", str(cfg), "--check-config"]) == 0
     assert f"config OK: {cfg}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("routes", [{"xm5": ["pc"]}, {"xm5": {"a": 1}}, {1: "pc"}, {("a",): "pc"}])
+def test_default_routes_non_string_is_error_not_traceback(routes: Any) -> None:
+    data = _copy()
+    data["default_routes"] = routes
+    assert any(e.startswith("config: default_routes:") for e in _errors(data))

@@ -13,6 +13,8 @@ User=pi
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
 Restart=on-failure
+# Code 2 = configuration invalide : inutile de boucler (cf. btmuxd --check-config)
+RestartPreventExitStatus=2
 RestartSec=5
 
 [Install]
