@@ -125,5 +125,25 @@ exit $fail
 
 ## 9. Versions installées
 
-_À compléter en phase 1.C (T1.8) après exécution du script sur le Pi : OS, noyau, bluez, pipewire, wireplumber,
-python, firmware dongle, MAC du contrôleur._
+Relevé du **2026-10-22** sur `pi-qualif` (lecture seule, `ubuntu@192.168.1.94`) — état **après flash et premier
+démarrage uniquement** ; les étapes §3 (config.txt, Ethernet), §4 (paquets), §5 (linger) et §6 (dongle) n'ont pas
+encore été faites. Les lignes « à relever » sont à compléter après ces étapes (rejouer le script du §8).
+
+| Élément | Relevé |
+|---------|--------|
+| Matériel | Raspberry Pi 3 Model B Rev 1.2 |
+| OS | Ubuntu 26.04.1 LTS (`resolute`), aarch64 |
+| Noyau | 7.0.0-1020-raspi (#20-Ubuntu, 2026-09-11) |
+| Hostname | `pi-qualif.local` (le hostname lui-même contient `.local` ; préférer `pi-qualif`) |
+| Utilisateur de service | `ubuntu` (uid 1000), `sudo` sans mot de passe (`sudo -n true` OK), accès apt et PyPI OK |
+| python3 | 3.14.3-0ubuntu2 (interpréteur 3.14.4) ; `python3-venv` **absent** (`ensurepip` indisponible) |
+| linux-firmware | 20260319.git217ca6e4.1ubuntu — `rtl_bt/rtl8761b{,u}_{fw,config}.bin.zst` présents |
+| bluez, pipewire, wireplumber, libspa-0.2-bluetooth, avahi-daemon | à relever (absents avant §4) |
+| Dongle RTL8761B | à relever (non branché : `lsusb` sans Realtek) ; Bluetooth intégré actif (BCM43430A1, hci0 UART) tant que `disable-bt` n'est pas posé |
+| MAC du contrôleur | à relever (§6) |
+| Capacités `btmgmt info` / liens SCO | à relever |
+| AAC (`pw-dump \| grep -i aac`) | à relever |
+| Linger / socket PipeWire | `Linger=no`, pas de `/run/user/1000/pipewire-0` (avant §4 et §5) |
+| Réseau | `eth0` sans câble ; SSH passe par **Wi-Fi** (`wlan0`) |
+
+> Attention : brancher l'Ethernet **avant** de poser `dtoverlay=disable-wifi`, sinon le Pi devient injoignable en SSH.
