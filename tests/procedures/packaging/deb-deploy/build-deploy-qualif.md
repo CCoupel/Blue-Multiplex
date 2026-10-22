@@ -15,7 +15,7 @@
 |-------|--------|------------------|--------|------|
 | 1 | `uv build` puis `scripts/build-deb.sh 0.1.0` | Sort en code 0 ; `dist/btmux_0.1.0_all.deb` créé (wheel `0.1.0.0` acceptée pour un paquet `0.1.0`) | | |
 | 2 | `dpkg-deb --info dist/btmux_0.1.0_all.deb` | `Package: btmux`, `Version: 0.1.0`, `Architecture: all`, dépendances python3 (≥ 3.12) listées | | |
-| 3 | `dpkg-deb --contents dist/btmux_0.1.0_all.deb` | Contient `/opt/btmux/…`, `/etc/systemd/system/btmuxd.service` (ou `/lib/systemd/system/`), `/etc/btmux/config.example.yaml` ; **aucun** `app-*.tar.gz` | | |
+| 3 | `dpkg-deb --contents dist/btmux_0.1.0_all.deb` | Contient `/usr/share/btmux/btmux-*.whl` (la wheel ; le venv `/opt/btmux` n'est **pas** dans le .deb, il est créé par le postinst), `/lib/systemd/system/btmuxd.service`, `/etc/btmux/config.example.yaml` ; **aucun** `app-*.tar.gz` | | |
 | 4 | Relancer `scripts/build-deb.sh 0.1.0` | Idempotent : même résultat, pas d'erreur | | |
 
 **Verdict** : [ ] PASS [ ] FAIL
