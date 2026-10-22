@@ -83,6 +83,7 @@ def test_without_check_config_invalid_config_exits_2(run_btmuxd_cfg, write_confi
     proc = run_btmuxd_cfg("--config", str(write_config(valid_config)))
     assert proc.returncode == 2
     assert "adapters[0].mac" in output_of(proc)
+    assert "started" not in output_of(proc)  # config invalide : le daemon ne demarre pas
 
 
 def test_default_config_path_is_etc_btmux_config_yaml(run_btmuxd_cfg):

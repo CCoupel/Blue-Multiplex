@@ -41,7 +41,8 @@
 | 5 | `ssh … '/opt/btmux/bin/btmuxd --version'` | `btmuxd 0.1.0.<a>` | | |
 | 6 | `ssh … '/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config'` | `config OK: /etc/btmux/config.yaml`, code 0 | | |
 | 7 | `ssh … 'ps -o user= -C python3,btmuxd'` (ou `systemctl show btmuxd -p User`) | Le service tourne sous `pi` (D2) | | |
-| 8 | `ssh … 'journalctl -u btmuxd -n 20 --no-pager'` | `daemon not implemented yet (v0.3.0)` ; pas de traceback ; pas de crash-loop (`Restart=on-failure` non déclenché : le daemon sort en 0) | | |
+| 8 | `ssh … 'journalctl -u btmuxd -n 20 --no-pager'` | Ligne `btmuxd <version> started — no daemon logic yet (v0.3.0)` ; pas de traceback ; pas de crash-loop : `systemctl show btmuxd -p NRestarts` = `0` et l'unité reste `active` en continu (le daemon reste vivant) | | |
+| 9 | `ssh … 'sudo systemctl stop btmuxd; systemctl is-active btmuxd; journalctl -u btmuxd -n 3 --no-pager'` | `inactive` ; journal `btmuxd <version> stopped` ; arrêt propre (SIGTERM → code 0, pas de `Failed`, pas de redémarrage automatique) ; puis `sudo systemctl start btmuxd` | | |
 
 **Verdict** : [ ] PASS [ ] FAIL
 
