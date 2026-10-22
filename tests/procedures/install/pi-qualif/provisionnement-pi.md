@@ -7,7 +7,10 @@
 ## Prérequis
 
 - [ ] Pi flashé avec Raspberry Pi Imager (Ubuntu Server 26.04 LTS 64 bits) ; personnalisation **cloud-init** : hostname `btmux-qualif`, utilisateur, clé SSH publique, mot de passe SSH désactivé, pas de Wi-Fi ; Ethernet branché
-- [ ] Dongle USB Bluetooth RTL8761B branché sur rallonge USB, loin des ports USB 3
+- [ ] **Variante Bluetooth** choisie et notée (`BTMUX_BT_MODE`, défaut `dongle`) :
+  - `dongle` (cible) : dongle USB RTL8761B branché sur rallonge USB, loin des ports USB 3 ; `dtoverlay=disable-bt` posé
+  - `internal` (provisoire, Pi 3, `docs/install-pi.md` §10) : Bluetooth intégré (`hci0`, UART, Broadcom BCM43430A1) ; **pas** de `disable-bt`
+  - Les étapes marquées *(dongle)* / *(internal)* ne s'appliquent qu'à leur variante ; les résultats `internal` sont indicatifs, pas la cible
 - [ ] `.claude/agents/environments/qualif.env` renseigné (`SSH_KEY_PATH`, `DEPLOY_HOST`, éventuellement `BTMUX_USER`)
 - [ ] Notation : `$U` = utilisateur de service, `$UID_U` = `id -u $U`
 
@@ -18,10 +21,10 @@
 | 1 | `ssh $U@btmux-qualif.local hostname` | `btmux-qualif` ; connexion par clé, sans mot de passe (cloud-init) | | |
 | 2 | `. /etc/os-release; echo $VERSION_CODENAME $VERSION_ID; uname -m` | `resolute 26.04` ; `aarch64` | | |
 | 3 | `cloud-init status` | `status: done` | | |
-| 4 | `grep -E 'disable-(bt\|wifi)' /boot/firmware/config.txt` | `dtoverlay=disable-bt` et `dtoverlay=disable-wifi` présents (section `[all]`) | | |
-| 5 | `ls /etc/netplan/ ; grep -l wifis /etc/netplan/* \|\| echo aucun` | Aucun bloc `wifis:` ; `ip -br link` sans interface `wlan*` ; Ethernet actif | | |
+| 4 | `grep -E 'disable-(bt\|wifi)' /boot/firmware/config.txt` | *(dongle)* `dtoverlay=disable-bt` et `dtoverlay=disable-wifi` présents (section `[all]`) — *(internal)* `disable-bt` **absent** ; `disable-wifi` facultatif | | |
+| 5 | `ls /etc/netplan/ ; grep -l wifis /etc/netplan/* \|\| echo aucun` | *(dongle)* Aucun bloc `wifis:` ; `ip -br link` sans interface `wlan*` ; Ethernet actif — *(internal)* Wi-Fi toléré (SSH possible par Wi-Fi) mais coexistence 2,4 GHz à consigner | | |
 | 6 | `systemctl is-active avahi-daemon` ; depuis le poste : `ping btmux-qualif.local` | `active` ; le nom `.local` se résout | | |
-| 7 | `bluetoothctl list` | **Un seul** contrôleur (le dongle) ; le Bluetooth intégré est absent | | |
+| 7 | `timeout 8 bluetoothctl list </dev/null` (le `timeout` est obligatoire : `bluetoothctl list` attend indéfiniment sans contrôleur) | **Un seul** contrôleur — *(dongle)* le dongle, le Bluetooth intégré est absent — *(internal)* `hci0` intégré | | |
 
 **Verdict** : [ ] PASS [ ] FAIL
 
@@ -35,27 +38,48 @@
 | 4 | `python3 --version` ; `python3 -c 'import ensurepip'` | ≥ 3.12 (attendu 3.14.x) ; `ensurepip` disponible (`python3-venv`) | | |
 | 5 | `dpkg -l libspa-0.2-bluetooth pipewire-audio linux-firmware bluez-tools alsa-utils avahi-daemon \| grep -c ^ii` | `6` (tous installés) | | |
 | 6 | `uname -r` | Noyau noté | | |
-| 7 | Exécuter le script de vérification de `docs/install-pi.md` §8 (en tant que `$U`) | Code 0, aucune ligne `ECHEC` | | |
+| 7 | Exécuter le script de vérification de `docs/install-pi.md` §8 en tant que `$U`, avec `BTMUX_BT_MODE=<variante>` | Code 0, aucune ligne `ECHEC` (18 contrôles `OK` constatés en `internal` ; en `dongle` : mêmes contrôles + firmware rtl8761b, Wi-Fi absent) | | |
 
 - [ ] Les valeurs ci-dessus sont reportées dans `docs/install-pi.md` §9 « Versions installées »
 
 **Verdict** : [ ] PASS [ ] FAIL
 
-## Scénario 3 — Dongle RTL8761B et firmware (`linux-firmware`)
+## Scénario 3 — Contrôleur Bluetooth : exécuter **une** variante (3-dongle ou 3-internal)
+
+### Variante `dongle` — RTL8761B et firmware (`linux-firmware`) — cible
 
 | Étape | Action | Résultat attendu | Valeur relevée | OK ? |
 |-------|--------|------------------|----------------|------|
 | 1 | `lsusb \| grep -i -E '0bda\|realtek'` | Dongle détecté | | |
-| 2 | `ls /lib/firmware/rtl_bt/ \| grep 8761b` | **Fichiers `rtl8761b*` présents** (au moins `rtl8761bu_fw.bin`, et `rtl8761bu_config.bin` si fourni) dans `linux-firmware` ; sinon FAIL bloquant (point non vérifié en amont) | | |
+| 2 | `ls /lib/firmware/rtl_bt/ \| grep 8761b` | **Fichiers `rtl8761b*` présents** (au moins `rtl8761bu_fw.bin`, et `rtl8761bu_config.bin` si fourni) dans `linux-firmware` ; sinon FAIL bloquant | | |
 | 3 | `dpkg -S /lib/firmware/rtl_bt/rtl8761bu_fw.bin` | Appartient au paquet `linux-firmware` | | |
 | 4 | `sudo dmesg \| grep rtl_bt` | Firmware chargé sans erreur (`rtl8761bu_fw`) | | |
 | 5 | `sudo btmgmt info` | Contrôleur listé, Bluetooth 5.x ; noter le nombre de liens SCO si exposé (utile à l'issue #6) | | |
-| 6 | `bluetoothctl list` | `Controller <MAC> … [default]` ; **MAC relevée** | | |
+| 6 | `timeout 8 bluetoothctl list </dev/null` | `Controller <MAC> … [default]` ; **MAC relevée** | | |
 
 - [ ] **MAC du dongle** consignée dans `docs/install-pi.md` §9 (elle identifie l'adaptateur dans la config — jamais `hci0`)
 - [ ] Rallonge USB utilisée, dongle éloigné des ports USB 3
 
-**Verdict** : [ ] PASS [ ] FAIL
+**Verdict dongle** : [ ] PASS [ ] FAIL [ ] N/A
+
+### Variante `internal` — Bluetooth intégré du Pi 3 (provisoire, `docs/install-pi.md` §10)
+
+| Étape | Action | Résultat attendu | Valeur relevée | OK ? |
+|-------|--------|------------------|----------------|------|
+| 1 | `grep '^dtoverlay=disable-bt' /boot/firmware/config.txt \|\| echo absent` | `absent` (sinon le retirer et redémarrer) | | |
+| 2 | `ls /lib/firmware/brcm/ \| grep BCM43430A1.raspberrypi,3-model-b.hcd` ; `dpkg -S` de ce fichier | Fichier présent (paquet `linux-firmware-raspi`) | | |
+| 3 | `sudo dmesg \| grep 'hci0: BCM'` | Firmware BCM chargé sans erreur (noter la version, ex. 001.002.009) | | |
+| 4 | `sudo btmgmt info` | **Un** contrôleur `hci0`, bus UART, Broadcom BCM43430A1, Bluetooth 4.2 | | |
+| 5 | `timeout 8 bluetoothctl list </dev/null` ; `systemctl is-active bluetooth` | `Controller <MAC> … [default]` (MAC du Pi, préfixe `B8:27:EB` sur Pi 3) ; `active` | | |
+| 6 | `hciconfig -a hci0 \| grep -i sco` | SCO MTU relevé (ex. 64:1) ; nombre de liens SCO simultanés non exposé : à mesurer aux spikes (R1) | | |
+| 7 | Routage SCO : `sudo hcitool cmd 0x3f 0x1d` (lecture seule) | Réponse notée (défaut constaté : `00 02 00 01 01` = PCM, routing 0). **Ne pas modifier** sauf essai documenté ; si `0x3f 0x1c 01 00 00 00 00` est essayé, relire `0x3f 0x1d` (attendu `01 00 00 00 00` = HCI) puis **restaurer la valeur d'origine** ; réglage volatil | | |
+| 8 | Reporter `adapters[0].mac` = MAC relevée dans `/etc/btmux/config.yaml` ; `btmuxd --config /etc/btmux/config.yaml --check-config` | `config OK: …`, code 0 | | |
+
+- [ ] MAC, firmware et SCO consignés dans `docs/install-pi.md` §9, **marqués « variante provisoire »**
+- [ ] Limites reconnues (non bloquantes) : HCI sur UART, antenne partagée avec le Wi-Fi 2,4 GHz, BT 4.2, RAM ~894 Mo, SCO par HCI non testé ; mesures latence/qualité à reconfirmer avec le dongle
+- [ ] **Retour au dongle** (quand disponible) : remettre `dtoverlay=disable-bt`, brancher le dongle, redémarrer, relever la nouvelle MAC, mettre à jour `adapters[0].mac`, rejouer la variante `dongle`
+
+**Verdict internal** : [ ] PASS [ ] FAIL [ ] N/A
 
 ## Scénario 4 — Session PipeWire pour le service système (décision D2)
 
@@ -94,7 +118,8 @@
 
 - [ ] Scénarios 1 à 6 PASS (critères d'acceptation de l'issue #3)
 - [ ] Versions installées et MAC du dongle consignées dans `docs/install-pi.md` §9
-- [ ] Présence des fichiers `rtl8761b*` dans `linux-firmware` confirmée (ou écart remonté au teamleader)
+- [ ] Scénario 3 : au moins une variante PASS ; la cible `dongle` reste à valider avant la clôture du milestone (la variante `internal` seule ne suffit pas à lever les réserves de la cible)
+- [ ] Variante `dongle` : présence des fichiers `rtl8761b*` dans `linux-firmware` confirmée (ou écart remonté au teamleader)
 
 ## Notes QA
 
