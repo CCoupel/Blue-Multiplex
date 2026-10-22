@@ -5,8 +5,8 @@
 > portee par `scripts/deploy.sh` (interface fixee, T1.7).
 
 Installation pure de la wheel deja publiee par PUBLISH QUALIF — aucun build, aucune publication
-(BORE). Cible : `pi@btmux-qualif.local:/opt/btmux` (venv), unite systeme `btmuxd` (`User=pi`,
-`XDG_RUNTIME_DIR=/run/user/1000`, linger active — decision D2).
+(BORE). Cible : `ubuntu@btmux-qualif.local:/opt/btmux` (venv), unite systeme `btmuxd` (utilisateur de service via drop-in `btmux-set-user.sh` / `BTMUX_USER`,
+utilisateur par defaut = partie utilisateur de `DEPLOY_HOST`, linger active — decision D2).
 
 ## Variables attendues
 
@@ -16,7 +16,7 @@ et relues par `scripts/deploy.sh` lui-meme.
 | Variable | Usage |
 |----------|-------|
 | `SSH_KEY_PATH` | Cle privee `ssh`/`scp` vers le Pi de qualif (aussi utilisee par `commands.smoke`) |
-| `DEPLOY_HOST` | `user@host` cible (ex. `pi@192.168.1.176`, valeur dans `qualif.env`) — aussi utilisee par `commands.smoke`, qui source `qualif.env` lui-meme |
+| `DEPLOY_HOST` | `user@host` cible (ex. `ubuntu@btmux-qualif.local`, valeur dans `qualif.env`) — aussi utilisee par `commands.smoke`, qui source `qualif.env` lui-meme |
 
 Variable absente -> STOP, remonter au teamleader (ne jamais coder de valeur).
 

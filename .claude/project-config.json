@@ -51,7 +51,7 @@
         },
         "deploy": {
           "mechanism": "vps",
-          "target": "pi@btmux-qualif.local:/opt/btmux",
+          "target": "ubuntu@btmux-qualif.local:/opt/btmux",
           "notes": "Pi de qualification — scripts/deploy.sh : scp de la wheel, uv pip install, unites systemd, restart"
         }
       },
@@ -66,7 +66,7 @@
         },
         "deploy": {
           "mechanism": "vps",
-          "target": "pi@btmux.local:/opt/btmux",
+          "target": "ubuntu@btmux.local:/opt/btmux",
           "notes": "Pi de production — telechargement du .deb de la release, scp, dpkg -i, restart"
         }
       }
@@ -130,7 +130,7 @@
     "coverage": "uv run pytest --cov=btmux --cov-report=term-missing",
     "test_fast": "uv run pytest -m \"not slow\"",
     "test_targeted": "uv run pytest {TARGETS}",
-    "smoke": "set -a; . .claude/agents/environments/qualif.env; set +a; ssh -i \"$SSH_KEY_PATH\" \"$DEPLOY_HOST\" 'systemctl is-active btmuxd && /opt/btmux/bin/btmuxd --version && /opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config'"
+    "smoke": "bash -c 'set -a; . <(tr -d \"\\r\" < .claude/agents/environments/qualif.env); set +a; ssh -i \"$SSH_KEY_PATH\" -o BatchMode=yes -- \"$DEPLOY_HOST\" \"systemctl is-active btmuxd && /opt/btmux/bin/btmuxd --version && /opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config\"'"
   },
   "docs": {
     "mockup_dir": "docs/mockup",
