@@ -12,7 +12,7 @@ via le daemon `btmuxd`. Aucun logiciel n'est requis côté sources.
 
 ## Développement
 
-Prérequis : Python 3.12, [`uv`](https://docs.astral.sh/uv/) (installé hors repo : `curl -LsSf https://astral.sh/uv/install.sh | sh`
+Prérequis : Python ≥ 3.12 (3.12 et 3.14 testés en CI ; le Pi cible tourne Python 3.14), [`uv`](https://docs.astral.sh/uv/) (installé hors repo : `curl -LsSf https://astral.sh/uv/install.sh | sh`
 → `~/.local/bin/uv`, à ajouter au `PATH`), `jq`, `dpkg-deb`.
 
 ```bash
@@ -36,7 +36,7 @@ Par défaut, le staging se fait dans `_work/tmp/` (gitignoré).
 ## Installation sur le Pi
 
 Le paquet `btmux_<X.Y.Z>_all.deb` est attaché à chaque GitHub Release. Il installe la wheel, l'unité systemd
-`btmuxd.service` et la configuration d'exemple ; le venv `/opt/btmux` est créé sur le Pi.
+`btmuxd.service`, la configuration d'exemple et `set-user.sh` ; le venv `/opt/btmux` est créé sur le Pi.
 
 1. Provisionner le Pi (Ubuntu Server 26.04 LTS arm64, Bluetooth, PipeWire, session de l'utilisateur de service avec linger) : [docs/install-pi.md](docs/install-pi.md).
 2. Copier et adapter la configuration : `config/config.example.yaml` → `/etc/btmux/config.yaml`

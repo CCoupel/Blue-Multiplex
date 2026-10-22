@@ -15,11 +15,18 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
 - Paquet Debian `btmux_<X.Y.Z>_all.deb` (`scripts/build-deb.sh`) et déploiement sur le Pi de qualification
   (`scripts/deploy.sh`), sans rebuild ni publication (#2).
 - Procédure de provisionnement du Pi de qualification `docs/install-pi.md` (#3).
+- Script `scripts/btmux-set-user.sh` (installé en `/usr/lib/btmux/set-user.sh`) : choisit l'utilisateur de service de
+  `btmuxd` par drop-in systemd, sans modifier l'unité livrée ; refus de root (#2).
+- Matrice CI sur Python 3.12 (plancher `requires-python`) et 3.14 (Python d'Ubuntu Server 26.04) (#1).
 
 ### Changed
 - `btmuxd --config <path>` (sans `--check-config`) ne sort plus en 0 après validation : le daemon reste vivant
   jusqu'à SIGTERM/SIGINT (code 0), pour que l'unité systemd soit réellement active (#2, #4).
 - Cible du Pi : Ubuntu Server 26.04 LTS arm64 (au lieu de Raspberry Pi OS / Debian Trixie) ; utilisateur de service `ubuntu` par défaut, paramétrable via `BTMUX_USER` (#2 #3).
+- `scripts/deploy.sh` durci : installe `python3-venv` si absent, garde Python ≥ 3.12 côté Pi, recrée un venv
+  incomplet, valide `BTMUX_USER`, `DEPLOY_HOST` et le nom de la wheel avant tout appel `ssh`, refuse root,
+  accepte un fichier d'environnement alternatif (`BTMUX_ENV_FILE`) et un `.env` en fins de ligne CRLF (#2).
+- Fins de ligne LF forcées pour `scripts/` et `systemd/` via `.gitattributes` (#2).
 
 ### Fixed
 - Corrections de revue de code du lot 1 (#2, #4) :
