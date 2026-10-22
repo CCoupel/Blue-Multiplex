@@ -14,7 +14,8 @@ ENV_FILE="${BTMUX_ENV_FILE:-.claude/agents/environments/${ENV_NAME}.env}"   # BT
 [ -f "$WHEEL" ] || { echo "deploy: wheel introuvable: $WHEEL" >&2; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "deploy: $ENV_FILE absent (modele: ${ENV_NAME}.env.example)" >&2; exit 1; }
 [ -f systemd/btmuxd.service ] && [ -f config/config.example.yaml ] && [ -f scripts/btmux-set-user.sh ] \
-  || { echo "deploy: systemd/btmuxd.service, config/config.example.yaml ou scripts/btmux-set-user.sh absent" >&2; exit 1; }
+  && [ -f scripts/btmux-install-wireplumber.sh ] && [ -f config/wireplumber/51-btmux-no-seat.conf ] \
+  || { echo "deploy: systemd/btmuxd.service, config/config.example.yaml, scripts/btmux-set-user.sh ou la config WirePlumber absent" >&2; exit 1; }
 
 # shellcheck disable=SC1090
 # tr -d '\r' : tolere un .env ecrit avec des fins de ligne CRLF (edite sous Windows)
@@ -40,7 +41,8 @@ REMOTE_DIR=$(ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "mktemp -d /tmp/btmux-deploy
 [[ "$REMOTE_DIR" =~ ^/tmp/btmux-deploy\.[A-Za-z0-9]+$ ]] || { echo "deploy: repertoire distant inattendu: $REMOTE_DIR" >&2; exit 1; }
 # Nettoyage distant garanti des la creation du repertoire (scp ou script distant en echec)
 trap 'ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "rm -rf $REMOTE_DIR" >/dev/null 2>&1 || true' EXIT
-scp "${SSH_OPTS[@]}" -q -- "$WHEEL" systemd/btmuxd.service config/config.example.yaml scripts/btmux-set-user.sh "$DEPLOY_HOST:$REMOTE_DIR/"
+scp "${SSH_OPTS[@]}" -q -- "$WHEEL" systemd/btmuxd.service config/config.example.yaml scripts/btmux-set-user.sh \
+  scripts/btmux-install-wireplumber.sh config/wireplumber/51-btmux-no-seat.conf "$DEPLOY_HOST:$REMOTE_DIR/"
 
 # Script distant : lu depuis stdin (aucun fichier intermediaire), argument = nom de la wheel.
 ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" "$BTMUX_USER" <<'REMOTE'
@@ -70,6 +72,8 @@ if [ ! -f /etc/btmux/config.yaml ]; then
 fi
 sudo install -m 644 "$dir/btmuxd.service" /etc/systemd/system/btmuxd.service
 sudo sh "$dir/btmux-set-user.sh" "$svc_user"
+# WirePlumber headless (pas de seat) : sans cela BlueZ n'annonce aucun profil audio. N'ecrase rien.
+sudo sh "$dir/btmux-install-wireplumber.sh" "$svc_user" "$dir/51-btmux-no-seat.conf"
 if [ "$(loginctl show-user "$svc_user" -p Linger --value 2>/dev/null)" != yes ]; then
   echo "deploy: ATTENTION linger absent pour $svc_user (sudo loginctl enable-linger $svc_user)" >&2
 fi

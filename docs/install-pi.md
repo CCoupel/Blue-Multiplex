@@ -67,6 +67,32 @@ sudo apt install -y bluez pipewire pipewire-audio wireplumber libspa-0.2-bluetoo
 Vérifier (après reboot, sans session ouverte) : `loginctl show-user <utilisateur> -p Linger` → `Linger=yes` et
 `ls /run/user/$(id -u <utilisateur>)/pipewire-0`.
 
+### 5 bis. WirePlumber en mode headless : désactiver `seat-monitoring` (obligatoire)
+
+Sur un serveur sans session graphique (aucun *seat* logind, cas de `btmuxd` sous un utilisateur avec linger),
+WirePlumber n'active pas son moniteur Bluetooth : BlueZ ne reçoit alors **aucun point de terminaison A2DP/HFP** et
+n'annonce que AVRCP — le Pi n'apparaît pas comme casque. Constaté sur `pi-qualif` (spike #5, 2026-10-22).
+
+Le fichier est livré dans le dépôt : `config/wireplumber/51-btmux-no-seat.conf` ; `scripts/deploy.sh` et le `postinst`
+du `.deb` l'installent dans le home de l'utilisateur de service, **sans écraser un fichier existant**. Installation
+manuelle (en tant qu'utilisateur de service) :
+
+```bash
+mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+cat > ~/.config/wireplumber/wireplumber.conf.d/51-btmux-no-seat.conf <<'CONF'
+wireplumber.profiles = {
+  main = {
+    monitor.bluez.seat-monitoring = disabled
+  }
+}
+CONF
+systemctl --user restart wireplumber
+```
+
+Vérifier : `bluetoothctl show | grep UUID` doit lister **Audio Sink (110b)**, **Audio Source (110a)**, **Handsfree
+Audio Gateway (111f)** et **Handsfree (111e)** en plus de AVRCP. Retour arrière : supprimer le fichier et
+redémarrer `wireplumber`.
+
 ## 6. Dongle RTL8761B
 
 ```bash
@@ -126,6 +152,7 @@ else
 fi
 bl=$(timeout 8 bluetoothctl list </dev/null 2>/dev/null)   # timeout : bluetoothctl attend sans contrôleur
 n=$(printf '%s\n' "$bl" | grep -c '^Controller'); [ "$n" -eq 1 ] && ok "1 contrôleur: $bl" || ko "$n contrôleur(s) (1 attendu)"
+timeout 8 bluetoothctl show </dev/null 2>/dev/null | grep -q 0000110b- && ok "profil A2DP sink exposé (WirePlumber headless OK)" || ko "pas d'UUID Audio Sink : voir §5 bis (seat-monitoring)"
 if ip -br link | grep -q '^wlan'; then
   [ "$mode" = internal ] && ok "Wi-Fi présent (toléré en mode internal)" || ko "interface wlan présente (Wi-Fi à désactiver)"
 else ok "pas de Wi-Fi"; fi
@@ -196,6 +223,11 @@ Limites connues du Bluetooth interne :
   ensuite. Le réglage est volatile (perdu au reset du contrôleur/redémarrage) : btmuxd devra l'appliquer à chaque
   démarrage s'il retient cette voie. Le passage effectif d'audio SCO par HCI (HFP) n'a **pas** été testé : il
   nécessite un appareil appairé (spikes #8/#9).
+- **Classe d'appareil annoncée** : avec les quatre rôles (A2DP sink+source, HFP HF+AG) la classe réelle est
+  **0x006C0404** (majeur Audio/Video, mineur Wearable Headset), et non 0x240404 : les bits de service *Capturing*
+  (0x080000) et *Telephony* (0x400000) sont ajoutés par le noyau à cause des profils HFP (AG et HF), `btmgmt class`
+  ne fixant que majeur/mineur. Relevé le 2026-10-22 ; l'effet sur la vue de Windows est l'objet du spike #5 (risque R4,
+  variante à rôles restreints préparée dans `spikes/05-exposure/50-btmux-roles.conf`).
 - **Un seul contrôleur** : en mono-adaptateur, le même `hci0` fait casque pour les sources et source pour les casques
   (limite connue de la v0.1.0, indépendante de la variante).
 - **Bluetooth 4.2** (et non 5.x) : pas de LE 2M ni d'extensions BT 5 ; sans effet sur A2DP/HFP classiques.

@@ -26,6 +26,9 @@ install -m 644 "$WHEEL" "$STAGE/usr/share/btmux/"
 [ -d systemd ] && install -m 644 systemd/*.service "$STAGE/lib/systemd/system/"
 install -d "$STAGE/usr/lib/btmux"
 install -m 755 scripts/btmux-set-user.sh "$STAGE/usr/lib/btmux/set-user.sh"
+install -m 755 scripts/btmux-install-wireplumber.sh "$STAGE/usr/lib/btmux/install-wireplumber.sh"
+install -d "$STAGE/usr/share/btmux/wireplumber"
+install -m 644 config/wireplumber/51-btmux-no-seat.conf "$STAGE/usr/share/btmux/wireplumber/"
 [ -f config/config.example.yaml ] && install -m 644 config/config.example.yaml "$STAGE/etc/btmux/config.example.yaml"
 
 cat > "$STAGE/DEBIAN/control" <<CTRL
@@ -57,6 +60,7 @@ fi
 if [ -n "$svc_user" ]; then
   if id "$svc_user" >/dev/null 2>&1; then
     /usr/lib/btmux/set-user.sh "$svc_user"
+    /usr/lib/btmux/install-wireplumber.sh "$svc_user" /usr/share/btmux/wireplumber/51-btmux-no-seat.conf || true
   else
     echo "btmux: utilisateur '$svc_user' inconnu — relancer /usr/lib/btmux/set-user.sh <utilisateur>" >&2
   fi
