@@ -104,3 +104,83 @@ def test_default_routes_non_string_is_error_not_traceback(routes: Any) -> None:
     data = _copy()
     data["default_routes"] = routes
     assert any(e.startswith("config: default_routes:") for e in _errors(data))
+
+
+# --- v0.2.0 : bi-adaptateur (V4 levée à 2) et clé pairing (V11) ---
+def _bi() -> dict[str, Any]:
+    data = _copy()
+    data["adapters"] = [
+        {"mac": "AA:BB:CC:00:00:01", "name": "btmux", "roles": ["sources"]},
+        {"mac": "AA:BB:CC:00:00:02", "name": "btmux-hp", "roles": ["headsets"]},
+    ]
+    return data
+
+
+def test_two_adapters_with_split_roles_accepted() -> None:
+    cfg = parse_config(_bi())
+    assert [a.mac for a in cfg.adapters] == ["AA:BB:CC:00:00:01", "AA:BB:CC:00:00:02"]
+    assert cfg.adapter_for_role("sources").name == "btmux"
+    assert cfg.adapter_for_role("headsets").name == "btmux-hp"
+
+
+def test_three_adapters_refused_with_contract_message() -> None:
+    data = _bi()
+    data["adapters"].append({"mac": "AA:BB:CC:00:00:03", "name": "x", "roles": ["sources"]})
+    errors = _errors(data)
+    assert "config: at most 2 adapters are supported (found 3)" in errors
+
+
+def test_two_adapters_same_role_is_a_v3_error() -> None:
+    data = _bi()
+    data["adapters"][1]["roles"] = ["sources"]
+    errors = _errors(data)
+    assert any(
+        "role 'headsets' must be provided by exactly one adapter (found 0)" in e for e in errors
+    )
+    assert any(
+        "role 'sources' must be provided by exactly one adapter (found 2)" in e for e in errors
+    )
+
+
+def test_pairing_defaults_and_values() -> None:
+    cfg = parse_config(_copy())
+    assert cfg.pairing.default_duration == 60 and cfg.pairing.accept_incoming is True
+    data = _copy()
+    data["pairing"] = {"default_duration": 300, "accept_incoming": False}
+    cfg = parse_config(data)
+    assert cfg.pairing.default_duration == 300 and cfg.pairing.accept_incoming is False
+
+
+@pytest.mark.parametrize("duration", [0, 301, -5, "60", 1.5, True, None])
+def test_pairing_invalid_duration(duration: Any) -> None:
+    data = _copy()
+    data["pairing"] = {"default_duration": duration}
+    assert any("pairing.default_duration" in e for e in _errors(data))
+
+
+@pytest.mark.parametrize("value", ["yes", 1, None])
+def test_pairing_invalid_accept_incoming(value: Any) -> None:
+    data = _copy()
+    data["pairing"] = {"accept_incoming": value}
+    assert any("pairing.accept_incoming" in e for e in _errors(data))
+
+
+def test_pairing_unknown_key_and_wrong_type() -> None:
+    data = _copy()
+    data["pairing"] = {"timeout": 5}
+    assert any("unknown key 'timeout' in pairing" in e for e in _errors(data))
+    data["pairing"] = [1]
+    assert any("pairing: expected a mapping" in e for e in _errors(data))
+
+
+def test_pairing_none_accepted() -> None:
+    data = _copy()
+    data["pairing"] = None
+    assert parse_config(data).pairing.default_duration == 60
+
+
+def test_example_config_is_bi_adapter(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[3]
+    cfg = load_config(root / "config" / "config.example.yaml")
+    assert len(cfg.adapters) == 2
+    assert cfg.adapter_for_role("sources") is not cfg.adapter_for_role("headsets")

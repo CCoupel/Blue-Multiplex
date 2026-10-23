@@ -2,11 +2,19 @@
 # Validation : btmuxd --config /etc/btmux/config.yaml --check-config
 # Schema de reference : contracts/config-schema.md
 
-# v0.1.0 : un seul adaptateur Bluetooth, qui porte les deux roles.
+# v0.2.0 : deux adaptateurs Bluetooth (2 x TP-Link UB500), identifies par MAC (bluetoothctl list), jamais hci0/hci1.
 adapters:
-  - mac: "AA:BB:CC:00:00:01"   # adresse du controleur (bluetoothctl list) — jamais hci0/hci1
+  - mac: "AA:BB:CC:00:00:01"   # hci-src : vu comme un CASQUE par les sources (PC, telephones)
     name: "btmux"              # nom Bluetooth annonce (1..248 octets UTF-8)
-    roles: [sources, headsets] # sources = vu comme un casque ; headsets = vu comme une source
+    roles: [sources]
+  - mac: "AA:BB:CC:00:00:02"   # hci-hp : vu comme une SOURCE par les casques
+    name: "btmux-hp"
+    roles: [headsets]
+# Forme mono-adaptateur (toujours valide) : une seule entree qui porte les deux roles.
+# adapters:
+#   - mac: "AA:BB:CC:00:00:01"
+#     name: "btmux"
+#     roles: [sources, headsets]
 
 # Appareils connus (liste, peut etre vide). alias : [a-z0-9][a-z0-9-]{0,31}
 devices:
@@ -25,3 +33,8 @@ api:
 
 mqtt:
   enabled: false
+
+# Fenetre d'appairage (optionnel ; valeurs par defaut ci-dessous)
+pairing:
+  default_duration: 60     # 1..300 s : duree par defaut d'une fenetre d'appairage
+  accept_incoming: true    # accepter les appairages entrants sur l'adaptateur `sources` PENDANT une fenetre

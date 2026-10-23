@@ -8,6 +8,7 @@ from btmux.config.models import (
     ConfigError,
     Device,
     MqttConfig,
+    PairingConfig,
 )
 
 __all__ = [
@@ -17,6 +18,7 @@ __all__ = [
     "ConfigError",
     "Device",
     "MqttConfig",
+    "PairingConfig",
     "load_config",
     "parse_config",
 ]

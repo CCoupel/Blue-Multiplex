@@ -6,10 +6,11 @@ Exploration technique bi-adaptateur (2 × TP-Link UB500) : revalidation de la to
 préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel complet.
 
 ### Changed
-- Contrat `contracts/config-schema.md` : règle V4 levée (1 ou 2 adaptateurs acceptés) — documentation uniquement, le
-  code reste à 1 adaptateur jusqu'à #14.
+- Configuration bi-adaptateur (#14) : règle V4 levée (1 ou 2 adaptateurs acceptés ; 3 refusés avec
+  `config: at most 2 adapters are supported (found N)`), `config/config.example.yaml` en deux adaptateurs (forme mono en commentaire).
 
 ### Added
+- Clé de configuration optionnelle `pairing` (`default_duration` 1..300 s, `accept_incoming`), règle V11 (#14, #20).
 - Brouillons de contrats `contracts/http-endpoints.md` et `contracts/models.md` (DRAFT, API appairages — #20 #21 #16).
 
 ## [0.1.0] — 2026-10-23 (non publié : exploration mono-adaptateur, clôturée sans release)

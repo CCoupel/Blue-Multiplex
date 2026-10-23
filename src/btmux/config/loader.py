@@ -1,4 +1,4 @@
-"""Chargement et validation (V1–V10) : toutes les erreurs sont collectées."""
+"""Chargement et validation (V1–V11) : toutes les erreurs sont collectées."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from btmux.config.models import (
     ConfigError,
     Device,
     MqttConfig,
+    PairingConfig,
 )
 
 PREFIX = "config: "
@@ -27,13 +28,15 @@ ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 ROLES = ("sources", "headsets")
 KINDS = ("source", "headset")
 MAX_NAME_BYTES = 248
-MAX_ADAPTERS_V010 = 1
+MAX_ADAPTERS = 2  # V4 (levée à 2 adaptateurs en v0.2.0)
+PAIRING_DURATION_RANGE = (1, 300)
 
-TOP_KEYS = {"adapters", "devices", "default_routes", "api", "mqtt"}
+TOP_KEYS = {"adapters", "devices", "default_routes", "api", "mqtt", "pairing"}
 ADAPTER_KEYS = {"mac", "name", "roles"}
 DEVICE_KEYS = {"mac", "alias", "kind", "priority"}
 API_KEYS = {"listen", "token_file"}
 MQTT_KEYS = {"enabled"}
+PAIRING_KEYS = {"default_duration", "accept_incoming"}
 
 
 class _Errors:
@@ -223,19 +226,35 @@ def _mqtt(raw: Any, err: _Errors) -> MqttConfig:
     return MqttConfig(enabled=enabled)
 
 
+def _pairing(raw: Any, err: _Errors) -> PairingConfig:
+    if raw is None:
+        return PairingConfig()
+    if not isinstance(raw, dict):
+        err.add("pairing: expected a mapping")
+        return PairingConfig()
+    err.unknown_keys(raw, PAIRING_KEYS, "pairing")
+    low, high = PAIRING_DURATION_RANGE
+    duration = raw.get("default_duration", 60)
+    if isinstance(duration, bool) or not isinstance(duration, int) or not low <= duration <= high:
+        err.add(f"pairing.default_duration: expected an integer between {low} and {high}")
+        duration = 60
+    accept = raw.get("accept_incoming", True)
+    if not isinstance(accept, bool):
+        err.add("pairing.accept_incoming: expected a boolean")
+        accept = True
+    return PairingConfig(default_duration=duration, accept_incoming=accept)
+
+
 def _role_policy(adapters: list[Adapter], err: _Errors) -> None:
-    """V3 (rôle porté par exactement un adaptateur) et V4 (politique mono-adaptateur v0.1.0)."""
+    """V3 (rôle porté par exactement un adaptateur) et V4 (au plus 2 adaptateurs)."""
     if not adapters:
         return
     for role in ROLES:
         count = sum(1 for a in adapters if role in a.roles)
         if count != 1:
             err.add(f"role '{role}' must be provided by exactly one adapter (found {count})")
-    if len(adapters) > MAX_ADAPTERS_V010:
-        err.add(
-            "multi-adapter configuration is planned for v0.2.0 "
-            f"(found {len(adapters)} adapters, max {MAX_ADAPTERS_V010})"
-        )
+    if len(adapters) > MAX_ADAPTERS:
+        err.add(f"at most {MAX_ADAPTERS} adapters are supported (found {len(adapters)})")
 
 
 def parse_config(data: Any) -> Config:
@@ -249,6 +268,7 @@ def parse_config(data: Any) -> Config:
     routes = _routes(data.get("default_routes"), devices, err)
     api = _api(data.get("api"), err)
     mqtt = _mqtt(data.get("mqtt"), err)
+    pairing = _pairing(data.get("pairing"), err)
     _role_policy(adapters, err)
     if err.items:
         raise ConfigError(err.items)
@@ -258,6 +278,7 @@ def parse_config(data: Any) -> Config:
         default_routes=routes,
         api=api,
         mqtt=mqtt,
+        pairing=pairing,
     )
 
 

@@ -49,12 +49,20 @@ class MqttConfig(_Model):
     enabled: bool = False
 
 
+class PairingConfig(_Model):
+    """Fenêtre d'appairage (#20/#21, V11)."""
+
+    default_duration: int = 60
+    accept_incoming: bool = True
+
+
 class Config(_Model):
     adapters: tuple[Adapter, ...]
     devices: tuple[Device, ...] = ()
     default_routes: dict[str, str] = Field(default_factory=dict)
     api: ApiConfig = Field(default_factory=ApiConfig)
     mqtt: MqttConfig = Field(default_factory=MqttConfig)
+    pairing: PairingConfig = Field(default_factory=PairingConfig)
 
     def adapter_for_role(self, role: Role) -> Adapter:
         for adapter in self.adapters:
