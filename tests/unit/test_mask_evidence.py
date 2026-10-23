@@ -13,10 +13,10 @@ PI = "B8:27:EB:1A:2E:D6"
 
 
 def test_masks_all_forms_but_keeps_pi() -> None:
-    text = f"{PI} aa:bb:cc:11:22:33 dev_AA_BB_CC_11_22_33 AA-BB-CC-11-22-33 bc:93:07:00:00:01"
+    text = f"{PI} aa:bb:cc:11:22:33 dev_AA_BB_CC_11_22_33 AA-BB-CC-11-22-33 02:00:00:12:34:56"
     out = mask.mask_text(text, PI)
     assert PI in out
-    assert "11:22:33" not in out and "11_22_33" not in out and "00:00:01" not in out
+    assert "11:22:33" not in out and "11_22_33" not in out and "12:34:56" not in out
     assert "aa:bb:cc:xx:xx:xx" in out and "dev_AA_BB_CC_xx_xx_xx" in out
 
 
