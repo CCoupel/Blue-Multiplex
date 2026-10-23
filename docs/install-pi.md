@@ -214,7 +214,7 @@ exit $fail
 
 ## 9. Versions installées
 
-Relevé du **2026-10-22** sur `pi-qualif` (`ubuntu@192.168.1.94`), en **variante provisoire Bluetooth interne** (§10) :
+Relevé du **2026-10-22** sur `pi-qualif` (`ubuntu@<IP-du-Pi>`), en **variante provisoire Bluetooth interne** (§10) :
 le dongle RTL8761B n'est pas disponible. Les valeurs de la cible (dongle) restent à relever le jour où il sera branché.
 
 | Élément | Relevé |
