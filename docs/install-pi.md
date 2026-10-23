@@ -1,6 +1,6 @@
 # Installation du Pi btmux (qualif puis prod)
 
-> Procédure de provisionnement du Pi (v0.1.0, mono-adaptateur). **OS cible : Ubuntu Server 26.04 LTS (arm64)**,
+> Procédure de provisionnement du Pi (v0.1.0 mono-adaptateur ; **v0.2.0 : deux dongles UB500**, §6). **OS cible : Ubuntu Server 26.04 LTS (arm64)**,
 > image officielle Raspberry Pi. Statut : rédigée, **pas encore vérifiée** sur matériel — la vérification a lieu
 > en phase 1.C (issue #3) ; la section « Versions installées » est complétée à ce moment-là.
 > Le même Pi sert de qualif puis de prod.
@@ -8,8 +8,8 @@
 ## 1. Matériel
 
 - Raspberry Pi 4 (préféré) ; Pi 3 ou Pi 5 possibles. Alimentation officielle, carte SD ≥ 16 Go, câble Ethernet.
-- 1 dongle USB Bluetooth Realtek RTL8761B (ex. TP-Link UB500) sur une **rallonge USB**, éloigné des ports USB 3.
-- v0.1.0 : un seul adaptateur ; le second dongle n'arrive qu'en v0.2.0.
+- **2 dongles USB Bluetooth TP-Link UB500** (puce Realtek RTL8761BU, USB `2357:0604`), chacun sur une **rallonge USB**, éloignés des
+  ports USB 3 (cible v0.2.0, §6). La v0.1.0 n'en utilisait qu'un (ou le Bluetooth interne du Pi 3, §10).
 
 ## 2. Paquets disponibles dans Ubuntu 26.04 (« resolute », arm64)
 
@@ -104,18 +104,54 @@ redémarrer `wireplumber`.
 > prévu en v0.2.0 (#18). En attendant, le nom peut être reposé à la main après reboot (`bluetoothctl system-alias btmux`,
 non vérifié sur le Pi).
 
-## 6. Dongle RTL8761B
+## 6. Deux dongles UB500 (cible bi-adaptateur)
+
+Deux dongles **TP-Link UB500** (Realtek RTL8761BU, USB `2357:0604`) : `hci-src` (rôle `sources`, vu comme un casque par les PC et
+téléphones) et `hci-hp` (rôle `headsets`, vu comme une source par les casques). Les noms `hci-src`/`hci-hp` désignent des rôles,
+jamais des index `hciN` (qui changent) : l'identification se fait par **adresse MAC** (`adapters[].mac`).
+
+### 6.1 Branchement
+
+- Chaque dongle sur une **rallonge USB** (≈ 20 cm ou plus), éloigné des ports USB 3 et de l'antenne Wi-Fi.
+- **Les deux dongles sur le même hub USB 2.0 du Pi** (ports USB 2.0 ; sur un Pi 3 les ports USB partagent un unique contrôleur
+  avec l'Ethernet). C'est la configuration des mesures du double saut (#8) : noter dans les relevés qu'ils partagent un seul
+  hub USB 2.0 (480 Mbit/s partagés), ce qui est une limite à rappeler dans les résultats.
+- Ethernet branché ; Wi-Fi désactivé (`dtoverlay=disable-wifi`) pour les mesures.
+
+### 6.2 Checklist de réception (avant tout appairage)
 
 ```bash
-lsusb | grep -i -E "0bda|realtek"          # le dongle est vu sur le bus USB
-dmesg | grep rtl_bt                         # firmware rtl8761bu_fw chargé, sans erreur
-ls /lib/firmware/rtl_bt/ | grep 8761b       # firmware présent (paquet linux-firmware)
-sudo btmgmt info                            # un contrôleur, version Bluetooth 5.x
-bluetoothctl list                           # "Controller <MAC> ... [default]"
+lsusb | grep -c 2357:0604                   # 2
+lsusb -t                                    # les deux sous le même hub USB 2.0 (Driver=btusb)
+dmesg | grep -E "rtl_bt|rtl8761"            # firmware rtl8761bu_fw chargé pour chaque dongle, sans erreur
+ls /lib/firmware/rtl_bt/ | grep 8761bu      # rtl8761bu_fw.bin(.zst), rtl8761bu_config.bin(.zst)
+bluetoothctl list                           # 2 contrôleurs : "Controller <MAC> ... "
+sudo btmgmt info                            # 2 index, version Bluetooth 5.x
+hciconfig -a | grep -E "^hci|Bus|BD Address" # 2 × « Bus: USB », aucun « Bus: UART »
 ```
 
-Relever l'**adresse MAC** du contrôleur : elle va dans `adapters[0].mac` de `/etc/btmux/config.yaml`
-(l'identification se fait par MAC, jamais par `hci0`).
+- [ ] 2 dongles détectés (`2357:0604`), firmware `rtl8761bu` chargé pour les deux, 0 erreur `btusb`/`hci` dans `dmesg`.
+- [ ] 2 contrôleurs BlueZ, **tous deux sur le bus USB, aucun sur UART** (Bluetooth interne désactivé).
+- [ ] Rallonges en place, dongles éloignés de l'USB 3 ; hub USB 2.0 unique noté.
+- [ ] MAC des deux contrôleurs relevées (tableau 6.4) et reportées dans `adapters[].mac`.
+
+### 6.3 Bascule du Bluetooth interne vers les dongles
+
+1. `/boot/firmware/config.txt` : **`dtoverlay=disable-bt`** présent (plus aucun usage radio du Bluetooth interne) ; retirer toute
+   configuration de la variante du §10.
+2. Brancher les deux dongles, **redémarrer** le Pi.
+3. Lancer le script du §8 avec **`BTMUX_BT_MODE=dongle`** : il exige 2 contrôleurs USB, 0 UART, `disable-bt` posé.
+4. Installer l'identité persistante des adaptateurs (service `btmux-adapters`, livré par le paquet / `scripts/deploy.sh`) :
+   `sudo /usr/lib/btmux/btmux-adapters.sh --dry-run` d'abord, puis `sudo systemctl enable --now btmux-adapters.service`.
+
+### 6.4 Tableau MAC ↔ rôle ↔ port USB (à compléter à la réception)
+
+Port USB d'un contrôleur : `readlink -f /sys/class/bluetooth/hciN/device` (chemin `…/1-1.2/1-1.2:1.0` → port `1-1.2`).
+
+| Rôle (`roles`) | Nom annoncé | Index actuel | MAC du contrôleur | Port USB | Rallonge |
+|----------------|-------------|--------------|-------------------|----------|----------|
+| `sources` (`hci-src`) | `btmux` | hci? | à relever | à relever | |
+| `headsets` (`hci-hp`) | `btmux-hp` | hci? | à relever | à relever | |
 
 ## 7. Vérifications PipeWire / BlueZ
 
@@ -127,7 +163,7 @@ pw-cli info 0 | grep -E "version|name"      # version PipeWire
 
 ## 8. Script de vérification
 
-À exécuter **en tant qu'utilisateur de service** (variable `BTMUX_USER` pour un autre utilisateur ; `BTMUX_BT_MODE=internal` pour la variante provisoire du §10, défaut `dongle`). Il échoue
+À exécuter **en tant qu'utilisateur de service** (variable `BTMUX_USER` pour un autre utilisateur ; `BTMUX_BT_MODE=internal` pour la variante provisoire du §10 ; défaut `dongle` = deux UB500, §6). Il échoue
 (code ≠ 0) si une anomalie est détectée et les affiche toutes :
 
 ```bash
@@ -158,11 +194,17 @@ if [ "$mode" = internal ]; then
   sudo dmesg 2>/dev/null | grep -q 'hci0: BCM' && ok "firmware BCM chargé (Bluetooth interne)" || ko "pas de trace hci0 BCM (dmesg)"
   grep -q '^dtoverlay=disable-bt' /boot/firmware/config.txt && ko "disable-bt présent (à retirer en mode internal)" || ok "disable-bt absent"
 else
-  ls /lib/firmware/rtl_bt/ 2>/dev/null | grep -q 8761b && ok "firmware rtl8761b présent" || ko "firmware rtl8761b absent"
-  sudo dmesg 2>/dev/null | grep -q rtl_bt && ok "firmware rtl_bt chargé" || ko "pas de trace rtl_bt (dmesg)"
+  grep -q '^dtoverlay=disable-bt' /boot/firmware/config.txt && ok "disable-bt posé" || ko "disable-bt absent (Bluetooth interne actif)"
+  [ "$(lsusb 2>/dev/null | grep -c 2357:0604)" -eq 2 ] && ok "2 dongles UB500 (2357:0604)" || ko "dongles UB500 : $(lsusb 2>/dev/null | grep -c 2357:0604) (2 attendus)"
+  ls /lib/firmware/rtl_bt/ 2>/dev/null | grep -q 8761bu && ok "firmware rtl8761bu présent" || ko "firmware rtl8761bu absent"
+  [ "$(sudo dmesg 2>/dev/null | grep -c 'rtl_bt/rtl8761bu_fw')" -ge 1 ] && ok "firmware rtl_bt chargé" || ko "pas de trace rtl_bt (dmesg)"
+  hc=$(timeout 8 hciconfig -a 2>/dev/null)
+  [ "$(printf '%s\n' "$hc" | grep -c 'Bus: USB')" -eq 2 ] && ok "2 contrôleurs sur le bus USB" || ko "contrôleurs USB : $(printf '%s\n' "$hc" | grep -c 'Bus: USB') (2 attendus)"
+  [ "$(printf '%s\n' "$hc" | grep -c 'Bus: UART')" -eq 0 ] && ok "0 contrôleur UART" || ko "contrôleur UART présent (Bluetooth interne actif)"
 fi
 bl=$(timeout 8 bluetoothctl list </dev/null 2>/dev/null)   # timeout : bluetoothctl attend sans contrôleur
-n=$(printf '%s\n' "$bl" | grep -c '^Controller'); [ "$n" -eq 1 ] && ok "1 contrôleur: $bl" || ko "$n contrôleur(s) (1 attendu)"
+want=1; [ "$mode" = dongle ] && want=2   # 2 contrôleurs USB en bi-adaptateur
+n=$(printf '%s\n' "$bl" | grep -c '^Controller'); [ "$n" -eq "$want" ] && ok "$want contrôleur(s): $bl" || ko "$n contrôleur(s) ($want attendu(s))"
 timeout 8 bluetoothctl show </dev/null 2>/dev/null | grep -q 0000110b- && ok "profil A2DP sink exposé (WirePlumber headless OK)" || ko "pas d'UUID Audio Sink : voir §5 bis (seat-monitoring)"
 if ip -br link | grep -q '^wlan'; then
   [ "$mode" = internal ] && ok "Wi-Fi présent (toléré en mode internal)" || ko "interface wlan présente (Wi-Fi à désactiver)"
