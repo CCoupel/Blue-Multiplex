@@ -18,9 +18,16 @@ if [ -e "$dest" ]; then
   echo "btmux-wireplumber: $dest existe déjà, conservé"
   exit 0
 fi
-if [ "$(id -u)" -eq 0 ] && [ -z "${BTMUX_HOME:-}" ]; then
-  # Création sous l'identité de l'utilisateur (propriété correcte des répertoires).
-  su -s /bin/sh "$user" -c "mkdir -p '$dest_dir' && cp '$src' '$dest' && chmod 644 '$dest'"
+# Création sous root avec propriétaire explicite : la source est dans un répertoire 0700 de l'utilisateur de
+# déploiement, illisible pour $user si les deux diffèrent (donc pas de `su $user -c cp`).
+# BTMUX_ASSUME_ROOT / BTMUX_INSTALL / BTMUX_GROUP : variables des tests unitaires.
+INSTALL="${BTMUX_INSTALL:-install}"
+if [ "$(id -u)" -eq 0 ] || [ "${BTMUX_ASSUME_ROOT:-0}" = 1 ]; then
+  group="${BTMUX_GROUP:-$(id -gn "$user")}"
+  for d in "$home/.config" "$home/.config/wireplumber" "$dest_dir"; do
+    [ -d "$d" ] || "$INSTALL" -d -o "$user" -g "$group" -m 755 "$d"
+  done
+  "$INSTALL" -o "$user" -g "$group" -m 644 "$src" "$dest"
 else
   mkdir -p "$dest_dir" && cp "$src" "$dest" && chmod 644 "$dest"
 fi

@@ -89,6 +89,12 @@ CONF
 systemctl --user restart wireplumber
 ```
 
+**Mise à jour** : le fichier déjà présent n'est **jamais écrasé** (ni par `deploy.sh`, ni par le `postinst`, ni lors d'une
+mise à jour du paquet). Si une version ultérieure de btmux modifie ce fichier, comparer manuellement avec
+`/usr/share/btmux/wireplumber/51-btmux-no-seat.conf` (ou `config/wireplumber/` dans le dépôt) et reporter les changements.
+Si `BTMUX_USER` diffère de l'utilisateur SSH de déploiement, le fichier est créé par root avec le propriétaire de
+`BTMUX_USER` (`install -o`), la source restant dans un répertoire temporaire privé.
+
 Vérifier : `bluetoothctl show | grep UUID` doit lister **Audio Sink (110b)**, **Audio Source (110a)**, **Handsfree
 Audio Gateway (111f)** et **Handsfree (111e)** en plus de AVRCP. Retour arrière : supprimer le fichier et
 redémarrer `wireplumber`.
