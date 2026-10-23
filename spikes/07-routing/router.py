@@ -10,6 +10,7 @@ Usage :
   router.py --virtual --cycles 12 [--out results.json]            (hors matériel : sources virtuelles)
   router.py --sink bluez_output.XX --a bluez_input.YY --b virt-srcB --cycles 10   (nœuds existants)
   router.py --sink bluez_output.XX --a bluez_input.YY --virtual-b --cycles 10     (B = tonalité virtuelle)
+  router.py --sink bluez_output.XX --virtual-sources --cycles 10 --hold 4          (A/B = tonalités 440/660 Hz)
 Provisoire — à revalider avec dongle RTL8761B (spike #7).
 """
 
@@ -211,6 +212,17 @@ async def main_async(args: argparse.Namespace) -> int:
             virtual = Virtual(graph, tone)
             await virtual.create()
             sink_name, a_name, b_name = SINK_NAME, *SOURCE_NAMES
+        elif args.virtual_sources:
+            # Sink réel (ex. casque Bluetooth) + deux sources virtuelles aux tonalités distinctes (440 / 660 Hz)
+            tones = {}
+            for name, freq in zip(SOURCE_NAMES, (440.0, 660.0), strict=True):
+                path = Path(args.tone).with_name(f"tone{int(freq)}.wav")
+                if not path.exists():
+                    make_tone(path, freq=freq)
+                tones[name] = path
+            virtual = Virtual(graph, Path(args.tone), tones)
+            await virtual.create(with_sink=False)
+            sink_name, a_name, b_name = args.sink, *SOURCE_NAMES
         elif args.virtual_b:
             # Source A et sink réels (ex. téléphone -> casque) ; source B = tonalité virtuelle (aucun lien BT de plus)
             tone = Path(args.tone)
@@ -260,6 +272,9 @@ def main() -> int:
     parser.add_argument(
         "--virtual-b", action="store_true", help="--sink et --a réels, B = source virtuelle"
     )
+    parser.add_argument(
+        "--virtual-sources", action="store_true", help="--sink réel, A et B = tonalités 440/660 Hz"
+    )
     parser.add_argument("--sink")
     parser.add_argument("--a")
     parser.add_argument("--b")
@@ -269,7 +284,9 @@ def main() -> int:
     parser.add_argument("--tone", default="out/tone180.wav")
     parser.add_argument("--out")
     args = parser.parse_args()
-    if not args.virtual and not (args.sink and args.a and (args.b or args.virtual_b)):
+    if not args.virtual and not (
+        args.sink and (args.virtual_sources or (args.a and (args.b or args.virtual_b)))
+    ):
         parser.error("--virtual, ou --sink/--a/--b, ou --sink/--a/--virtual-b")
     return asyncio.run(main_async(args))
 

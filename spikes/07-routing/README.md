@@ -15,7 +15,9 @@
 | `virtual.py` | Sink `support.null-audio-sink` (linger) + sources `pw-play` (`node.autoconnect=false`). |
 | `wireplumber/btmux-route.lua`, `52-btmux-route.conf` | Variante Lua : route pilotée par la métadonnée `btmux.route` (`SRC>SINK`). |
 | `measure_lua.py` | Mesure la bascule de la variante Lua. |
-| `watch_uart.sh` | Garde-fou : signale la première erreur UART HCI (Bluetooth interne). |
+| `sink_state.py` | Pause / reprise d'un flux vers un sink réel : délais `running` ↔ `idle`. |
+| `list_nodes.py` | Liste les nœuds (nom, classe, état, ports) pour choisir `--sink` / `--a`. |
+| `watch_uart.sh` | Garde-fou (seuils : 1 `tx timeout`/`stalled`, ou ≥ 3 `Frame reassembly` en 30 s) : déconnecte les appareils BT, arrête le routeur. |
 
 ## Résultats hors matériel (sources virtuelles, 12 cycles A↔B = 24 bascules, `pi-qualif`, 2026-10-23)
 
@@ -28,6 +30,25 @@
 
 Tous < 1 s (cible du cadrage). Mesures `t_active`, depuis la commande jusqu'aux liens `active`.
 Fichiers : `out/router-virtual-*.json`, `out/lua-virtual.json` (non versionnés).
+
+## Résultats avec un sink Bluetooth réel (Bose, 1 seul lien ACL, sources virtuelles 440/660 Hz, séance du 2026-10-23)
+
+24 bascules A↔B (hold 1,5 s) vers le sink A2DP du casque ; `t_active` en ms (0 erreur UART sur toute la période Bose seul).
+
+| Méthode | médiane | p95 | max | (rappel sink virtuel) |
+|---------|---------|-----|-----|------------------------|
+| session `pw-cli` persistante | **153 ms** | 170 ms | 187 ms | 94 ms |
+| `pw-link` séquentiel | 442 ms | 528 ms | 531 ms | 315 ms |
+| Lua WirePlumber (clé `btmux.route`) | 275 ms | 311 ms | 319 ms | 168 ms |
+
+Lua : ≈ 207 ms dans WirePlumber une fois retirés ~67 ms de lancement de `pw-metadata`. Le sink Bluetooth ajoute ~60–110 ms
+à chaque méthode (négociation du lien et passage à `running`). Tous < 1 s.
+Pause / reprise du flux (3 tours) : le sink quitte `running` (→ `idle`) en **65–71 ms** après la suppression des liens ;
+la reprise le ramène à `running` en **114–209 ms**. L'écoute a été faite par l'utilisateur (voir le rapport de séance).
+
+**Deux sources BT réelles : impossible sur le Bluetooth interne.** Téléphone + Bose connectés, le démarrage de l'audio du
+téléphone a provoqué une rafale d'erreurs UART (~140 `Frame reassembly failed` + `tx timeout`) ; la séance a donc été
+menée avec le Bose seul et deux sources virtuelles. À refaire avec le dongle (T3.2b).
 
 ### Après `systemctl --user restart pipewire wireplumber` (sans appareil BT)
 

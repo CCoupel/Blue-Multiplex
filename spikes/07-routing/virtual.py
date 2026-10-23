@@ -47,9 +47,10 @@ async def _run(*cmd: str) -> tuple[int, str]:
 class Virtual:
     """Cycle de vie des nœuds virtuels (création, destruction, recréation après un restart PipeWire)."""
 
-    def __init__(self, graph: Graph, tone: Path) -> None:
+    def __init__(self, graph: Graph, tone: Path, tones: dict[str, Path] | None = None) -> None:
         self.graph = graph
         self.tone = tone
+        self.tones = tones or {}
         self.players: dict[str, asyncio.subprocess.Process] = {}
 
     async def create(self, names: tuple[str, ...] = SOURCE_NAMES, with_sink: bool = True) -> None:
@@ -71,7 +72,7 @@ class Virtual:
                 "pw-play",
                 "-P",
                 f"{{ node.name={name} node.autoconnect=false }}",
-                str(self.tone),
+                str(self.tones.get(name, self.tone)),
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )

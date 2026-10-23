@@ -32,10 +32,22 @@ async def main_async(args: argparse.Namespace) -> int:
     tone = Path(args.tone)
     if not tone.exists():
         make_tone(tone)
-    virtual = Virtual(graph, tone)
-    await virtual.create()
+    if args.sink:  # sink réel + deux sources virtuelles aux tonalités distinctes
+        tones = {}
+        for name, freq in zip(SOURCE_NAMES, (440.0, 660.0), strict=True):
+            path = tone.with_name(f"tone{int(freq)}.wav")
+            if not path.exists():
+                make_tone(path, freq=freq)
+            tones[name] = path
+        virtual = Virtual(graph, tone, tones)
+        await virtual.create(with_sink=False)
+        sink_name = args.sink
+    else:
+        virtual = Virtual(graph, tone)
+        await virtual.create()
+        sink_name = SINK_NAME
     a, b = SOURCE_NAMES
-    sink = graph.node_by_name(SINK_NAME)
+    sink = graph.node_by_name(sink_name)
     assert sink is not None
     overhead: list[float] = []
     for _ in range(5):  # coût du lancement de pw-metadata seul (clé sans effet)
@@ -51,7 +63,7 @@ async def main_async(args: argparse.Namespace) -> int:
             other = graph.node_by_name(b if target == a else a)
             assert other is not None
             t0 = time.perf_counter()
-            await set_route(f"{target}>{SINK_NAME}")
+            await set_route(f"{target}>{sink_name}")
             # PipeWire réutilise les identifiants de liens : on teste l'état final (liens de la cible actifs,
             # plus aucun lien de l'autre source), pas l'apparition d'un nouvel identifiant.
             await graph.wait_for(
@@ -88,6 +100,7 @@ async def main_async(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--sink", help="sink réel (sinon sink virtuel)")
     parser.add_argument("--cycles", type=int, default=12)
     parser.add_argument("--tone", default="out/tone180.wav")
     parser.add_argument("--out")
