@@ -33,7 +33,7 @@ mqtt:                                  # optionnel ; défaut { enabled: false }
 | V1 | `mac` (adaptateurs et appareils) : `^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`, normalisée en majuscules | `config: adapters[0].mac: invalid MAC address '...'` |
 | V2 | `adapters` non vide ; `roles` sous-ensemble non vide de `{sources, headsets}`, sans doublon | `config: adapters[i].roles: unknown role '...'` |
 | V3 | Chaque rôle `sources` et `headsets` porté par **exactement un** adaptateur | `config: role 'headsets' must be provided by exactly one adapter (found N)` |
-| V4 | **v0.1.0** : `len(adapters) > 1` refusé (le schéma l'accepte, la politique refuse) | `config: multi-adapter configuration is planned for v0.2.0 (found N adapters, max 1)` |
+| V4 | ~~v0.1.0 : `len(adapters) > 1` refusé~~ **Levée le 2026-10-23 (révision 14:45, sous réserve GATE 2)** : 1 **ou** 2 adaptateurs acceptés ; `len(adapters) > 2` refusé | `config: at most 2 adapters are supported (found N)` |
 | V5 | `devices[].alias` uniques ; `devices[].mac` uniques ; alias `^[a-z0-9][a-z0-9-]{0,31}$` | `config: devices: duplicate alias 'xm5'` |
 | V6 | `kind ∈ {source, headset}` ; `priority` entier ≥ 0, optionnel, **autorisé seulement** pour `kind: source` (défaut 100) | `config: devices[2].priority: only allowed for kind 'source'` |
 | V7 | `default_routes` : clé = alias d'un `headset` existant, valeur = alias d'une `source` existante | `config: default_routes: unknown headset alias '...'` |
@@ -71,6 +71,14 @@ cfg.adapter_for_role("headsets")  # -> Adapter
 cfg.sources / cfg.headsets  # listes triées par priority puis alias
 ```
 
-## Évolution prévue (v0.2.0, #14)
+## Forme bi-adaptateur (#14, activée en v0.1.0 — révision 2026-10-23)
 
-Suppression de V4 uniquement ; `adapters` à deux entrées `roles: [sources]` / `roles: [headsets]`. Aucun autre changement.
+```yaml
+adapters:
+  - { mac: "AA:BB:CC:00:00:01", name: "btmux",     roles: [sources]  }   # hci-src : vu comme casque par PC/téléphones
+  - { mac: "AA:BB:CC:00:00:02", name: "btmux-src", roles: [headsets] }   # hci-hp  : vu comme source par les casques
+```
+
+V3 inchangée (chaque rôle porté par exactement un adaptateur) ; la forme mono (une entrée, deux rôles) reste valide.
+`Config.adapter_for_role(role)` renvoie l'adaptateur du rôle ; `cfg.adapters` conserve l'ordre du fichier. Les noms `hci-src`/`hci-hp`
+sont des **conventions de documentation** (rôle `sources` / `headsets`), jamais des index `hciN`.

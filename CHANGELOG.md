@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0] — Unreleased
+
+Exploration technique bi-adaptateur (2 × TP-Link UB500) : revalidation de la topologie cible (`hci-src` / `hci-hp`),
+préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel complet.
+
+### Changed
+- Contrat `contracts/config-schema.md` : règle V4 levée (1 ou 2 adaptateurs acceptés) — documentation uniquement, le
+  code reste à 1 adaptateur jusqu'à #14.
+
+### Added
+- Brouillons de contrats `contracts/http-endpoints.md` et `contracts/models.md` (DRAFT, API appairages — #20 #21 #16).
+
 ## [0.1.0] — 2026-10-23 (non publié : exploration mono-adaptateur, clôturée sans release)
 
 Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui porte les deux rôles
