@@ -69,7 +69,7 @@ configure)
   python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' || { echo "btmux: python3 >= 3.12 requis" >&2; exit 1; }
   # Environnement Python déterministe : venv standard (pip non mis à niveau), dépendances hachées, puis wheel sans index.
   [ -x /opt/btmux/bin/pip ] || { rm -rf /opt/btmux; python3 -m venv /opt/btmux; }
-  /opt/btmux/bin/pip install --quiet --require-hashes --no-deps -r /usr/share/btmux/requirements.lock.txt
+  /opt/btmux/bin/pip install --quiet --only-binary=:all: --require-hashes --no-deps -r /usr/share/btmux/requirements.lock.txt
   /opt/btmux/bin/pip install --quiet --no-index --no-deps --force-reinstall /usr/share/btmux/btmux-*.whl
   # Utilisateur de service : $BTMUX_USER, sinon l'utilisateur qui a lancé sudo, sinon « ubuntu ».
   # Un drop-in déjà présent (choix de l'administrateur) n'est pas écrasé sans BTMUX_USER explicite.

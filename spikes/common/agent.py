@@ -44,9 +44,11 @@ class PairingPolicy:
         return self.clock() < self.window_until
 
     def accept_pairing(self, adapter: str) -> bool:
-        """Appairage entrant : fenêtre ouverte ET adaptateur `sources`."""
-        return self.window_open() and (
-            self.sources_adapter is None or adapter == self.sources_adapter
+        """Appairage entrant : fenêtre ouverte ET adaptateur `sources` (fail-closed si inconnu)."""
+        return (
+            self.window_open()
+            and self.sources_adapter is not None
+            and adapter == self.sources_adapter
         )
 
     @staticmethod
@@ -71,6 +73,12 @@ async def run(args: argparse.Namespace) -> int:
     policy = PairingPolicy(window_file=Path(args.window_file) if args.window_file else None)
     policy.sources_adapter = await find_adapter(bus, mac_for_role(args.config, "sources"))
     headsets_adapter = await find_adapter(bus, mac_for_role(args.config, "headsets"))
+    if policy.sources_adapter is None:
+        print(
+            "agent : adaptateur `sources` introuvable — tout appairage sera refusé",
+            file=sys.stderr,
+            flush=True,
+        )
     if args.window:
         policy.open_window(args.window)
 

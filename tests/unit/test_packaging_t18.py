@@ -125,8 +125,8 @@ def test_build_deb_contents_and_maintainer_scripts(tmp_path: Path) -> None:
     assert 'case "$1" in' in postinst and "configure)" in postinst
     assert "--upgrade-deps" not in postinst
     assert (
-        "pip install --quiet --require-hashes --no-deps -r /usr/share/btmux/requirements.lock.txt"
-        in postinst
+        "pip install --quiet --only-binary=:all: --require-hashes --no-deps -r "
+        "/usr/share/btmux/requirements.lock.txt" in postinst
     )
     assert "--no-index --no-deps --force-reinstall /usr/share/btmux/btmux-*.whl" in postinst
     assert (

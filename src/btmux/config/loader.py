@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 ROLES = ("sources", "headsets")
 KINDS = ("source", "headset")
 MAX_NAME_BYTES = 248
+_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
 MAX_ADAPTERS = 2  # V4 (levée à 2 adaptateurs en v0.2.0)
 PAIRING_DURATION_RANGE = (1, 300)
 
@@ -70,6 +72,7 @@ def _adapters(raw: Any, err: _Errors) -> tuple[list[Adapter], list[list[str]], i
         return [], [], 0
     result: list[Adapter] = []
     all_roles: list[list[str]] = []
+    seen_macs: set[str] = set()
     for i, item in enumerate(raw):
         where = f"adapters[{i}]"
         if not isinstance(item, dict):
@@ -80,12 +83,22 @@ def _adapters(raw: Any, err: _Errors) -> tuple[list[Adapter], list[list[str]], i
         if "mac" not in item:
             err.add(f"{where}.mac: required")
         name = item.get("name")
-        name_ok = isinstance(name, str) and 1 <= len(name.encode("utf-8")) <= MAX_NAME_BYTES
+        name_ok = (
+            isinstance(name, str)
+            and 1 <= len(name.encode("utf-8")) <= MAX_NAME_BYTES
+            and not any(unicodedata.category(c) in _FORBIDDEN_CATEGORIES for c in name)
+        )
         if not name_ok:
-            err.add(f"{where}.name: required, 1..{MAX_NAME_BYTES} bytes (UTF-8)")
+            err.add(
+                f"{where}.name: required, 1..{MAX_NAME_BYTES} bytes (UTF-8), no control characters"
+            )
         roles = _roles(item.get("roles"), where, err)
         if roles:
             all_roles.append(roles)
+        if mac is not None:
+            if mac in seen_macs:
+                err.add(f"{where}.mac: duplicate adapter mac '{mac}'")
+            seen_macs.add(mac)
         if mac is not None and name_ok and roles:
             result.append(Adapter.model_validate({"mac": mac, "name": name, "roles": tuple(roles)}))
     return result, all_roles, len(raw)

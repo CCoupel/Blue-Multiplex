@@ -123,6 +123,28 @@ def test_invalid_config_exits_2(tmp_path: Path) -> None:
     assert "configuration invalide" in proc.stderr
 
 
+def test_btmgmt_failure_exits_zero_with_message(tmp_path: Path) -> None:
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(BI_CONFIG)
+    env = _env(tmp_path, BTMGMT_INFO_BI)
+    (tmp_path / "btmgmt").write_text(
+        "#!/bin/sh\nexit 1\n"
+    )  # sudo refusé / socket mgmt indisponible
+    sudo = tmp_path / "sudo"
+    sudo.write_text('#!/bin/sh\nshift\nexec "$@"\n')
+    sudo.chmod(0o755)
+    env["PATH"] = f"{tmp_path}:{env['PATH']}"
+    proc = subprocess.run(
+        ["bash", str(SCRIPT), "--config", str(cfg), "--wait", "0"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert "btmgmt" in proc.stderr and "aucun adaptateur configurable" in proc.stderr
+
+
 def test_unit_file_shape() -> None:
     unit = (ROOT / "systemd" / "btmux-adapters.service").read_text()
     assert "Type=oneshot" in unit and "After=bluetooth.service" in unit

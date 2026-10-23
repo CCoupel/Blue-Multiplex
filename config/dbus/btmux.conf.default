@@ -3,6 +3,7 @@
 <!-- btmux : autorise l'utilisateur de service de btmuxd (ubuntu) à parler à BlueZ sur le bus système
      (enregistrement d'agent, RemoveDevice, propriétés des adaptateurs/appareils). Rendu par btmux-configure.sh
      (ubuntu remplacé) ; aucun accès générique : uniquement cet utilisateur, uniquement org.bluez. -->
+<!-- NOTE (R2, #20) : policy large (own/send/receive org.bluez) à resserrer et à valider sur matériel. -->
 <busconfig>
   <policy user="ubuntu">
     <allow send_destination="org.bluez"/>

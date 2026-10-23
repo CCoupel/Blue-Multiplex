@@ -38,17 +38,33 @@ run() {
   if [ "$DRY" = 1 ]; then echo "DRY-RUN: $*"; else "$@"; fi
 }
 
-if ! LIST="$("$PY" -m btmux.config adapters --config "$CONFIG")"; then
-  echo "btmux-adapters: configuration invalide ($CONFIG)" >&2
+rc=0
+LIST="$("$PY" -I -P -m btmux.config adapters --config "$CONFIG")" || rc=$?
+if [ "$rc" -ne 0 ]; then
+  if [ "$rc" -eq 2 ]; then
+    echo "btmux-adapters: configuration invalide ($CONFIG)" >&2
+  else
+    echo "btmux-adapters: impossible d'exécuter 'btmux.config' avec $PY (code $rc) — venv /opt/btmux absent ou btmux non installé ? (BTMUX_PYTHON)" >&2
+  fi
   exit 2
 fi
 
-index_of() {   # MAC -> index hciN (vide si absent)
+MGMT_ERR=0
+index_of() {   # MAC -> index hciN (vide si absent ou si btmgmt échoue : MGMT_ERR=1)
+  local out
   # shellcheck disable=SC2086
-  $SUDO $BTMGMT info 2>/dev/null | awk -v mac="$1" '
+  if ! out="$($SUDO $BTMGMT info 2>/dev/null)"; then MGMT_ERR=1; return 0; fi
+  printf '%s\n' "$out" | awk -v mac="$1" '
     /^hci[0-9]+:/ { idx = substr($1, 4); sub(/:$/, "", idx) }
     tolower($1) == "addr" && toupper($2) == toupper(mac) { print idx; exit }'
 }
+
+# btmgmt inutilisable (absent, sudo refusé, socket mgmt) : message explicite, code 0 (contrat : ne bloque pas le démarrage)
+index_of 00:00:00:00:00:00 >/dev/null
+if [ "$MGMT_ERR" = 1 ] && [ "$DRY" != 1 ]; then
+  echo "btmux-adapters: AVERTISSEMENT '$BTMGMT info' a échoué (absent, droits ou socket mgmt) — aucun adaptateur configurable" >&2
+  exit 0
+fi
 
 deadline=$((SECONDS + WAIT))
 while :; do

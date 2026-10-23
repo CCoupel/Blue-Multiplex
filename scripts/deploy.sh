@@ -74,7 +74,7 @@ if [ -e /opt/btmux ] && [ ! -x /opt/btmux/bin/pip ]; then
 fi
 [ -x /opt/btmux/bin/pip ] || sudo python3 -m venv /opt/btmux
 # Dependances epinglees et hachees, puis la wheel sans index (redeploiement de meme version effectif)
-sudo /opt/btmux/bin/pip install --quiet --require-hashes --no-deps -r "$dir/$lock"
+sudo /opt/btmux/bin/pip install --quiet --only-binary=:all: --require-hashes --no-deps -r "$dir/$lock"
 sudo /opt/btmux/bin/pip install --quiet --no-index --no-deps --force-reinstall "$dir/$wheel"
 # Configuration commune (config d'exemple, policy D-Bus, jeton 0600, drop-in utilisateur, WirePlumber, unites, systemd)
 sudo sh "$dir/btmux-configure.sh" --user "$svc_user" --share "$dir" --units "$dir"

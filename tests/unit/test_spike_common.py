@@ -54,12 +54,10 @@ def test_pairing_policy_window_and_adapter() -> None:
 
 def test_pairing_policy_window_file(tmp_path: Path) -> None:
     flag = tmp_path / "window.open"
-    policy = agent.PairingPolicy(window_file=flag)
+    policy = agent.PairingPolicy(window_file=flag, sources_adapter="/org/bluez/hci9")
     assert not policy.window_open()
     flag.write_text("")
-    assert policy.window_open() and policy.accept_pairing(
-        "/org/bluez/hci9"
-    )  # pas d'adaptateur imposé
+    assert policy.window_open() and policy.accept_pairing("/org/bluez/hci9")
     flag.unlink()
     assert not policy.window_open()
 

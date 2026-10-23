@@ -12,7 +12,7 @@ ko() { echo "ECHEC $*"; fail=1; }
 warn() { echo "AVERT $*"; }
 
 [ "$(hostname)" = "$EXPECT_HOST" ] && ok "hostname $EXPECT_HOST" || ko "hostname $(hostname) (attendu $EXPECT_HOST)"
-ip -4 -br addr 2>/dev/null | grep -q '192\.168\.1\.176' && ko "adresse 192.168.1.176 (machine interdite)" || ok "pas la machine interdite"
+[ "$(hostname)" = "piClock" ] && ko "machine interdite (piClock)" || ok "pas la machine interdite"
 n=$(lsusb 2>/dev/null | grep -c '2357:0604' || true); [ "$n" -eq 2 ] && ok "2 dongles UB500" || ko "dongles UB500 : $n (2 attendus)"
 hc="$(timeout 8 hciconfig -a 2>/dev/null || true)"
 [ "$(printf '%s\n' "$hc" | grep -c 'Bus: USB')" -eq 2 ] && ok "2 contrôleurs sur le bus USB" || ko "contrôleurs USB != 2"

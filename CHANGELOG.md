@@ -6,6 +6,7 @@ Exploration technique bi-adaptateur (2 × TP-Link UB500) : revalidation de la to
 préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel complet.
 
 ### Changed
+- Config : `adapters[].mac` dupliquée refusée ; `adapters[].name` sans caractère de contrôle (sortie TSV de `btmux.config adapters` non forgeable) ; `btmux-adapters.sh` : `python -I -P`, `btmgmt` en échec = avertissement + code 0 ; installation pip `--only-binary=:all:` ; agent de spike fail-closed.
 - `btmuxd.service` durci (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp`, `RestartPreventExitStatus=2 3`) ;
   `deploy.sh` exige le lockfile à côté de la wheel (`btmux-<V>.requirements.lock.txt`).
 - Configuration bi-adaptateur (#14) : règle V4 levée (1 ou 2 adaptateurs acceptés ; 3 refusés avec
