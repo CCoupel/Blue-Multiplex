@@ -14,7 +14,7 @@ via le daemon `btmuxd`. Aucun logiciel n'est requis côté sources.
 
 - **v0.1.0** — exploration mono-adaptateur, clôturée sans release (socle, spikes #5 et #7 provisoires).
 - **v0.2.0** — exploration technique bi-adaptateur (2 × TP-Link UB500) : préparation des dongles, campagne de
-  revalidation (T3.2b), agent et appairages BlueZ, API HTTP, Web UI de suivi et gestion des appairages.
+  revalidation (T3.2b), agent d'appairage BlueZ (#20), API HTTP (#21), Web UI de suivi et gestion des appairages (#16).
 - **v0.3.0** — daemon `btmuxd` : routage, reconnexion, politique de connexions ; MQTT prévu en v0.4.0.
 
 ## État des spikes
