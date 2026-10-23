@@ -1,9 +1,8 @@
 # Contrat — API HTTP `btmuxd` v0.2.0 (périmètre « appairages »)
 
-> **Statut : DRAFT** — brouillon contract-first v0.2.0, sous réserve de validation au GATE 2 (LOT-2 « appairages + Web UI »). Non implémenté.
+> **Statut : validé au GATE 2 v0.2.0 (2026-10-23 17:12)** — contrat de référence pour LOT-2 « appairages + Web UI » (#20 #21 #16). Serveur aiohttp ; mise à jour en direct par SSE avec repli polling.
 
-> Contract-first (#21). Serveur : `aiohttp` (asyncio natif, pas de pydantic côté serveur — décision à confirmer au plan v0.2.0 ;
-> FastAPI reste possible). Écoute `api.listen` (défaut `0.0.0.0:8088`, LAN seul). **Auth** : `Authorization: Bearer <jeton>`,
+> Contract-first (#21). Serveur : `aiohttp` (asyncio natif, pas de pydantic côté serveur — décision GATE 2 du 2026-10-23). Écoute `api.listen` (défaut `0.0.0.0:8088`, LAN seul). **Auth** : `Authorization: Bearer <jeton>`,
 > jeton lu dans `api.token_file` (`/etc/btmux/token`, mode 0600, généré à l'installation s'il manque). `GET /` et `/static/*`
 > (Web UI) sont publics, tout `/api/*` exige le jeton (401 sinon). Réponses JSON UTF-8 ; erreurs `{ "error": "<code>", "message": "<texte>" }`.
 

@@ -33,7 +33,7 @@ mqtt:                                  # optionnel ; défaut { enabled: false }
 | V1 | `mac` (adaptateurs et appareils) : `^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`, normalisée en majuscules | `config: adapters[0].mac: invalid MAC address '...'` |
 | V2 | `adapters` non vide ; `roles` sous-ensemble non vide de `{sources, headsets}`, sans doublon | `config: adapters[i].roles: unknown role '...'` |
 | V3 | Chaque rôle `sources` et `headsets` porté par **exactement un** adaptateur | `config: role 'headsets' must be provided by exactly one adapter (found N)` |
-| V4 | ~~v0.1.0 : `len(adapters) > 1` refusé~~ **Levée le 2026-10-23 (révision 14:45, sous réserve GATE 2)** : 1 **ou** 2 adaptateurs acceptés ; `len(adapters) > 2` refusé | `config: at most 2 adapters are supported (found N)` |
+| V4 | ~~v0.1.0 : `len(adapters) > 1` refusé~~ **Levée le 2026-10-23 (validée au GATE 2 v0.2.0)** : 1 **ou** 2 adaptateurs acceptés ; `len(adapters) > 2` refusé | `config: at most 2 adapters are supported (found N)` |
 | V5 | `devices[].alias` uniques ; `devices[].mac` uniques ; alias `^[a-z0-9][a-z0-9-]{0,31}$` | `config: devices: duplicate alias 'xm5'` |
 | V6 | `kind ∈ {source, headset}` ; `priority` entier ≥ 0, optionnel, **autorisé seulement** pour `kind: source` (défaut 100) | `config: devices[2].priority: only allowed for kind 'source'` |
 | V7 | `default_routes` : clé = alias d'un `headset` existant, valeur = alias d'une `source` existante | `config: default_routes: unknown headset alias '...'` |
@@ -82,3 +82,20 @@ adapters:
 V3 inchangée (chaque rôle porté par exactement un adaptateur) ; la forme mono (une entrée, deux rôles) reste valide.
 `Config.adapter_for_role(role)` renvoie l'adaptateur du rôle ; `cfg.adapters` conserve l'ordre du fichier. Les noms `hci-src`/`hci-hp`
 sont des **conventions de documentation** (rôle `sources` / `headsets`), jamais des index `hciN`.
+
+## Clé `pairing` (v0.2.0 — #20/#21, validée au GATE 2 du 2026-10-23)
+
+```yaml
+pairing:                       # optionnel ; défauts ci-dessous
+  default_duration: 60         # 1..300 s — durée par défaut d'une fenêtre d'appairage
+  accept_incoming: true        # agent NoInputNoOutput : accepter les appairages entrants sur l'adaptateur `sources` PENDANT une fenêtre
+```
+
+Règle V11 : `default_duration` entier 1..300 ; `accept_incoming` booléen. Hors fenêtre, tout appairage entrant est refusé
+quelle que soit la valeur. Rétrocompatible : absence de la clé = défauts.
+
+## Comportement de `btmuxd --config <path>` (CHANGED v0.2.0, validé au GATE 2)
+
+À partir de #20, `btmuxd --config` ne sort plus immédiatement : il valide la config, se connecte à BlueZ (code 3 si un adaptateur
+de `adapters[]` est introuvable après 30 s), démarre l'API HTTP (#21) et reste en service jusqu'à SIGTERM/SIGINT (code 0).
+`--check-config` est inchangé.

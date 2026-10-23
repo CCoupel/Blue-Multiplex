@@ -1,6 +1,6 @@
 # Contrat — Modèles JSON de l'API `btmuxd` v0.2.0
 
-> **Statut : DRAFT** — brouillon contract-first v0.2.0, sous réserve de validation au GATE 2 (LOT-2 « appairages + Web UI »). Non implémenté.
+> **Statut : validé au GATE 2 v0.2.0 (2026-10-23 17:12)** — contrat de référence pour LOT-2 « appairages + Web UI » (#20 #21 #16). Serveur aiohttp ; mise à jour en direct par SSE avec repli polling.
 
 ```jsonc
 State      { "version": "0.2.0.0", "adapters": [Adapter], "devices": [Device], "pairing": PairingWindow | null }
