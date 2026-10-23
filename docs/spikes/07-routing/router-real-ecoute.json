@@ -1,0 +1,108 @@
+{
+ "method": "pwcli-session",
+ "results": [
+  {
+   "n": 1,
+   "from": "virt-srcA",
+   "to": "virt-srcB",
+   "t_link_ms": 76.11356400002478,
+   "t_active_ms": 131.3064559999475,
+   "t_running_ms": 160.23848400027418
+  },
+  {
+   "n": 2,
+   "from": "virt-srcB",
+   "to": "virt-srcA",
+   "t_link_ms": 123.84696700019049,
+   "t_active_ms": 151.07760999990205,
+   "t_running_ms": 151.24281699991116
+  },
+  {
+   "n": 3,
+   "from": "virt-srcA",
+   "to": "virt-srcB",
+   "t_link_ms": 160.19509900024786,
+   "t_active_ms": 160.38952400003836,
+   "t_running_ms": 160.4883240001982
+  },
+  {
+   "n": 4,
+   "from": "virt-srcB",
+   "to": "virt-srcA",
+   "t_link_ms": 91.32394300013402,
+   "t_active_ms": 186.08362400027545,
+   "t_running_ms": 186.26945500000147
+  },
+  {
+   "n": 5,
+   "from": "virt-srcA",
+   "to": "virt-srcB",
+   "t_link_ms": 74.42275199991855,
+   "t_active_ms": 128.54263700000956,
+   "t_running_ms": 128.70857199959573
+  },
+  {
+   "n": 6,
+   "from": "virt-srcB",
+   "to": "virt-srcA",
+   "t_link_ms": 105.28657800023211,
+   "t_active_ms": 185.88164700031484,
+   "t_running_ms": 186.03961400003755
+  },
+  {
+   "n": 7,
+   "from": "virt-srcA",
+   "to": "virt-srcB",
+   "t_link_ms": 100.62314700007846,
+   "t_active_ms": 152.77232800008278,
+   "t_running_ms": 152.93602400015516
+  },
+  {
+   "n": 8,
+   "from": "virt-srcB",
+   "to": "virt-srcA",
+   "t_link_ms": 105.17944399998669,
+   "t_active_ms": 156.37905299990962,
+   "t_running_ms": 156.58254000027227
+  },
+  {
+   "n": 9,
+   "from": "virt-srcA",
+   "to": "virt-srcB",
+   "t_link_ms": 113.33059100024911,
+   "t_active_ms": 153.57935000020007,
+   "t_running_ms": 153.73143100032394
+  },
+  {
+   "n": 10,
+   "from": "virt-srcB",
+   "to": "virt-srcA",
+   "t_link_ms": 98.41947800032358,
+   "t_active_ms": 168.44645300034244,
+   "t_running_ms": 168.74374100007117
+  }
+ ],
+ "summary": {
+  "t_link_ms": {
+   "n": 10,
+   "min": 74.42275199991855,
+   "median": 102.90129550003257,
+   "p95": 160.19509900024786,
+   "max": 160.19509900024786
+  },
+  "t_active_ms": {
+   "n": 10,
+   "min": 128.54263700000956,
+   "median": 154.97920150005484,
+   "p95": 186.08362400027545,
+   "max": 186.08362400027545
+  },
+  "t_running_ms": {
+   "n": 10,
+   "min": 128.70857199959573,
+   "median": 158.41051200027323,
+   "p95": 186.26945500000147,
+   "max": 186.26945500000147
+  }
+ }
+}

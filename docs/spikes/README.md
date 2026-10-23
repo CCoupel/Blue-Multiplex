@@ -8,3 +8,4 @@ correspondant est dans `spikes/`.
 | # | Sujet | Verdict | Rapport |
 |---|-------|---------|---------|
 | 5 | Exposition mono-adaptateur (« casque générique ») | RÉSERVES — casque générique : oui, avec réserves (provisoire) | [05-exposure.md](05-exposure.md) |
+| 7 | Routage PipeWire (bascule de source par liens) | RÉSERVES — mécanisme `pw-*` (pw-dump -m + session pw-cli) retenu (provisoire) | [07-routing.md](07-routing.md) |

@@ -1,0 +1,31 @@
+2026-10-23T12:03:46Z watch_uart : base=0 erreurs, intervalle 3s
+2026-10-23T12:06:43Z ALERTE UART : 1 nouvelle(s) erreur(s) HCI — ARRÊTER LA SÉANCE
+[   26.999521] Bluetooth: hci0: BCM: features 0x2e
+[   27.003268] Bluetooth: hci0: BCM43436 7
+[   27.003443] Bluetooth: hci0: BCM43430A1 (001.002.009) build 1042
+[   27.004585] Bluetooth: hci0: BCM: Using default device address (43:43:a1:xx:xx:xx)
+[ 3282.627084] Bluetooth: hci0: Frame reassembly failed (-84)
+# erreur isolée consignée : 2026-10-23T12:06:43,058567+00:00 Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T12:07:37Z watch_uart : base tx-timeout/stalled=0, frame-reassembly=1 (seuils : 1 timeout, ou 3 frames/30 s)
+2026-10-23T12:08:46Z info : 2 Frame reassembly failed (total 3)
+2026-10-23T12:10:22Z info : 58 Frame reassembly failed (total 61)
+2026-10-23T12:10:23Z ALERTE UART (>= 3 Frame reassembly en 30 s) — ARRÊT DE LA SÉANCE
+[ 3502.876058] Bluetooth: hci0: Frame reassembly failed (-84)
+[ 3502.884317] Bluetooth: hci0: Frame reassembly failed (-84)
+[ 3502.884427] Bluetooth: hci0: Frame reassembly failed (-84)
+[ 3502.915774] Bluetooth: hci0: Frame reassembly failed (-84)
+[ 3502.915896] Bluetooth: hci0: Frame reassembly failed (-84)
+[ 3502.923870] Bluetooth: hci0: Frame reassembly failed (-84)
+Attempting to disconnect from BC:93:07:xx:xx:xx
+[[0;93mCHG[0m] Device BC:93:07:xx:xx:xx ServicesResolved: no
+[[0;93mSIGNAL[0m] BREDR.Disconnected - org.bluez.Reason.Unknown, Unspecified
+[[0;93mSIGNAL[0m] Disconnected - org.bluez.Reason.Unknown, Unspecified
+[[0;93mCHG[0m] Device BC:93:07:xx:xx:xx Connected: no
+Disconnection successful
+Attempting to disconnect from 28:11:A5:xx:xx:xx
+[[0;93mSIGNAL[0m] BREDR.Disconnected - org.bluez.Reason.Local, Connection terminated by local host
+[[0;93mSIGNAL[0m] Disconnected - org.bluez.Reason.Local, Connection terminated by local host
+[[0;93mCHG[0m] Device 28:11:A5:xx:xx:xx Connected: no
+Disconnection successful
+# --- repli Bose seul 2026-10-23T12:14:36Z
+2026-10-23T12:14:36Z watch_uart : base tx-timeout/stalled=2, frame-reassembly=1036 (seuils : 1 timeout, ou 3 frames/30 s)

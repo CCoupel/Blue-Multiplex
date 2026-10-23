@@ -1,0 +1,20 @@
+[
+ {
+  "round": 1,
+  "resume_to_running_ms": 209.44541000017125,
+  "pause_to_not_running_ms": 69.14724599982947,
+  "state_after_pause": "idle"
+ },
+ {
+  "round": 2,
+  "resume_to_running_ms": 114.24620399975538,
+  "pause_to_not_running_ms": 71.37586299995746,
+  "state_after_pause": "idle"
+ },
+ {
+  "round": 3,
+  "resume_to_running_ms": 126.88864699975966,
+  "pause_to_not_running_ms": 64.67318800014255,
+  "state_after_pause": "idle"
+ }
+]
