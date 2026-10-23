@@ -13,9 +13,9 @@ linger active — decision D2).
 
 | Element | Valeur attendue |
 |---------|-----------------|
-| `DEPLOY_HOST` (`qualif.env`) | `ubuntu@192.168.1.94` (Pi de qualification, Ubuntu 26.04 LTS) |
+| `DEPLOY_HOST` (`qualif.env`) | `user@host` du Pi de qualification (Ubuntu 26.04 LTS) — valeur uniquement dans `qualif.env`, jamais en clair dans le depot |
 | `hostname` distant | `pi-qualif` |
-| Hote **interdit** | `192.168.1.176` (piClock) — jamais de `ssh`/`scp`, quel que soit le contexte |
+| Hotes **interdits** | `FORBIDDEN_HOSTS` (`qualif.env`, liste separee par des virgules ; contient le Pi « piClock », en service) — jamais de `ssh`/`scp`, quel que soit le contexte |
 
 `qualif.env` est en **CRLF** : le lire avec `tr -d '\r'`, ne jamais le reecrire.
 
@@ -58,8 +58,11 @@ set -a; . <(tr -d '\r' < "$ENV_FILE"); set +a
 SSH=(ssh -i "$SSH_KEY_PATH" -o BatchMode=yes -- "$DEPLOY_HOST")
 
 # 0. Garde-fous cible
-case "$DEPLOY_HOST" in *192.168.1.176*) echo "REFUS : 192.168.1.176 (piClock) interdit"; exit 1 ;; esac
-test "$DEPLOY_HOST" = "ubuntu@192.168.1.94" || { echo "DEPLOY_HOST inattendu : $DEPLOY_HOST"; exit 1; }
+: "${FORBIDDEN_HOSTS:?absent de qualif.env}"
+IFS=, read -ra _forbidden <<< "$FORBIDDEN_HOSTS"
+for h in "${_forbidden[@]}"; do
+  [ -n "$h" ] && case "$DEPLOY_HOST" in *"$h"*) echo "REFUS : hote interdit ($h)"; exit 1 ;; esac
+done
 test "$("${SSH[@]}" hostname)" = pi-qualif || { echo "hostname distant != pi-qualif"; exit 1; }
 
 # 1. Verification — wheel ET lockfile publies pour CETTE version, sommes de controle
