@@ -152,7 +152,7 @@ src/btmux/pipewire/
   errors.py     # PipeWireUnavailable, NodeMissing, LinkTimeout
 ```
 
-```python
+```text
 # graph.py
 class PwGraph:
     async def start(self) -> None: ...            # lance `pw-dump -m`, parse le flux JSON incrémental, gère l'EOF
