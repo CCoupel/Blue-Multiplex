@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Installe la wheel btmux sur le Pi de l'environnement donne (BORE : aucun build, aucune publication).
-# Usage : scripts/deploy.sh <env> <wheel>      ex. scripts/deploy.sh qualif build/qualif_v0.1.0/btmux-0.1.0.1-py3-none-any.whl
+# Usage : scripts/deploy.sh <env> <wheel>      ex. scripts/deploy.sh qualif build/qualif_v0.2.0/btmux-0.2.0.1-py3-none-any.whl
+# Le lockfile runtime haché est cherché à côté de la wheel : <dir>/btmux-<V>-py3-none-any.whl -> <dir>/btmux-<V>.requirements.lock.txt
+# (absent -> sortie 1 avant tout ssh). Même séquence que le postinst du .deb : venv sans --upgrade-deps, dépendances
+# `--require-hashes --no-deps`, puis wheel `--no-index --no-deps --force-reinstall`, puis scripts/btmux-configure.sh.
 # Lit .claude/agents/environments/<env>.env : SSH_KEY_PATH, DEPLOY_HOST (user@host), BTMUX_USER (optionnel :
 # utilisateur de service de btmuxd, defaut = partie user de DEPLOY_HOST, sinon "ubuntu").
 # Idempotent : relancable a l'identique. Ne remplace jamais /etc/btmux/config.yaml s'il existe.
@@ -13,9 +16,13 @@ ENV_FILE="${BTMUX_ENV_FILE:-.claude/agents/environments/${ENV_NAME}.env}"   # BT
 
 [ -f "$WHEEL" ] || { echo "deploy: wheel introuvable: $WHEEL" >&2; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "deploy: $ENV_FILE absent (modele: ${ENV_NAME}.env.example)" >&2; exit 1; }
-[ -f systemd/btmuxd.service ] && [ -f config/config.example.yaml ] && [ -f scripts/btmux-set-user.sh ] \
-  && [ -f scripts/btmux-install-wireplumber.sh ] && [ -f config/wireplumber/51-btmux-no-seat.conf ] \
-  || { echo "deploy: systemd/btmuxd.service, config/config.example.yaml, scripts/btmux-set-user.sh ou la config WirePlumber absent" >&2; exit 1; }
+LOCK="${WHEEL%-py3-none-any.whl}.requirements.lock.txt"
+[ -f "$LOCK" ] || { echo "deploy: lockfile introuvable a cote de la wheel: $LOCK" >&2; exit 1; }
+for f in systemd/btmuxd.service systemd/btmux-adapters.service config/config.example.yaml config/dbus/btmux.conf.in \
+  config/wireplumber/51-btmux-no-seat.conf config/wireplumber/roles.conf scripts/btmux-configure.sh \
+  scripts/btmux-set-user.sh scripts/btmux-install-wireplumber.sh scripts/btmux-adapters.sh; do
+  [ -f "$f" ] || { echo "deploy: fichier du depot absent: $f" >&2; exit 1; }
+done
 
 # shellcheck disable=SC1090
 # tr -d '\r' : tolere un .env ecrit avec des fins de ligne CRLF (edite sous Windows)
@@ -41,13 +48,17 @@ REMOTE_DIR=$(ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "mktemp -d /tmp/btmux-deploy
 [[ "$REMOTE_DIR" =~ ^/tmp/btmux-deploy\.[A-Za-z0-9]+$ ]] || { echo "deploy: repertoire distant inattendu: $REMOTE_DIR" >&2; exit 1; }
 # Nettoyage distant garanti des la creation du repertoire (scp ou script distant en echec)
 trap 'ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "rm -rf $REMOTE_DIR" >/dev/null 2>&1 || true' EXIT
-scp "${SSH_OPTS[@]}" -q -- "$WHEEL" systemd/btmuxd.service config/config.example.yaml scripts/btmux-set-user.sh \
-  scripts/btmux-install-wireplumber.sh config/wireplumber/51-btmux-no-seat.conf "$DEPLOY_HOST:$REMOTE_DIR/"
+LOCK_NAME="$(basename "$LOCK")"
+[[ "$LOCK_NAME" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "deploy: nom de lockfile invalide: $LOCK_NAME" >&2; exit 1; }
+scp "${SSH_OPTS[@]}" -q -- "$WHEEL" "$LOCK" systemd/btmuxd.service systemd/btmux-adapters.service \
+  config/config.example.yaml config/dbus/btmux.conf.in config/wireplumber/51-btmux-no-seat.conf config/wireplumber/roles.conf \
+  scripts/btmux-configure.sh scripts/btmux-set-user.sh scripts/btmux-install-wireplumber.sh scripts/btmux-adapters.sh \
+  "$DEPLOY_HOST:$REMOTE_DIR/"
 
 # Script distant : lu depuis stdin (aucun fichier intermediaire), argument = nom de la wheel.
-ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" "$BTMUX_USER" <<'REMOTE'
+ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" bash -s -- "$REMOTE_DIR" "$WHEEL_NAME" "$LOCK_NAME" "$BTMUX_USER" <<'REMOTE'
 set -euo pipefail
-dir="$1"; wheel="$2"; svc_user="$3"
+dir="$1"; wheel="$2"; lock="$3"; svc_user="$4"
 trap 'rm -rf "$dir"' EXIT
 # Prerequis cote Pi : python >= 3.12 (requires-python) et python3-venv (ensurepip)
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 12))' \
@@ -61,25 +72,15 @@ if [ -e /opt/btmux ] && [ ! -x /opt/btmux/bin/pip ]; then
   echo "deploy: /opt/btmux incomplet, recreation"
   sudo rm -rf /opt/btmux
 fi
-sudo python3 -m venv --upgrade-deps /opt/btmux
-sudo /opt/btmux/bin/pip install --quiet --upgrade "$dir/$wheel"   # wheel + dependances
-sudo /opt/btmux/bin/pip install --quiet --force-reinstall --no-deps "$dir/$wheel"   # redeploiement meme version effectif
-sudo install -d -m 755 /etc/btmux
-sudo install -m 644 "$dir/config.example.yaml" /etc/btmux/config.example.yaml
-if [ ! -f /etc/btmux/config.yaml ]; then
-  sudo install -m 644 /etc/btmux/config.example.yaml /etc/btmux/config.yaml
-  echo "deploy: /etc/btmux/config.yaml cree depuis l'exemple (a adapter : MAC du controleur)"
-fi
-sudo install -m 644 "$dir/btmuxd.service" /etc/systemd/system/btmuxd.service
-sudo sh "$dir/btmux-set-user.sh" "$svc_user"
-# WirePlumber headless (pas de seat) : sans cela BlueZ n'annonce aucun profil audio. N'ecrase rien.
-sudo sh "$dir/btmux-install-wireplumber.sh" "$svc_user" "$dir/51-btmux-no-seat.conf"
+[ -x /opt/btmux/bin/pip ] || sudo python3 -m venv /opt/btmux
+# Dependances epinglees et hachees, puis la wheel sans index (redeploiement de meme version effectif)
+sudo /opt/btmux/bin/pip install --quiet --require-hashes --no-deps -r "$dir/$lock"
+sudo /opt/btmux/bin/pip install --quiet --no-index --no-deps --force-reinstall "$dir/$wheel"
+# Configuration commune (config d'exemple, policy D-Bus, jeton 0600, drop-in utilisateur, WirePlumber, unites, systemd)
+sudo sh "$dir/btmux-configure.sh" --user "$svc_user" --share "$dir" --units "$dir"
 if [ "$(loginctl show-user "$svc_user" -p Linger --value 2>/dev/null)" != yes ]; then
   echo "deploy: ATTENTION linger absent pour $svc_user (sudo loginctl enable-linger $svc_user)" >&2
 fi
-sudo systemctl daemon-reload
-sudo systemctl enable btmuxd.service
-sudo systemctl restart btmuxd.service
 sleep 2
 if ! systemctl is-active --quiet btmuxd.service; then
   echo "deploy: btmuxd.service inactif ($(systemctl show -p Result --value btmuxd.service))" >&2
@@ -87,6 +88,7 @@ if ! systemctl is-active --quiet btmuxd.service; then
   exit 1
 fi
 echo "deploy: btmuxd.service actif"
+systemctl show -p Result,ExecMainStatus btmux-adapters.service
 /opt/btmux/bin/btmuxd --version
 REMOTE
 echo "== deploy $ENV_NAME termine"

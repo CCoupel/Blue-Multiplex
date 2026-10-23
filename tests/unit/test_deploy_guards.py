@@ -7,11 +7,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _deploy(tmp_path: Path, env_text: str) -> subprocess.CompletedProcess[str]:
+def _deploy(
+    tmp_path: Path, env_text: str, with_lock: bool = True
+) -> subprocess.CompletedProcess[str]:
     env_file = tmp_path / "t.env"
     env_file.write_text(env_text)
     wheel = tmp_path / "btmux-0.0.0-py3-none-any.whl"
     wheel.write_bytes(b"")
+    if with_lock:
+        (tmp_path / "btmux-0.0.0.requirements.lock.txt").write_text("x==1 --hash=sha256:0\n")
     # ssh/scp factices en tete du PATH : si une garde laisse passer, le test echoue (rc != attendu)
     # au lieu de joindre une vraie machine.
     fake = tmp_path / "bin"
@@ -56,4 +60,11 @@ def test_invalid_inputs_refused_before_ssh(tmp_path: Path, env_text: str) -> Non
     proc = _deploy(tmp_path, env_text)
     assert proc.returncode == 1, proc.stderr
     assert "invalide" in proc.stderr
+    assert "SSH-APPELE" not in proc.stderr
+
+
+def test_missing_lockfile_refused_before_ssh(tmp_path: Path) -> None:
+    proc = _deploy(tmp_path, "SSH_KEY_PATH=/k\nDEPLOY_HOST=ubuntu@btmux.local\n", with_lock=False)
+    assert proc.returncode == 1, proc.stderr
+    assert "lockfile introuvable" in proc.stderr
     assert "SSH-APPELE" not in proc.stderr

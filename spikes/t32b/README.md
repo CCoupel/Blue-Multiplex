@@ -27,7 +27,7 @@ par le casque), identifiés par MAC (`/etc/btmux/config.yaml`), jamais par `hciN
 1. `session.sh s1` ; vérifier le préflight. Ouvrir la fenêtre d'appairage : `touch out/window.open` (fermer : `rm`).
 2. **Identité (#12)** : le PC et le téléphone ne voient que `btmux` ; le casque ne voit que `btmux-src` ; permuter les MAC des rôles dans la config,
    `btmux-adapters.sh`, reboot : les rôles suivent les MAC.
-3. **Rôles (#13)** : `roles_report.sh` ; ajuster `spikes/common/roles.conf` si un appareil se comporte mal.
+3. **Rôles (#13)** : `roles_report.sh` ; ajuster `config/wireplumber/roles.conf` si un appareil se comporte mal.
 4. **Exposition (#5 bi)** : PC + téléphone sur `hci-src`, casque sur `hci-hp`, audio 5 min, reboot (reconnexion initiée par le Pi).
 5. **Routage (#7 critère 1)** : bascule réel ↔ réel ×10 (`router.py --sink @hci1:Audio/Sink --a @hci0:Stream/Output/Audio:<PC> --b @hci0:Stream/Output/Audio:<tél>`), p95 < 1 s, 10 min, FL/FR, restart WirePlumber BT connecté.
 

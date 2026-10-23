@@ -54,7 +54,7 @@ Par défaut, le staging se fait dans `_work/tmp/` (gitignoré).
 ## Installation sur le Pi
 
 Le paquet `btmux_<X.Y.Z>_all.deb` est produit par `scripts/build-deb.sh` (aucune release publique à ce jour). Il installe la wheel, l'unité systemd
-`btmuxd.service`, la configuration d'exemple et `set-user.sh` ; le venv `/opt/btmux` est créé sur le Pi.
+`btmuxd.service`, la configuration d'exemple et `btmux-set-user.sh` ; le venv `/opt/btmux` est créé sur le Pi.
 
 1. Provisionner le Pi (Ubuntu Server 26.04 LTS arm64, Bluetooth, PipeWire, session de l'utilisateur de service avec linger) : [docs/install-pi.md](docs/install-pi.md).
 2. Copier et adapter la configuration : `config/config.example.yaml` → `/etc/btmux/config.yaml`
@@ -74,7 +74,7 @@ Le paquet `btmux_<X.Y.Z>_all.deb` est produit par `scripts/build-deb.sh` (aucune
    ```
 
    Un drop-in `/etc/systemd/system/btmuxd.service.d/user.conf` déjà présent n'est pas écrasé sans `BTMUX_USER`.
-   Pour le modifier plus tard : `sudo /usr/lib/btmux/set-user.sh <utilisateur>` puis `sudo systemctl daemon-reload`
+   Pour le modifier plus tard : `sudo /usr/lib/btmux/btmux-set-user.sh <utilisateur>` puis `sudo systemctl daemon-reload`
    et `sudo systemctl restart btmuxd`. Le compte root est refusé.
 
 Déploiement sur le Pi de qualification depuis une wheel déjà construite : `scripts/deploy.sh <env> <wheel>`.

@@ -18,5 +18,8 @@ step "typecheck" ; bash -c "$(cmd typecheck)"
 step "tests"     ; bash -c "$(cmd coverage) -m 'not hardware' --cov-fail-under=$(jq -r '.testing.coverage_min // 0' "$CONFIG")"
 step "audit"     ; bash -c "$(cmd audit)"
 step "build"     ; rm -rf dist && bash -c "$(cmd build)"
+# Lockfile runtime haché (dépendances de production seulement, sans btmux lui-même : installé depuis la wheel) — utilisé par
+# le postinst du .deb et par deploy.sh (`pip install --require-hashes --no-deps -r`).
+step "lockfile"  ; uv export --no-dev --frozen --hashes --no-emit-project --format requirements-txt -o dist/requirements.lock.txt
 
 echo; echo "CI OK — artefacts dans dist/ :"; ls -1 dist/

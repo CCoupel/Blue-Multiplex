@@ -1,8 +1,8 @@
 [Unit]
 Description=btmuxd — multiplexeur audio Bluetooth
 Documentation=https://github.com/CCoupel/Blue-Multiplex
-After=bluetooth.service user@1000.service dbus.service
-Wants=bluetooth.service user@1000.service
+After=bluetooth.service btmux-adapters.service user@1000.service dbus.service
+Wants=bluetooth.service btmux-adapters.service user@1000.service
 Requires=dbus.service
 
 [Service]
@@ -14,9 +14,15 @@ User=ubuntu
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
 Restart=on-failure
-# Code 2 = configuration invalide : inutile de boucler (cf. btmuxd --check-config)
-RestartPreventExitStatus=2
+# Codes 2 (configuration invalide) et 3 (adaptateur introuvable) : inutile de boucler (cf. contrat config-schema)
+RestartPreventExitStatus=2 3
 RestartSec=5
+# Durcissement : lecture seule partout, sauf le socket PipeWire de l'utilisateur (drop-in : ReadWritePaths=-/run/user/<uid>)
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=-/run/user/1000
 
 [Install]
 WantedBy=multi-user.target

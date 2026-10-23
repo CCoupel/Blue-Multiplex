@@ -27,5 +27,8 @@ Wants=bluetooth.service user@$uid.service
 User=$user
 Environment=
 Environment=XDG_RUNTIME_DIR=/run/user/$uid
+# unité durcie (ProtectSystem=strict) : le socket PipeWire de l'utilisateur doit rester accessible
+ReadWritePaths=
+ReadWritePaths=-/run/user/$uid
 CONF
 echo "btmux-set-user: btmuxd.service -> User=$user (uid $uid)"

@@ -60,7 +60,7 @@ case "$cmd" in
 == S1 : identité, rôles, exposition, routage ==
  1. Fenêtre d'appairage   : touch $OUT/window.open   (fermer : rm $OUT/window.open)
  2. Identité (#12)        : bluetoothctl list ; $COMMON/resolve_adapter.py --role sources|headsets --index
- 3. Rôles/profils (#13)   : $COMMON/../t32b/roles_report.sh  (SDP/profils par carte) ; ajuster $COMMON/roles.conf
+ 3. Rôles/profils (#13)   : $COMMON/../t32b/roles_report.sh  (SDP/profils par carte) ; ajuster $COMMON/../../config/wireplumber/roles.conf
  4. Routage (#7)          : $HERE/../07-routing/router.py --sink @hci1:Audio/Sink --a @hci0:Stream/Output/Audio --virtual-b --cycles 10
  5. Clôture               : $0 stop
 TXT

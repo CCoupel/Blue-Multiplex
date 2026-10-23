@@ -1,0 +1,12 @@
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<!-- btmux : autorise l'utilisateur de service de btmuxd (@BTMUX_USER@) à parler à BlueZ sur le bus système
+     (enregistrement d'agent, RemoveDevice, propriétés des adaptateurs/appareils). Rendu par btmux-configure.sh
+     (@BTMUX_USER@ remplacé) ; aucun accès générique : uniquement cet utilisateur, uniquement org.bluez. -->
+<busconfig>
+  <policy user="@BTMUX_USER@">
+    <allow send_destination="org.bluez"/>
+    <allow send_interface="org.bluez.Agent1"/>
+    <allow receive_sender="org.bluez"/>
+  </policy>
+</busconfig>

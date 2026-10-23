@@ -59,7 +59,7 @@ sudo apt install -y bluez pipewire pipewire-audio wireplumber libspa-0.2-bluetoo
 - l'utilisateur de service est paramétrable : `BTMUX_USER` (variable de `qualif.env`, défaut = partie utilisateur de
   `DEPLOY_HOST`, sinon `ubuntu`). `scripts/deploy.sh` et le `postinst` du `.deb` génèrent le drop-in
   `/etc/systemd/system/btmuxd.service.d/user.conf` (`User=`, `XDG_RUNTIME_DIR=/run/user/<uid>`, `After=user@<uid>.service`)
-  via `scripts/btmux-set-user.sh` (installé en `/usr/lib/btmux/set-user.sh` par le paquet) ;
+  via `scripts/btmux-set-user.sh` (installé en `/usr/lib/btmux/btmux-set-user.sh` par le paquet) ;
 - la session utilisateur doit exister sans login : `sudo loginctl enable-linger <utilisateur>` ;
 - PipeWire/WirePlumber tournent en **services utilisateur** (jamais `--system`). Ubuntu les active à l'installation ;
   sinon : `systemctl --user enable --now pipewire.socket pipewire-pulse.socket wireplumber.service`.
