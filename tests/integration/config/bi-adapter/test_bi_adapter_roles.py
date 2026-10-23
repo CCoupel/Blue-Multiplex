@@ -67,11 +67,6 @@ def test_v4_more_than_two_adapters_rejected(errors_of, valid_config, extra_count
     )
 
 
-@pytest.mark.xfail(
-    reason="ecart a trancher : V4 (validation croisee) non collectee avec une erreur de champ "
-    "(contrat : « toutes les erreurs sont collectees »)",
-    strict=False,
-)
 def test_v4_error_is_collected_with_other_errors(errors_of, valid_config):
     valid_config["adapters"] = [SRC, HP, {"mac": "bad", "name": "x", "roles": ["sources"]}]
     errs = errors_of(valid_config)
