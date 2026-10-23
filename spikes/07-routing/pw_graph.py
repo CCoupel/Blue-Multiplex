@@ -11,6 +11,7 @@ Provisoire — à revalider avec dongle RTL8761B (spike #7, Bluetooth interne du
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import time
 from collections.abc import Callable
@@ -170,7 +171,9 @@ class Graph:
                 return
 
     def _emit(self, now: float, kind: str, obj: Any) -> None:
-        self.events.append((now, kind, obj))
+        self.events.append(
+            (now, kind, copy.copy(obj))
+        )  # instantané : l'état courant peut changer ensuite
         for cb in self.listeners:
             cb(now, kind, obj)
 

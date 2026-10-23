@@ -16,6 +16,7 @@
 | `wireplumber/btmux-route.lua`, `52-btmux-route.conf` | Variante Lua : route pilotée par la métadonnée `btmux.route` (`SRC>SINK`). |
 | `measure_lua.py` | Mesure la bascule de la variante Lua. |
 | `sink_state.py` | Pause / reprise d'un flux vers un sink réel : délais `running` ↔ `idle`. |
+| `skew_probe.py` | Trou/chevauchement et écart FL/FR d'une bascule, à partir des événements du graphe. |
 | `list_nodes.py` | Liste les nœuds (nom, classe, état, ports) pour choisir `--sink` / `--a`. |
 | `watch_uart.sh` | Garde-fou (seuils : 1 `tx timeout`/`stalled`, ou ≥ 3 `Frame reassembly` en 30 s) : déconnecte les appareils BT, arrête le routeur. |
 
@@ -49,6 +50,23 @@ la reprise le ramène à `running` en **114–209 ms**. L'écoute a été faite 
 **Deux sources BT réelles : impossible sur le Bluetooth interne.** Téléphone + Bose connectés, le démarrage de l'audio du
 téléphone a provoqué une rafale d'erreurs UART (~140 `Frame reassembly failed` + `tx timeout`) ; la séance a donc été
 menée avec le Bose seul et deux sources virtuelles. À refaire avec le dongle (T3.2b).
+
+### Trou / chevauchement et écart FL/FR pendant une bascule (`skew_probe.py`, sink virtuel, 20 bascules par méthode)
+
+`router.py` fait **unlink de l'ancienne source puis link de la nouvelle** (rupture avant liaison, exclusif, pas de mixage) :
+il y a donc un **trou** de quelques dizaines de ms au niveau du graphe, jamais de chevauchement. (Un éventuel recouvrement
+perçu à l'oreille vient de la mise en tampon du sink A2DP, qui joue encore la fin de l'ancien flux.)
+
+| Méthode | trou médian (min–max) | écart FL/FR médian (max) |
+|---------|------------------------|--------------------------|
+| `pwcli` (session persistante) | 71 ms (58–79) | **0 ms** (0) |
+| `pwlink-seq` (2 forks) | 119 ms (103–132) | **71 ms** (93) |
+| `pwlink-par` | 144 ms (136–180) | 0,8 ms (16) |
+| Lua | 65 ms (39–83) | **0 ms** (0) |
+
+L'écart FL/FR de `pwlink-seq` (un `pw-link` par canal, ~70 ms) est audible comme une légère « alternance droite/gauche » au
+changement ; `pwcli` et Lua créent les deux liens dans le même cycle du graphe (0 ms). Correctif : écrire les deux
+`create-link` en un seul envoi dans la session `pw-cli` (déjà le cas) ou créer les liens dans le même appel côté WirePlumber.
 
 ### Après `systemctl --user restart pipewire wireplumber` (sans appareil BT)
 
