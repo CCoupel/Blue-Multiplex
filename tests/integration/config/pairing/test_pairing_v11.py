@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from specsupport import XFAIL_T11, assert_has_error
-
-pytestmark = XFAIL_T11
+from specsupport import assert_has_error
 
 
 def test_pairing_absent_uses_defaults(load, valid_config):

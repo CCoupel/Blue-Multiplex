@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from specsupport import XFAIL_T11, assert_has_error
+from specsupport import assert_has_error
 
 SRC = {"mac": "AA:BB:CC:00:00:01", "name": "btmux", "roles": ["sources"]}
 HP = {"mac": "AA:BB:CC:00:00:02", "name": "btmux-src", "roles": ["headsets"]}
@@ -16,7 +16,6 @@ def test_mono_two_roles_accepted(load, valid_config):
     assert cfg.adapter_for_role("sources").mac == cfg.adapter_for_role("headsets").mac
 
 
-@XFAIL_T11
 def test_bi_adapter_accepted_and_roles_resolved(load, valid_config):
     valid_config["adapters"] = [SRC, HP]
     cfg = load(valid_config)
@@ -25,7 +24,6 @@ def test_bi_adapter_accepted_and_roles_resolved(load, valid_config):
     assert cfg.adapter_for_role("headsets").name == "btmux-src"
 
 
-@XFAIL_T11
 def test_bi_adapter_keeps_file_order(load, valid_config):
     valid_config["adapters"] = [HP, SRC]
     cfg = load(valid_config)
@@ -33,13 +31,11 @@ def test_bi_adapter_keeps_file_order(load, valid_config):
     assert cfg.adapter_for_role("sources").name == "btmux"
 
 
-@XFAIL_T11
 def test_bi_adapter_mac_normalized_to_uppercase(load, valid_config):
     valid_config["adapters"] = [dict(SRC, mac="aa:bb:cc:00:00:01"), HP]
     assert load(valid_config).adapters[0].mac == "AA:BB:CC:00:00:01"
 
 
-@XFAIL_T11
 def test_v3_duplicated_roles_across_two_adapters_rejected(errors_of, valid_config):
     valid_config["adapters"] = [BOTH_A, BOTH_B]
     errs = errors_of(valid_config)
@@ -47,7 +43,6 @@ def test_v3_duplicated_roles_across_two_adapters_rejected(errors_of, valid_confi
     assert_has_error(errs, "role 'headsets' must be provided by exactly one adapter (found 2)")
 
 
-@XFAIL_T11
 def test_v3_same_role_on_both_adapters_rejected(errors_of, valid_config):
     valid_config["adapters"] = [SRC, dict(HP, roles=["sources"])]
     errs = errors_of(valid_config)
@@ -60,7 +55,6 @@ def test_v2_zero_adapters_rejected(errors_of, valid_config):
     assert_has_error(errors_of(valid_config), "adapters")
 
 
-@XFAIL_T11
 @pytest.mark.parametrize("extra_count", [1, 2])
 def test_v4_more_than_two_adapters_rejected(errors_of, valid_config, extra_count):
     extras = [
@@ -85,7 +79,6 @@ def test_v4_error_is_collected_with_other_errors(errors_of, valid_config):
     assert_has_error(errs, "adapters[2].mac")
 
 
-@XFAIL_T11
 def test_devices_and_routes_work_with_bi_adapter(load, valid_config):
     valid_config["adapters"] = [SRC, HP]
     cfg = load(valid_config)

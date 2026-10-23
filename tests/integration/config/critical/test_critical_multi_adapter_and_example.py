@@ -7,7 +7,7 @@ le test critical « multi-adaptateur refuse » devient « 3 adaptateurs refuses 
 from __future__ import annotations
 
 import pytest
-from specsupport import REPO_ROOT, XFAIL_T11, assert_has_error, output_of
+from specsupport import REPO_ROOT, assert_has_error, output_of
 
 EXAMPLE = REPO_ROOT / "config" / "config.example.yaml"
 
@@ -19,14 +19,12 @@ THIRD = {"mac": "AA:BB:CC:00:00:03", "name": "btmux-3", "roles": ["sources"]}
 
 
 @pytest.mark.critical
-@XFAIL_T11
 def test_v4_three_adapters_rejected(errors_of, valid_config):
     valid_config["adapters"] = TWO_ADAPTERS + [THIRD]
     assert_has_error(errors_of(valid_config), "at most 2 adapters are supported (found 3)")
 
 
 @pytest.mark.critical
-@XFAIL_T11
 def test_v4_two_adapters_split_roles_accepted(load, valid_config):
     valid_config["adapters"] = TWO_ADAPTERS
     cfg = load(valid_config)
@@ -41,7 +39,6 @@ def test_v4_mono_adapter_still_accepted(load, valid_config):
 
 
 @pytest.mark.critical
-@XFAIL_T11
 def test_check_config_cli_refuses_three_adapters_with_code_2(
     run_btmuxd_cfg, write_config, valid_config
 ):
@@ -52,7 +49,6 @@ def test_check_config_cli_refuses_three_adapters_with_code_2(
 
 
 @pytest.mark.critical
-@XFAIL_T11
 def test_check_config_cli_accepts_bi_adapter_with_code_0(
     run_btmuxd_cfg, write_config, valid_config
 ):
