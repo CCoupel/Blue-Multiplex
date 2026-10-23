@@ -12,8 +12,10 @@
 - **Milestones GitHub** :
   - `v0.1.0 — Phase 0 : exploration technique (mono-adaptateur)` : clôturé sans release ; #1 à #5 et #7 traités, #6 reporté
   - `v0.2.0 — Exploration technique bi-adaptateur (2 × UB500)` : préparation UB500 (#17), campagne T3.2b (#6, #7 revalidés),
-    Web UI appairages ; issues `PLANNING` jusqu'au GATE 2 du plan v0.2.0
-  - `v0.3.0 — Daemon btmuxd : appairage, routage, API` : #16 et issues daemon créées après #11
+    agent BlueZ d'appairage (#20), API HTTP (#21), Web UI de suivi et gestion des appairages (#16, périmètre réduit) ;
+    issues `PLANNING` jusqu'au GATE 2 du plan v0.2.0
+  - `v0.3.0 — Daemon btmuxd : routage, reconnexion, politique de connexions` : issues daemon créées après #11 ;
+    sans agent, API ni Web UI (déjà en v0.2.0)
 - **Issues actives** : aucune en cours sur v0.1.0
 - **Prochaine étape** : ouverture de `milestone/v0.2.0` depuis `main` (`deployer`, `pyproject.toml` → `0.2.0.0` + `uv lock`,
   patch contrats V4 `_work/tmp/contracts-v4-bi-adaptateur.patch`, `CHANGELOG [0.2.0]`), puis `/feature` plan v0.2.0 (LOT-1 #18 #14 #17)
@@ -37,7 +39,7 @@
   prévu en v0.2.0 (#18).
 - Label GitHub `spike` cree : exploration technique, livrable = rapport `docs/spikes/NN-<sujet>.md` + decision, code jetable sous `spikes/` (hors `src/`, hors couverture).
 - Schema config `adapters` en liste `{mac, name, roles}` (une entree en v0.1.0, deux en v0.2.0, contrat V4 à lever) — diverge du cadrage §4.6, à aligner en #11.
-- Daemon fonctionnel, API HTTP/CLI, MQTT, GPIO, Web UI : hors v0.1.0 ; daemon en v0.3.0, MQTT/GPIO en v0.4.0.
+- Daemon fonctionnel, routage, MQTT, GPIO : hors v0.1.0 ; daemon en v0.3.0, MQTT/GPIO en v0.4.0. Agent BlueZ (#20), API HTTP (#21) et Web UI (#16) en v0.2.0.
 - Les spikes radio exigent des etapes manuelles utilisateur (appairages, appels) : prevoir une procedure manuelle en `_work/handoff/` a chaque ordre DEV de spike.
 
 ## Points de contexte pour la prochaine session
