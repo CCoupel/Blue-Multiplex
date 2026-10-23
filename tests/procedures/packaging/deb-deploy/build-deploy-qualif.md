@@ -65,9 +65,44 @@
 
 **Verdict** : [ ] PASS [ ] FAIL
 
+## Scénario 6 — Packaging déterministe (v0.2.0, #17) : lockfile, postinst, prerm/postrm
+
+**Prérequis v0.2.0** : branche `milestone/v0.2.0` ; le bump de version commite `uv lock` (`uv lock --check` doit passer).
+
+| Étape | Action | Résultat attendu | Obtenu | OK ? |
+|-------|--------|------------------|--------|------|
+| 1 | `scripts/ci.sh` | `dist/requirements.lock.txt` produit (`uv export --no-dev --frozen --hashes`) | | |
+| 2 | `grep -c -- '--hash=sha256:' dist/requirements.lock.txt` ; `grep -E '^(ruff\|mypy\|pytest\|pip-audit)' dist/requirements.lock.txt` | Hashes présents pour chaque dépendance ; **aucune** dépendance de dev | | |
+| 3 | `scripts/build-deb.sh 0.2.0` puis `dpkg-deb --contents dist/btmux_0.2.0_all.deb` | Contient le lockfile (`/usr/share/btmux/requirements.lock.txt`), la wheel, `btmuxd.service`, `btmux-adapters.service`, `/usr/lib/btmux/btmux-adapters.sh`, `51-btmux-no-seat.conf`, `roles.conf`, `/etc/dbus-1/system.d/btmux.conf` | | |
+| 4 | `dpkg-deb -e dist/btmux_0.2.0_all.deb _work/tmp/ctrl && cat _work/tmp/ctrl/{postinst,prerm,postrm}` | `postinst` : `case "$1" in configure)` ; `python3 -m venv` **sans** `--upgrade-deps` ; `pip install --require-hashes --no-deps -r <lockfile>` puis wheel `--no-index --no-deps` ; `prerm` et `postrm` présents ; `sh -n`/`bash -n` OK sur chacun | | |
+| 5 | Installer sur le Pi : `sudo dpkg -i btmux_0.2.0_all.deb` (ou `deploy.sh qualif`) | Code 0 ; venv `/opt/btmux` créé ; installation **hors-ligne côté dépendances non listées** (aucun accès index pour la wheel : `--no-index`) | | |
+| 6 | `/opt/btmux/bin/pip freeze` vs lockfile | Les versions installées = celles du lockfile (mêmes pins) | | |
+| 7 | `sudo apt remove btmux` | `prerm` arrête `btmuxd` proprement (SIGTERM, code 0) ; unité retirée ; **`/etc/btmux/config.yaml` et le jeton conservés** | | |
+| 8 | `sudo apt purge btmux` | `postrm purge` : `/opt/btmux` retiré ; état documenté pour `/etc/btmux/` (config/jeton supprimés ou conservés selon le script — noter lequel) | | |
+| 9 | Réinstaller (`dpkg -i`) après remove puis purge | Idempotent : service redémarré, config d'exemple présente, aucun message d'erreur du postinst | | |
+
+**Verdict** : [ ] PASS [ ] FAIL
+
+## Scénario 7 — Unité durcie, policy D-Bus et jeton généré (v0.2.0)
+
+| Étape | Action | Résultat attendu | Obtenu | OK ? |
+|-------|--------|------------------|--------|------|
+| 1 | `systemctl cat btmuxd` | `RestartPreventExitStatus=2 3`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp=yes`, `ReadWritePaths=` (si requis, ex. `/var/lib/btmux`) | | |
+| 2 | `systemd-analyze security btmuxd --no-pager \| tail -3` | Score relevé (informatif) ; aucune option incompatible : le service démarre | | |
+| 3 | `systemctl is-active btmuxd ; journalctl -u btmuxd -n 20 --no-pager` | `active` ; pas de `Permission denied` dû au durcissement | | |
+| 4 | `ls -l /etc/dbus-1/system.d/btmux.conf` ; lire le fichier | Présent ; autorise **`$U`** (`BTMUX_USER`) sur `org.bluez` (Agent, RemoveDevice, Adapter) ; pas d'autorisation générique `user="*"` | | |
+| 5 | `sudo -u $U busctl --system call org.bluez /org/bluez org.bluez.AgentManager1 RegisterAgent …` (ou `busctl --system introspect org.bluez /org/bluez/hci0`) | Pas de `AccessDenied` ; test négatif : un autre utilisateur non listé est refusé | | |
+| 6 | `stat -c '%a %U:%G' /etc/btmux/token` | Fichier **0600**, propriétaire = utilisateur de service, contenu non vide (≥ 32 caractères) | | |
+| 7 | Réinstaller (`dpkg -i`) | Le jeton existant **n'est pas régénéré** (même contenu, même mtime) | | |
+| 8 | Supprimer le jeton puis réinstaller | Jeton régénéré en 0600 | | |
+| 9 | Config bi : `btmuxd --config /etc/btmux/config.yaml --check-config` | `config OK`, code 0 ; config à 3 adaptateurs → code 2 « at most 2 adapters are supported » | | |
+| 10 | Smoke LOT-1 : `is-active btmuxd && btmuxd --version && --check-config` | Code 0 (le smoke `GET /api/health` n'arrive qu'avec le LOT-2) | | |
+
+**Verdict** : [ ] PASS [ ] FAIL
+
 ## Critères de validation
 
-- [ ] Tous les scénarios 1 à 4 PASS (critères d'acceptation de l'issue #2)
+- [ ] Tous les scénarios 1 à 4 PASS (critères d'acceptation de l'issue #2) — v0.2.0 : scénarios 6 et 7 PASS (issue #17)
 - [ ] Aucune étape ne modifie un fichier hors du projet côté poste
 
 ## Notes QA

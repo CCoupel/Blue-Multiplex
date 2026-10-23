@@ -73,6 +73,18 @@ cette checklist **valide les preuves et le rapport** après la séance. Scripts 
 | 5.10 | Cohérence : verdict compatible avec les observations §2–§3 (pas de PASS affiché malgré un échec constaté) | |
 | 5.11 | **Masquage avant commit** (dépôt public) : les preuves copiées sous `docs/spikes/` passent par `spikes/common/mask_evidence.py` ; `python spikes/common/mask_evidence.py --pi-mac <MAC du Pi> --check docs/spikes` retourne 0 et `grep -rE '([0-9A-Fa-f]{2}[:_-]){5}[0-9A-Fa-f]{2}' docs/spikes` ne montre que la MAC du Pi ; aucun appareil tiers du voisinage (scan) ni nom d'appareil personnel dans `pair.jsonl` | |
 
+## 6. Revalidation UB500 bi — étapes 3–6 en bi-adaptateur (séance S1, `revalidation-ub500/`)
+
+Colonne « UB500 bi » : PC + téléphone sur `hci-src` simultanément, puis casque sur `hci-hp` (= 3 liens ACL répartis sur 2 radios).
+
+| # | Contrôle | Preuve attendue | OK UB500 bi |
+|---|----------|-----------------|-------------|
+| 6.1 | PC **et** téléphone connectés simultanément à `btmux` (`hci-src`) | `bluetoothctl devices Connected` : 2 sources ; chacun voit **un seul** casque `btmux` | |
+| 6.2 | Casque connecté par le Pi sur `hci-hp` pendant que les 2 sources sont connectées | 3 liens ACL, aucun `tx timeout` ; le casque voit `btmux-hp` (source) | |
+| 6.3 | Audio 5 min : source → Pi → casque | Aucune coupure | |
+| 6.4 | Reboot : appairages (`Paired`/`Trusted`) conservés, reconnexion automatique, **alias et classe de chaque adaptateur restaurés** par `btmux-adapters.service` | `reboot_check.sh` ×2 | |
+| 6.5 | Rapport `docs/spikes/05-exposure.md` § « Revalidation UB500 » : statut provisoire **levé ou maintenu**, preuves masquées (5.11) | | |
+
 ## Critères de validation
 
 - [ ] §1 à §4 : tous les contrôles OK, ou écarts documentés dans le rapport avec impact sur le verdict

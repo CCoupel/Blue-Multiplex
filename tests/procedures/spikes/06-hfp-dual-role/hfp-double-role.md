@@ -21,7 +21,7 @@
 
 ## 1. Critère 1 — Scénario HF (source) + AG (casque), voix
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 1.1 | PC connecté en HFP (HF côté `btmux`) et casque connecté en HFP AG, **sans audio** | `bluetoothctl devices Connected` = 2 ; RFCOMM HF + AG établis (journal `btmon`/spike) | ✔ | ✔ | | |
 | 1.2 | **SCO PC seul** : micro Teams ouvert, parler/écouter | Lien SCO ouvert (`btmon`), voix compréhensible dans les deux sens (boucle locale PipeWire), **codec relevé** (mSBC ou CVSD) | ✔ | ✔ | | |
@@ -31,21 +31,21 @@
 
 ## 2. Critère 2 — Capacité SCO
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 2.1 | `sco_capacity.sh` exécuté (`btmgmt info`, `btmon`, compteurs `hciconfig`) | Sortie archivée ; SCO MTU, route SCO (HCI/PCM, `0x3f 0x1d`) relevés | ✔ | ✔ | | |
 | 2.2 | Nombre de liens SCO tenus **en parallèle** | Valeur mesurée et méthode | ⏭ (1 seul essayé) | ✔ | | |
 
 ## 3. Critère 3 — Stabilité et bascules
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 3.1 | Stabilité ≥ 10 min en HFP | Aucune erreur HCI, aucune coupure | ⏭ | ✔ | | |
 | 3.2 | 5 bascules A2DP ↔ HFP déclenchées par Windows (ouverture/fermeture micro Teams) | Journal des 5 transitions, durées | ⏭ | ✔ | | |
 
 ## 4. Critère 4 — Inventaire de l'API téléphonie (backend natif)
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 4.1 | `inventory_telephony.py` : propriétés/événements D-Bus BlueZ et PipeWire disponibles | Fichier `out/inventory.*` (propriétés, signaux, indicateurs d'appel, commandes AT accessibles) | ✔ | — | | |
 | 4.2 | Jugement **« suffisant pour #10 : OUI / NON »**, justifié par l'inventaire | Conclusion dans le rapport, avec manques listés | ✔ | — | | |
@@ -66,6 +66,21 @@
 | 5.9 | Cohérence décision ↔ observations (incident `tx timeout` éventuel cité) | |
 | 5.10 | Entrées pour #10 et ADR 0001 (politique de profils HFP) identifiées | |
 | 5.11 | **Masquage avant commit** (dépôt public) : `python spikes/common/mask_evidence.py --pi-mac <MAC du Pi> --check docs/spikes` retourne 0 ; `grep -rE '([0-9A-Fa-f]{2}[:_-]){5}[0-9A-Fa-f]{2}' docs/spikes` ne montre que la MAC du Pi ; aucun nom d'appareil personnel ni appareil tiers | |
+
+## 6. Revalidation UB500 bi — double SCO (séance S2, `revalidation-ub500/`)
+
+Topologie : PC (Teams) en HFP sur `hci-src` (rôle **HF** côté `btmux`) ; casque en HFP **AG** sur `hci-hp`. 1 SCO par radio.
+
+| # | Contrôle | Preuve attendue | OK UB500 bi |
+|---|----------|-----------------|-------------|
+| 6.1 | Voix bout en bout **PC ↔ casque** via lien PipeWire manuel, deux SCO simultanés | Voix dans les deux sens ; deux liens SCO (`btmon`, un par `hciN`) | |
+| 6.2 | Codec SCO relevé de chaque côté | mSBC ou CVSD pour `hci-src` et `hci-hp` | |
+| 6.3 | Nombre de liens SCO tenus par dongle (`sco_capacity.sh` sur chaque `hciN`) | Valeur mesurée par radio ; lever R1 (1 seul SCO/RTL8761BU) | |
+| 6.4 | eSCO mSBC (`hci-hp`) + A2DP sortant simultanés sur le même `hci-hp` | Comportement observé et consigné (R1) | |
+| 6.5 | Stabilité ≥ 10 min en HFP | 0 coupure, 0 erreur HCI | |
+| 6.6 | 5 bascules A2DP ↔ HFP déclenchées par Windows (micro Teams) | Journal des 5 transitions, durées | |
+| 6.7 | Inventaire API téléphonie complété (indicateurs d'appel, AT) ; **oFono** testé si l'inventaire natif est insuffisant | `out/inventory.*` ; décision | |
+| 6.8 | Rapport `docs/spikes/06-hfp-dual-role.md` : **décision backend définitive** (natif / oFono / hybride) ou provisoire maintenue, motivée ; § bi-adaptateur (#15) | | |
 
 ## Critères de validation
 

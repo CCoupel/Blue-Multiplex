@@ -22,7 +22,7 @@ Cocher une colonne par contrôle effectivement joué ; un `⏭` non joué n'est 
 
 ## 1. Critère 1 — Multiplexage et bascule
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 1.1 | Source réelle (S24) en A2DP sink + casque en A2DP source, flux entrant et sortant simultanés | `pw-dump`/`wpctl status` : nœuds `bluez_input`/`bluez_output` `running` ; audio audible | ✔ | — | | |
 | 1.2 | Bascule **réelle → virtuelle → réelle**, ×3 minimum, sans déconnexion BT | `bluetoothctl devices Connected` inchangé avant/après chaque bascule ; liens PipeWire créés/supprimés (journal prototype) | ✔ | — | | |
@@ -33,7 +33,7 @@ Cocher une colonne par contrôle effectivement joué ; un `⏭` non joué n'est 
 
 ## 2. Critère 2 — Prototype Python asyncio
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 2.1 | Découverte des nœuds (`pw-dump` JSON ou API native) | Sortie du prototype listant source réelle, virtuelle, casque | ✔ | ✔ | | |
 | 2.2 | Création / suppression de liens | Journal + `pw-link -l` avant/après | ✔ | ✔ | | |
@@ -42,14 +42,14 @@ Cocher une colonne par contrôle effectivement joué ; un `⏭` non joué n'est 
 
 ## 3. Critère 3 — Variante Lua WirePlumber
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 3.1 | Variante Lua rejouée sur les étapes 2–4 de la séance (bascule, `running`) | Script + sortie dans `out/lua/` | ✔ | — | | |
 | 3.2 | Tableau comparatif pw-* / API native / Lua : robustesse au redémarrage, resync d'état, observabilité | Tableau dans le rapport, une ligne par critère, chaque cellule justifiée | ✔ | — | | |
 
 ## 4. Critère 4 — Redémarrage PipeWire/WirePlumber
 
-| # | Contrôle | Preuve attendue | Interne | UB500 | OK int. | OK UB500 |
+| # | Contrôle | Preuve attendue | Interne | UB500 bi | OK int. | OK UB500 bi |
 |---|----------|-----------------|---------|-------|---------|----------|
 | 4.1 | `systemctl --user restart pipewire wireplumber` en cours de lecture | Liens reconstruits par le prototype, durée relevée ; BT non reconnecté (ou reconnexion notée) | ✔ | ✔ | | |
 | 4.2 | Idem avec la variante Lua | Résultat consigné (reconstruits / non) | ✔ | — | | |
@@ -69,6 +69,21 @@ Cocher une colonne par contrôle effectivement joué ; un `⏭` non joué n'est 
 | 5.9 | Limites : UART ≤ 3 Mbit/s, ≤ 2 ACL, antenne partagée Wi-Fi, SBC seul (pas d'AAC) | |
 | 5.10 | Cohérence verdict ↔ observations (aucun PASS malgré un échec constaté ; incident `tx timeout` éventuel cité) | |
 | 5.11 | **Masquage avant commit** (dépôt public) : `python spikes/common/mask_evidence.py --pi-mac <MAC du Pi> --check docs/spikes` retourne 0 ; `grep -rE '([0-9A-Fa-f]{2}[:_-]){5}[0-9A-Fa-f]{2}' docs/spikes` ne montre que la MAC du Pi ; aucun nom d'appareil personnel ni appareil tiers du voisinage | |
+
+## 6. Revalidation UB500 bi — critère 1 complet (séance S1, `revalidation-ub500/`)
+
+Topologie : `hci-src` (rôle `sources`) porte PC + téléphone (A2DP sink) ; `hci-hp` (rôle `headsets`) porte le casque (A2DP source).
+Plus de limite à 2 liens ACL : `link_guard.py` plafonne **par adaptateur**. Config bi, `BTMUX_BT_MODE=dongle`, Ethernet + `disable-wifi`.
+
+| # | Contrôle | Preuve attendue | OK UB500 bi |
+|---|----------|-----------------|-------------|
+| 6.1 | 2 sources **réelles** (PC + téléphone) sur `hci-src`, casque sur `hci-hp`, flux entrants/sortant simultanés | `bluetoothctl devices Connected` = 3 ; nœuds `running` ; audio audible | |
+| 6.2 | Bascule **réelle ↔ réelle** ×10 chronométrée, sans déconnexion BT | `out/switch_times.*` : n ≥ 10, médiane et **p95 < 1 s** (`testing.perf.source_switch_ms_max`) | |
+| 6.3 | Tenue 10 min avec 2 flux | 0 `xrun`, 0 erreur HCI (`watch_hci.sh` ×2), aucune déconnexion | |
+| 6.4 | Bascule avec formats **FL/FR** (canaux) correcte | Pas d'inversion de canaux ni de silence, relevé `pw-dump` | |
+| 6.5 | `systemctl --user restart pipewire wireplumber` **avec BT connecté** (3 liens) | Liens reconstruits, durée relevée, appareils non reconnectés (ou délai noté) | |
+| 6.6 | Conditions consignées : Ethernet, `disable-wifi`, hub USB 2.0 partagé, codec A2DP | Dans le rapport § « Revalidation UB500 » | |
+| 6.7 | Rapport `docs/spikes/07-routing.md` § « Revalidation UB500 » : statut provisoire **levé ou maintenu**, motivé ; mesures opposables | | |
 
 ## Critères de validation
 

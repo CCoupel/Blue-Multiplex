@@ -9,6 +9,7 @@
 - [ ] Pi flashé avec Raspberry Pi Imager (Ubuntu Server 26.04 LTS 64 bits) ; personnalisation **cloud-init** : hostname `btmux-qualif`, utilisateur, clé SSH publique, mot de passe SSH désactivé, pas de Wi-Fi ; Ethernet branché
 - [ ] **Variante Bluetooth** choisie et notée (`BTMUX_BT_MODE`, défaut `dongle`) :
   - `dongle` (cible) : dongle USB RTL8761B branché sur rallonge USB, loin des ports USB 3 ; `dtoverlay=disable-bt` posé
+  - `dongle-bi` (cible v0.2.0, `docs/install-pi.md` §6) : **deux** dongles TP-Link UB500 (RTL8761BU, `2357:0604`), `BTMUX_BT_MODE=dongle` ; jouer le **scénario 7**
   - `internal` (provisoire, Pi 3, `docs/install-pi.md` §10) : Bluetooth intégré (`hci0`, UART, Broadcom BCM43430A1) ; **pas** de `disable-bt`
   - Les étapes marquées *(dongle)* / *(internal)* ne s'appliquent qu'à leur variante ; les résultats `internal` sont indicatifs, pas la cible
 - [ ] `.claude/agents/environments/qualif.env` renseigné (`SSH_KEY_PATH`, `DEPLOY_HOST`, éventuellement `BTMUX_USER`)
@@ -114,11 +115,57 @@
 
 **Verdict** : [ ] PASS [ ] FAIL
 
+## Scénario 7 — Variante `dongle-bi` : deux dongles UB500 (`docs/install-pi.md` §6, issue #18)
+
+À jouer à la réception des dongles, **avant** toute séance radio (`revalidation-ub500/`). `$U` = utilisateur de service.
+
+### 7a. Checklist de réception (matériel)
+
+| Étape | Action | Résultat attendu | Valeur relevée | OK ? |
+|-------|--------|------------------|----------------|------|
+| 1 | Inspection : 2 × TP-Link UB500, chacun sur une **rallonge USB** (≥ 20 cm), loin des ports USB 3 et de l'antenne Wi-Fi ; étiqueter A / B | Conforme ; étiquettes posées | | |
+| 2 | Les **deux dongles sur le même hub USB 2.0** du Pi ; noter la topologie | Hub unique noté (limite à rappeler dans les mesures du double saut #8) | | |
+| 3 | Ethernet branché ; Wi-Fi désactivé (`dtoverlay=disable-wifi`) | `ip -br link` sans `wlan*` | | |
+| 4 | `lsusb \| grep -c 2357:0604` | `2` | | |
+| 5 | `lsusb -t` | Les deux sous le même hub USB 2.0, `Driver=btusb` | | |
+| 6 | `dmesg \| grep -E 'rtl_bt\|rtl8761'` | Firmware `rtl8761bu_fw` chargé **pour chaque** dongle, aucune erreur `btusb`/`hci` | | |
+| 7 | `ls /lib/firmware/rtl_bt/ \| grep 8761bu` | `rtl8761bu_fw.bin(.zst)` et `rtl8761bu_config.bin(.zst)` présents (`linux-firmware`) | | |
+| 8 | `bluetoothctl list` (avec `timeout 8 … </dev/null`) ; `sudo btmgmt info` | **2** contrôleurs ; 2 index ; Bluetooth 5.x | | |
+| 9 | `hciconfig -a \| grep -E '^hci\|Bus\|BD Address'` | 2 × `Bus: USB`, **aucun** `Bus: UART` | | |
+
+### 7b. Bascule du Bluetooth interne vers les dongles
+
+| Étape | Action | Résultat attendu | Obtenu | OK ? |
+|-------|--------|------------------|--------|------|
+| 1 | `grep '^dtoverlay=disable-bt' /boot/firmware/config.txt` | **Présent** ; aucun reste de la variante `internal` (§10) | | |
+| 2 | Redémarrer avec les deux dongles branchés | Pi joignable, 2 contrôleurs USB après reboot | | |
+| 3 | Script de vérification §8 : `BTMUX_BT_MODE=dongle bash verif.sh` | Code 0 : 2 contrôleurs USB, 0 UART, `disable-bt` posé, aucune ligne `ECHEC` | | |
+| 4 | `sudo /usr/lib/btmux/btmux-adapters.sh --config /etc/btmux/config.yaml --dry-run` | Pour chaque adaptateur : `<MAC> -> hciN`, alias, classe, `discov no` / `bondable off` ; **aucune** commande exécutée ; code 0 | | |
+| 5 | `sudo systemctl enable --now btmux-adapters.service ; systemctl is-active btmux-adapters` | Service `oneshot` terminé en succès (`active (exited)`) | | |
+| 6 | Après `sudo reboot` : `bluetoothctl show \| grep -E 'Alias\|Class'` pour chaque contrôleur | Alias et classe **persistants** (re-posés au boot par le service, identiques) | | |
+| 7 | Débrancher un dongle, relancer `btmux-adapters.sh --dry-run` | Avertissement pour l'adaptateur absent, code 0 (ne bloque jamais le démarrage) ; rebrancher | | |
+| 8 | `/etc/btmux/config.yaml` en forme bi (`sources` / `headsets`) puis `btmuxd --config … --check-config` | `config OK: …`, code 0 | | |
+
+### 7c. Tableau MAC ↔ rôle ↔ port USB (à reporter dans `docs/install-pi.md` §6.4)
+
+Port USB : `readlink -f /sys/class/bluetooth/hciN/device` (chemin `…/1-1.2/1-1.2:1.0` → port `1-1.2`).
+
+| Rôle (`roles`) | Nom annoncé | Index actuel | MAC | Port USB | Rallonge (A/B) |
+|----------------|-------------|--------------|-----|----------|----------------|
+| `sources` (`hci-src`) | | | | | |
+| `headsets` (`hci-hp`) | | | | | |
+
+- [ ] Tableau complété et reporté ; `adapters[].mac` de la config = MAC relevées (jamais `hciN`)
+- [ ] Permutation des deux dongles (échange des ports) + reboot : les rôles suivent les **MAC**, pas les index
+
+**Verdict 7** : [ ] PASS [ ] FAIL [ ] N/A (variante non jouée)
+
 ## Critères de validation
 
 - [ ] Scénarios 1 à 6 PASS (critères d'acceptation de l'issue #3)
 - [ ] Versions installées et MAC du dongle consignées dans `docs/install-pi.md` §9
 - [ ] Scénario 3 : au moins une variante PASS ; la cible `dongle` reste à valider avant la clôture du milestone (la variante `internal` seule ne suffit pas à lever les réserves de la cible)
+- [ ] Variante `dongle-bi` : scénarios 3 (variante dongle) et 7 PASS pour la cible v0.2.0
 - [ ] Variante `dongle` : présence des fichiers `rtl8761b*` dans `linux-firmware` confirmée (ou écart remonté au teamleader)
 
 ## Notes QA
