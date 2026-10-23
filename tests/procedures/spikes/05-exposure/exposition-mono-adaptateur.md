@@ -1,7 +1,7 @@
 # Procédure QA — Spike #5 : exposition « casque générique » en mono-adaptateur
 
 **Issue** : #5 · **Milestone** : v0.1.0 · **Tags** : `hardware` (manuel, jamais en CI) · **Testeur** : QA · **Date** : ____
-**Cible** : pi-qualif (`ubuntu@192.168.1.94`), `hci0` **Bluetooth interne** BCM43430A1, MAC `B8:27:EB:1A:2E:D6`, Wi-Fi actif, pas d'AAC.
+**Cible** : pi-qualif (`ubuntu@<IP-du-Pi>`), `hci0` **Bluetooth interne** BCM43430A1, MAC `B8:27:EB:1A:2E:D6`, Wi-Fi actif, pas d'AAC.
 **Pilotage** : la procédure de séance (étapes à faire par l'utilisateur) est dans `_work/handoff/dev-backend-spike05-*.md` ;
 cette checklist **valide les preuves et le rapport** après la séance. Scripts : `spikes/05-exposure/`.
 

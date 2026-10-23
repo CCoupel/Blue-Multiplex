@@ -1,7 +1,7 @@
 # Procédure QA — Spike #6 : double rôle HFP (HF + AG) sur un adaptateur
 
 **Issue** : #6 · **Milestone** : v0.1.0 · **Tags** : `hardware` (manuel, jamais en CI) · **Testeur** : QA · **Date** : ____
-**Cible** : pi-qualif (`ubuntu@192.168.1.94`), `hci0` **BT interne** BCM43430A1.
+**Cible** : pi-qualif (`ubuntu@<IP-du-Pi>`), `hci0` **BT interne** BCM43430A1.
 **Séance (utilisateur)** : `_work/handoff/dev-backend-spike06-*.md`. Code : `spikes/06-hfp-dual-role/`. Rapport : `docs/spikes/06-hfp-dual-role.md`.
 
 > **Mention obligatoire** : **provisoire — à revalider avec dongle UB500 (T3.2b)**. Version **réduite** jouée maintenant :

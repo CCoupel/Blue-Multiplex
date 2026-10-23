@@ -78,7 +78,7 @@
 | 5 | Installer sur le Pi : `sudo dpkg -i btmux_0.2.0_all.deb` (ou `deploy.sh qualif`) | Code 0 ; venv `/opt/btmux` créé ; installation **hors-ligne côté dépendances non listées** (aucun accès index pour la wheel : `--no-index`) | | |
 | 6 | `/opt/btmux/bin/pip freeze` vs lockfile | Les versions installées = celles du lockfile (mêmes pins) | | |
 | 7 | `sudo apt remove btmux` | `prerm` arrête `btmuxd` proprement (SIGTERM, code 0) ; unité retirée ; **`/etc/btmux/config.yaml` et le jeton conservés** | | |
-| 8 | `sudo apt purge btmux` | `postrm purge` : `/opt/btmux` retiré ; état documenté pour `/etc/btmux/` (config/jeton supprimés ou conservés selon le script — noter lequel) | | |
+| 8 | `sudo apt purge btmux` | `postrm purge` retire `/opt/btmux`, le drop-in `btmuxd.service.d`, `/etc/dbus-1/system.d/btmux.conf`, `/etc/btmux/token` et `config.example.yaml` ; **`/etc/btmux/config.yaml` (configuration de l'utilisateur) est conservé** ; rechargement de D-Bus sans erreur | | |
 | 9 | Réinstaller (`dpkg -i`) après remove puis purge | Idempotent : service redémarré, config d'exemple présente, aucun message d'erreur du postinst | | |
 
 **Verdict** : [ ] PASS [ ] FAIL
@@ -90,8 +90,8 @@
 | 1 | `systemctl cat btmuxd` | `RestartPreventExitStatus=2 3`, `NoNewPrivileges=yes`, `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp=yes`, `ReadWritePaths=` (si requis, ex. `/var/lib/btmux`) | | |
 | 2 | `systemd-analyze security btmuxd --no-pager \| tail -3` | Score relevé (informatif) ; aucune option incompatible : le service démarre | | |
 | 3 | `systemctl is-active btmuxd ; journalctl -u btmuxd -n 20 --no-pager` | `active` ; pas de `Permission denied` dû au durcissement | | |
-| 4 | `ls -l /etc/dbus-1/system.d/btmux.conf` ; lire le fichier | Présent ; autorise **`$U`** (`BTMUX_USER`) sur `org.bluez` (Agent, RemoveDevice, Adapter) ; pas d'autorisation générique `user="*"` | | |
-| 5 | `sudo -u $U busctl --system call org.bluez /org/bluez org.bluez.AgentManager1 RegisterAgent …` (ou `busctl --system introspect org.bluez /org/bluez/hci0`) | Pas de `AccessDenied` ; test négatif : un autre utilisateur non listé est refusé | | |
+| 4 | `ls -l /etc/dbus-1/system.d/btmux.conf` ; lire le fichier | Présent ; un bloc `<policy user="$U">` (utilisateur de service `BTMUX_USER`, réécrit par le postinst — `ubuntu` par défaut) avec `allow send_destination="org.bluez"`, `allow send_interface="org.bluez.Agent1"`, `allow receive_sender="org.bluez"` ; **aucune** policy générique (`context="default"`/`user="*"`). Policy volontairement large (note R2 du fichier : à resserrer et valider sur matériel en #20) | | |
+| 5 | `sudo -u $U busctl --system introspect org.bluez /org/bluez/hci0` | Pas de `AccessDenied` pour `$U` ; test négatif : un utilisateur non listé n'obtient pas l'accès en émission vers `org.bluez` au-delà de la policy par défaut du bus | | |
 | 6 | `stat -c '%a %U:%G' /etc/btmux/token` | Fichier **0600**, propriétaire = utilisateur de service, contenu non vide (≥ 32 caractères) | | |
 | 7 | Réinstaller (`dpkg -i`) | Le jeton existant **n'est pas régénéré** (même contenu, même mtime) | | |
 | 8 | Supprimer le jeton puis réinstaller | Jeton régénéré en 0600 | | |

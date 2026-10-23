@@ -1,7 +1,7 @@
 # Procédure QA — Spike #7 : routage PipeWire sur un adaptateur unique
 
 **Issue** : #7 · **Milestone** : v0.1.0 · **Tags** : `hardware` (manuel, jamais en CI) · **Testeur** : QA · **Date** : ____
-**Cible** : pi-qualif (`ubuntu@192.168.1.94`), `hci0` **BT interne** BCM43430A1 (MAC du Pi dans `docs/install-pi.md` §9).
+**Cible** : pi-qualif (`ubuntu@<IP-du-Pi>`), `hci0` **BT interne** BCM43430A1 (MAC du Pi dans `docs/install-pi.md` §9).
 **Séance (utilisateur)** : `_work/handoff/dev-backend-spike07-*.md`. Code : `spikes/07-routing/`. Rapport : `docs/spikes/07-routing.md`.
 
 > **Mention obligatoire** : en BT interne les résultats sont **provisoires — à revalider avec dongle UB500 (T3.2b)**.
