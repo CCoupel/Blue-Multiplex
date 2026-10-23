@@ -4,20 +4,29 @@ Un Raspberry Pi (`btmux`) équipé de deux dongles Bluetooth sert de multiplexeu
 aux sources (PC, téléphones) et comme une source aux casques, le routage étant logiciel (PipeWire/WirePlumber)
 via le daemon `btmuxd`. Aucun logiciel n'est requis côté sources.
 
-> **Statut** : v0.1.0 (phase 0, mono-adaptateur) — le daemon valide sa configuration et reste actif ; le routage
-> audio arrive en v0.3.0.
+> **Statut** : v0.1.0 clôturée le 2026-10-23 **sans release** (aucun tag, aucun paquet publié). Le daemon valide sa
+> configuration et reste actif ; le routage audio arrive en v0.3.0.
 
 - Cadrage : [docs/cadrage.md](docs/cadrage.md)
 - Installation du Pi : [docs/install-pi.md](docs/install-pi.md)
+
+## Roadmap
+
+- **v0.1.0** — exploration mono-adaptateur, clôturée sans release (socle, spikes #5 et #7 provisoires).
+- **v0.2.0** — exploration technique bi-adaptateur (2 × TP-Link UB500) : préparation des dongles, campagne de
+  revalidation (T3.2b), Web UI des appairages.
+- **v0.3.0** — daemon `btmuxd` : appairage, routage, API HTTP et CLI.
 
 ## État des spikes
 
 | # | Sujet | Verdict | Rapport |
 |---|-------|---------|---------|
 | 5 | Exposition mono-adaptateur (« casque générique ») | RÉSERVES, **provisoire** (Bluetooth interne du Pi 3) | [docs/spikes/05-exposure.md](docs/spikes/05-exposure.md) |
+| 6 | Double rôle HFP | **reporté** à la campagne UB500 (v0.2.0) | — |
+| 7 | Routage PipeWire (bascule de source par liens) | RÉSERVES, **provisoire** (mécanisme `pw-*` retenu) | [docs/spikes/07-routing.md](docs/spikes/07-routing.md) |
 
-Matériel : 2 dongles TP-Link UB500 (RTL8761BU) commandés ; à revalider à réception, les verdicts actuels ne valent
-que pour le Bluetooth interne du Pi 3.
+Matériel : 2 dongles TP-Link UB500 (RTL8761BU) commandés ; à revalider à réception. Les verdicts actuels ne valent
+que pour le Bluetooth interne du Pi 3, dont le développement radio est arrêté.
 
 ## Développement
 
@@ -44,7 +53,7 @@ Par défaut, le staging se fait dans `_work/tmp/` (gitignoré).
 
 ## Installation sur le Pi
 
-Le paquet `btmux_<X.Y.Z>_all.deb` est attaché à chaque GitHub Release. Il installe la wheel, l'unité systemd
+Le paquet `btmux_<X.Y.Z>_all.deb` est produit par `scripts/build-deb.sh` (aucune release publique à ce jour). Il installe la wheel, l'unité systemd
 `btmuxd.service`, la configuration d'exemple et `set-user.sh` ; le venv `/opt/btmux` est créé sur le Pi.
 
 1. Provisionner le Pi (Ubuntu Server 26.04 LTS arm64, Bluetooth, PipeWire, session de l'utilisateur de service avec linger) : [docs/install-pi.md](docs/install-pi.md).

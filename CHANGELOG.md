@@ -1,9 +1,13 @@
 # Changelog
 
-## [0.1.0]
+## [0.1.0] — 2026-10-23 (non publié : exploration mono-adaptateur, clôturée sans release)
 
 Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui porte les deux rôles
 (`sources` et `headsets`). Pas encore de routage audio : le daemon démarre, valide sa configuration et reste vivant.
+
+Clôture : aucun tag, aucun paquet `.deb` publié, aucune mise en production ; `pyproject.toml` reste à `0.1.0.3`.
+Les verdicts des spikes #5 et #7 sont **provisoires** (Bluetooth interne du Pi 3) et doivent être revalidés avec les
+dongles TP-Link UB500 (RTL8761BU) en v0.2.0. Le spike #6 est reporté à cette campagne.
 
 ### Added
 - Squelette Python `btmux` (daemon `btmuxd`, client `btmuxctl` en stub), outillage ruff/mypy/pytest (#1).
@@ -24,6 +28,11 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
 - WirePlumber en mode headless (sans seat logind) : `config/wireplumber/51-btmux-no-seat.conf`
   (`monitor.bluez.seat-monitoring = disabled`) et `scripts/btmux-install-wireplumber.sh`, installés sans écraser un
   fichier existant (#5).
+- Spike #7 (routage PipeWire, bascule de source par liens) : rapport `docs/spikes/07-routing.md`, verdict RÉSERVES,
+  **provisoire** ; prototype jetable `spikes/07-routing/` ; garde-fou UART `watch_uart.sh` (arrêt au premier
+  `tx timeout`). Décision : routage par `pw-dump -m` (événements) et session `pw-cli` persistante pour créer et
+  supprimer les liens, repli `pw-link` ; Lua WirePlumber et API native non retenus pour la v0.3.0 (#7).
+- Masquage des preuves des spikes #5 et #7 par `mask_evidence.py` (annexes sous `docs/spikes/`) (#5, #7).
 
 ### Changed
 - `btmuxd --config <path>` (sans `--check-config`) ne sort plus en 0 après validation : le daemon reste vivant

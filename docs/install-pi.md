@@ -99,6 +99,11 @@ Vérifier : `bluetoothctl show | grep UUID` doit lister **Audio Sink (110b)**, *
 Audio Gateway (111f)** et **Handsfree (111e)** en plus de AVRCP. Retour arrière : supprimer le fichier et
 redémarrer `wireplumber`.
 
+> **Alias non persistant (spike #7, 2026-10-23)** : `btmgmt name btmux` ne survit pas au reboot ; après redémarrage,
+> le téléphone voyait encore « pi-qualif ». Le correctif (`bluetoothctl system-alias` ou `Name=` dans `main.conf`) est
+> prévu en v0.2.0 (#18). En attendant, le nom peut être reposé à la main après reboot (`bluetoothctl system-alias btmux`,
+non vérifié sur le Pi).
+
 ## 6. Dongle RTL8761B
 
 ```bash

@@ -10,7 +10,7 @@
 T3.2b désigne la **revalidation avec les dongles UB500** (puce RTL8761BU), prévue après leur réception.
 
 Issue : #7 · Séance : 2026-10-23, 14:03–14:20 heure de Paris (12:03–12:20 UTC), précédée d'essais hors matériel (≈ 13:00–13:30 Paris) ·
-Prototype : `spikes/07-routing/` (README avec les tableaux détaillés) · Procédure QA : `tests/procedures/spikes/07-routing/routage-mono-adaptateur.md`.
+Prototype : `spikes/07-routing/` (README avec les tableaux détaillés) · Procédure QA : [routage-mono-adaptateur.md](../../tests/procedures/spikes/07-routing/routage-mono-adaptateur.md).
 **Convention horaire** : heures de Paris (UTC+2) sauf mention « UTC » ; les annexes (`docs/spikes/07-routing/`) sont en UTC.
 Les adresses MAC des appareils de l'utilisateur sont masquées (`xx`) ; seule celle du Pi est en clair.
 
