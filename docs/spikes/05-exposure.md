@@ -4,7 +4,7 @@
 > **Bluetooth interne du Raspberry Pi 3 Model B** (UART, antenne partagée avec le Wi-Fi, Bluetooth 4.2), faute de
 > dongle. Aucune décision d'architecture (v0.2.0) ne doit s'appuyer sur ce verdict seul.
 
-Issue : #5 · Séance : 2026-10-23, 09:08–11:22 heure de Paris (07:08–09:22 UTC), sur **deux démarrages du Pi** (redémarrage à 11:04 Paris) ; le travail utile couvre ≈ 10:30–11:22 Paris (08:30–09:22 UTC) ·
+Issue : #5 · Séance : 2026-10-23, **08:30–09:22 UTC** (10:30–11:22 heure de Paris), outillage préparé dès 07:08 UTC (09:08 Paris), sur **deux démarrages du Pi** (redémarrage à 11:04 Paris) ·
 Outillage : `spikes/05-exposure/` · Procédure QA : `tests/procedures/spikes/05-exposure/exposition-mono-adaptateur.md`.
 Les adresses MAC des appareils de l'utilisateur sont masquées (`xx`) dans ce document et ses annexes.
 **Convention horaire** : les heures du texte sont en heure de Paris (UTC+2) sauf mention « UTC » ; le Pi journalise en UTC, donc `pair.jsonl`, `journal-extraits.txt`, `reboot-*.txt` et `agent.log` sont en UTC (Paris = UTC + 2 h).
@@ -45,13 +45,13 @@ Pilotage par SSH (l'agent exécute côté Pi, l'utilisateur manipule). Détail d
 
 | Étape | Résultat | Preuve |
 |-------|----------|--------|
-| 0 — Outillage | OK. Résolution MAC → `hci0` par D-Bus OK ; `btmgmt name btmux` + `class 4 4` appliqués ; **classe annoncée 0x006C0404** (pas 0x240404) ; `sdptool browse local` inutilisable (R6, « Failed to connect to SDP server ») → repli `bluetoothctl show` + `btmon`. **Prérequis découvert** : sans « seat » logind, WirePlumber n'active pas le moniteur Bluetooth et BlueZ n'annonce que AVRCP (aucun profil audio) ; corrigé par `monitor.bluez.seat-monitoring = disabled` (cf. `docs/install-pi.md` §5 bis). | `show-20261022-145623.txt` (avant), `show-20261023-090731.txt` (après) |
-| 1 — Windows | **Appairage standard abouti**, Windows affiche « btmux — Microphone, audio connectés » avec icône casque. Deux échecs préalables, tous deux côté Pi : (a) aucun agent d'autorisation → `Authentication attempt without agent`, A2DP et Hands-Free rejetés, Windows : « Réessayez de connecter votre appareil » (10:30–10:35) ; (b) après `trust` + agent, clés désynchronisées → HCI `Authentication Failure (0x05)` ×11 (« Nous n'avons pas pu assurer la connexion », 10:38–10:39) ; réglé par `bluetoothctl remove` côté Pi puis nouvel ajout côté Windows (10:40). | `journal-extraits.txt`, `btmon-extraits.txt`, `pair.jsonl`, `agent.log` |
+| 0 — Outillage | OK. Résolution MAC → `hci0` par D-Bus OK ; `btmgmt name btmux` + `class 4 4` appliqués ; **classe annoncée 0x006C0404** (pas 0x240404) ; `sdptool browse local` inutilisable (R6, « Failed to connect to SDP server », sortie en annexe `sdp-20261023-090731.txt`) → repli `bluetoothctl show` (UUIDs, `show-20261023-090731.txt`) + `btmon`. **Prérequis découvert** : sans « seat » logind, WirePlumber n'active pas le moniteur Bluetooth et BlueZ n'annonce que AVRCP (aucun profil audio) ; corrigé par `monitor.bluez.seat-monitoring = disabled` (cf. `docs/install-pi.md` §5 bis). | `show-20261022-145623.txt` (avant), `show-20261023-090731.txt` (après) |
+| 1 — Windows | **Appairage standard abouti**, Windows affiche « btmux — Microphone, audio connectés » avec icône casque. Deux échecs préalables, tous deux côté Pi : (a) aucun agent d'autorisation → `Authentication attempt without agent`, A2DP et Hands-Free rejetés, Windows : « Réessayez de connecter votre appareil » (10:30–10:35) ; (b) après `trust` + agent, clés désynchronisées → HCI `Authentication Failure (0x05)` ×11 (11 tentatives de connexion échouées, soit 22 lignes `Authentication Failed` dans l'extrait btmon) (« Nous n'avons pas pu assurer la connexion », 10:38–10:39) ; réglé par `bluetoothctl remove` côté Pi puis nouvel ajout côté Windows (10:40). | `journal-extraits.txt`, `btmon-extraits.txt`, `pair.jsonl`, `agent.log` |
 | 2 — Audio PC → Pi | A2DP établi : Windows propose SBC/aptX/AAC, **aptX retenu** (le Pi n'a pas d'AAC). Le nœud PipeWire `bluez_input` n'apparaît qu'après une connexion initiée par le Pi ; ensuite **Windows bascule en HFP (mSBC, mono, 16 kHz)** et y reste (cf. Constats). Rien d'audible côté Pi (sink = Dummy, pas de sortie). | `pair.jsonl` (MediaTransport1), `btmon-extraits.txt` |
 | 3 — Téléphone | Appairage du Galaxy S24 Ultra du premier coup (10:50:05–10:50:13), vu côté téléphone avec « Appels » et « Audio ». A2DP **aptX stéréo 44,1 kHz** actif à 10:52:39 ; un décrochage HFP de ~3 s à 10:51:12. Deux sources en simultané pendant ~3 min. | `pair.jsonl`, `agent.log` |
 | 4 — Casque | `pair` + `trust` + `connect` **initiés par le Pi** (lien ACL sortant, Pi central) : OK en moins d'une minute (scan compris), **pendant que le PC est connecté**. Le casque annonce « connecté à btmux ». A2DP source du Pi vers le casque (SBC), carte PipeWire avec profils `a2dp-sink` (= Pi émetteur), `a2dp-sink-sbc_xq`, `headset-head-unit(-cvsd)` ; nœud `bluez_output` présent. HFP AG vers le casque non testé. | `pair.jsonl` |
 | 5 — Pi → casque | Tonalité 22 s (puis seconde lecture de mesure) : **entendue par l'utilisateur, « propre, sans coupure »**. `pw-top` : ERR 0, BUSY 0,1–0,3 ms, sink SBC 48 kHz S16LE quantum 2048, transport A2DP `active`, PC resté connecté. | mesures de séance (cf. Mesures) |
-| 6 — Reboot | **Appairages et Trusted conservés** (3 appareils), `hci0` revenu, MAC identique. **Aucune reconnexion automatique** : ni le PC ni le téléphone n'ont rappelé le Pi en 120 s (ni jusqu'à ~290 s) ; reconnexion obtenue seulement par `bluetoothctl connect` depuis le Pi. | `reboot-20261023-090735.txt` |
+| 6 — Reboot | **Appairages et Trusted conservés** (PC et téléphone ; le Bose n'a été appairé qu'après le redémarrage), `hci0` revenu, MAC identique. **Aucune reconnexion automatique** : ni le PC ni le téléphone n'ont rappelé le Pi en 120 s (ni jusqu'à ~290 s) ; reconnexion obtenue seulement par `bluetoothctl connect` depuis le Pi. | `reboot-20261023-090735.txt` |
 | 7 — Clôture | Fenêtre fermée, outils arrêtés, appairages laissés en place. | — |
 
 ### Par critère d'acceptation de #5
@@ -108,7 +108,7 @@ Pilotage par SSH (l'agent exécute côté Pi, l'utilisateur manipule). Détail d
 
 ## Limites
 
-- **Bluetooth interne du Pi 3 (provisoire)** : HCI sur UART ; **l'audio SCO passe par l'UART** (SCO routé via HCI), antenne
+- **Bluetooth interne du Pi 3 (provisoire, risque R13 du plan)** : HCI sur UART ; **l'audio SCO passe par l'UART** (SCO routé via HCI), antenne
   partagée avec le Wi-Fi actif (Ethernet non branché), Bluetooth 4.2. Des erreurs de trames UART sont apparues dès une seule
   source (136 en une minute) et se sont aggravées à deux flux jusqu'à un contrôleur muet nécessitant un redémarrage (**observé
   une fois**) ; elles sont revenues, de façon moins sévère, à la reconnexion simultanée de deux sources, sans audio (11 erreurs
@@ -124,7 +124,7 @@ Pilotage par SSH (l'agent exécute côté Pi, l'utilisateur manipule). Détail d
 
 ## Décision / Verdict
 
-**Casque générique en mono-adaptateur : OUI AVEC RÉSERVES — provisoire, à revalider avec dongle RTL8761B.**
+**Casque générique en mono-adaptateur : RÉSERVES** (casque générique : oui, avec réserves) — **provisoire, à revalider avec dongle RTL8761B.**
 
 Pour : le PC pro et le téléphone s'appairent par l'interface standard, sans rien installer, et voient un casque ;
 A2DP (aptX) et HFP (mSBC) s'établissent ; le Pi appaire, fait confiance et connecte un casque **de lui-même** pendant
@@ -189,7 +189,8 @@ Fichiers versionnés dans `docs/spikes/05-exposure/` (MAC des appareils de l'uti
 | `agent.log` | autorisations demandées à `bt-agent` (A2DP 110d, HFP 111e, AVRCP 110e) |
 | `reboot-20261022-145737.txt`, `reboot-20261023-090735.txt` | `reboot_check.sh` (le second : appairages conservés, pas de reconnexion automatique) |
 | `journal-extraits.txt` | erreurs HCI par minute, premiers timeouts, boot précédent et courant |
-| `btmon-extraits.txt` | extraits `btmon` : `Authentication Failed` ×22, raisons de déconnexion, capacités AVDTP |
+| `btmon-extraits.txt` | extraits `btmon` : `Authentication Failed` ×22 (= 11 tentatives Windows échouées × 2 lignes btmon chacune, voir Résultats étape 1 « ×11 »), raisons de déconnexion, capacités AVDTP |
+| `sdp-20261023-090731.txt` | tentative `sdptool browse local` : échec « Failed to connect to SDP server » (risque R6) ; repli = UUIDs de `show-20261023-090731.txt` et capture `btmon` |
 
 Preuves complètes, non versionnées (`_work/tmp/spike-05/`, y compris les captures `btmon-*.snoop`/`.txt` de plusieurs Mo) :
 conservées localement par le teamleader.

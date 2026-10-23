@@ -7,4 +7,4 @@ correspondant est dans `spikes/`.
 
 | # | Sujet | Verdict | Rapport |
 |---|-------|---------|---------|
-| 5 | Exposition mono-adaptateur (« casque générique ») | OUI AVEC RÉSERVES (provisoire) | [05-exposure.md](05-exposure.md) |
+| 5 | Exposition mono-adaptateur (« casque générique ») | RÉSERVES — casque générique : oui, avec réserves (provisoire) | [05-exposure.md](05-exposure.md) |
