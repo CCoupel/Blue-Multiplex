@@ -5,7 +5,7 @@
 > dongle. Aucune décision d'architecture (v0.2.0) ne doit s'appuyer sur ce verdict seul.
 
 Issue : #5 · Séance : 2026-10-23, **08:30–09:22 UTC** (10:30–11:22 heure de Paris), outillage préparé dès 07:08 UTC (09:08 Paris), sur **deux démarrages du Pi** (redémarrage à 11:04 Paris) ·
-Outillage : `spikes/05-exposure/` · Procédure QA : `tests/procedures/spikes/05-exposure/exposition-mono-adaptateur.md`.
+Outillage : `spikes/05-exposure/` · Procédure QA : [exposition-mono-adaptateur.md](../../tests/procedures/spikes/05-exposure/exposition-mono-adaptateur.md).
 Les adresses MAC des appareils de l'utilisateur sont masquées (`xx`) dans ce document et ses annexes.
 **Convention horaire** : les heures du texte sont en heure de Paris (UTC+2) sauf mention « UTC » ; le Pi journalise en UTC, donc `pair.jsonl`, `journal-extraits.txt`, `reboot-*.txt` et `agent.log` sont en UTC (Paris = UTC + 2 h).
 

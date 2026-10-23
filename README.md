@@ -10,6 +10,15 @@ via le daemon `btmuxd`. Aucun logiciel n'est requis côté sources.
 - Cadrage : [docs/cadrage.md](docs/cadrage.md)
 - Installation du Pi : [docs/install-pi.md](docs/install-pi.md)
 
+## État des spikes
+
+| # | Sujet | Verdict | Rapport |
+|---|-------|---------|---------|
+| 5 | Exposition mono-adaptateur (« casque générique ») | RÉSERVES, **provisoire** (Bluetooth interne du Pi 3) | [docs/spikes/05-exposure.md](docs/spikes/05-exposure.md) |
+
+Matériel : 2 dongles TP-Link UB500 (RTL8761BU) commandés ; à revalider à réception, les verdicts actuels ne valent
+que pour le Bluetooth interne du Pi 3.
+
 ## Développement
 
 Prérequis : Python ≥ 3.12 (3.12 et 3.14 testés en CI ; le Pi cible tourne Python 3.14), [`uv`](https://docs.astral.sh/uv/) (installé hors repo : `curl -LsSf https://astral.sh/uv/install.sh | sh`

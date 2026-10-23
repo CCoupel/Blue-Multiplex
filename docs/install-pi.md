@@ -242,3 +242,15 @@ Limites connues du Bluetooth interne :
 Impact sur les spikes #5 à #10 : A2DP sink/source, AVRCP, HFP (rôles HF/AG) restent testables ; les mesures de
 latence (< 300 ms) et de bascule sont indicatives ; le nombre de liens SCO simultanés (R1) est à mesurer, la valeur du
 Pi 3 ne vaut pas pour le RTL8761B.
+
+## 11. Preuves de spikes avant commit (dépôt public)
+
+Les sorties brutes des spikes (`spikes/*/out/`, `*.snoop`) ne sont jamais commitées (`.gitignore`). Toute preuve copiée
+sous `docs/spikes/` passe **avant commit** par `spikes/common/mask_evidence.py` (adresses MAC des appareils tiers
+remplacées, scans de voisinage et noms personnels retirés, MAC du Pi conservée) :
+
+```bash
+python spikes/common/mask_evidence.py --pi-mac <MAC du Pi> --check docs/spikes   # code 0 attendu
+```
+
+Critère d'acceptation (point 5.11) : [procédure QA du spike #5](../tests/procedures/spikes/05-exposure/exposition-mono-adaptateur.md).

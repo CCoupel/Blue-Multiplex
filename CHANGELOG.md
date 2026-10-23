@@ -18,6 +18,12 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
 - Script `scripts/btmux-set-user.sh` (installé en `/usr/lib/btmux/set-user.sh`) : choisit l'utilisateur de service de
   `btmuxd` par drop-in systemd, sans modifier l'unité livrée ; refus de root (#2).
 - Matrice CI sur Python 3.12 (plancher `requires-python`) et 3.14 (Python d'Ubuntu Server 26.04) (#1).
+- Spike #5 (exposition mono-adaptateur, « casque générique ») : rapport `docs/spikes/05-exposure.md`, verdict
+  RÉSERVES, **provisoire** (mesuré sur le Bluetooth interne du Pi 3, à revalider avec le dongle RTL8761B) ; outillage
+  jetable `spikes/05-exposure/` ; script de masquage des preuves `spikes/common/mask_evidence.py` (#5).
+- WirePlumber en mode headless (sans seat logind) : `config/wireplumber/51-btmux-no-seat.conf`
+  (`monitor.bluez.seat-monitoring = disabled`) et `scripts/btmux-install-wireplumber.sh`, installés sans écraser un
+  fichier existant (#5).
 
 ### Changed
 - `btmuxd --config <path>` (sans `--check-config`) ne sort plus en 0 après validation : le daemon reste vivant
@@ -27,6 +33,11 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
   incomplet, valide `BTMUX_USER`, `DEPLOY_HOST` et le nom de la wheel avant tout appel `ssh`, refuse root,
   accepte un fichier d'environnement alternatif (`BTMUX_ENV_FILE`) et un `.env` en fins de ligne CRLF (#2).
 - Fins de ligne LF forcées pour `scripts/` et `systemd/` via `.gitattributes` (#2).
+- Sorties brutes et captures HCI des spikes (`spikes/*/out/`, `*.snoop`) exclues du dépôt via `.gitignore` ; les
+  preuves publiées passent par `mask_evidence.py` (#5).
+- Historique de la branche `milestone/v0.1.0` réécrit le 2026-10-23 (purges successives, données tierces déplacées
+  hors dépôt). Les clones existants doivent être réalignés sur `origin/milestone/v0.1.0` (conserver les travaux
+  locaux avant un `git reset`) (#5).
 
 ### Fixed
 - Corrections de revue de code du lot 1 (#2, #4) :
@@ -34,3 +45,5 @@ Phase 0 — mono-adaptateur : un Raspberry Pi avec un seul dongle Bluetooth, qui
   - `scripts/deploy.sh` : propagation correcte des codes de sortie ;
   - `scripts/build-deb.sh` : sélection de la wheel sans confusion entre `0.1.1` et `0.1.10`, message clair si absente ;
   - répertoire de travail du build configurable (`BUILD_TMPDIR`), répertoire distant de déploiement en `mktemp -d`.
+- Copie du fichier WirePlumber sous root quand `BTMUX_USER` diffère de l'utilisateur de déploiement, avec le
+  propriétaire `BTMUX_USER` (#5).
