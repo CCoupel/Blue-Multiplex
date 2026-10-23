@@ -1,0 +1,9 @@
+14:57:38 uptime: up 55 minutes — adaptateur B8:27:EB:1A:2E:D6 = hci0
+	Name: pi-qualif
+	Alias: btmux
+	Class: 0x006c0404 (7078916)
+	Powered: yes
+	Discoverable: yes
+	DiscoverableTimeout: 0x000000b4 (180)
+	Pairable: yes
+14:57:38 ECHEC : aucun appareil appairé conservé après le redémarrage

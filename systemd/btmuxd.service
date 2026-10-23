@@ -1,0 +1,22 @@
+[Unit]
+Description=btmuxd — multiplexeur audio Bluetooth
+Documentation=https://github.com/CCoupel/Blue-Multiplex
+After=bluetooth.service user@1000.service dbus.service
+Wants=bluetooth.service user@1000.service
+Requires=dbus.service
+
+[Service]
+Type=simple
+# Decision D2 : unite systeme executee sous un utilisateur normal, qui accede a sa session PipeWire
+# (loginctl enable-linger <user>). Valeurs par defaut = premier utilisateur d'Ubuntu Server (ubuntu, uid 1000) ;
+# l'utilisateur reel est fixe par le drop-in genere par scripts/btmux-set-user.sh (deploy.sh / postinst du .deb).
+User=ubuntu
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
+Restart=on-failure
+# Code 2 = configuration invalide : inutile de boucler (cf. btmuxd --check-config)
+RestartPreventExitStatus=2
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

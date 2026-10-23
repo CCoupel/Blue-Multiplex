@@ -1,0 +1,15 @@
+Agent registered
+Default agent requested
+Device: MSI (84:7B:57:xx:xx:xx) for UUID 0000110d-0000-1000-8000-00805f9b34fb
+Device: MSI (84:7B:57:xx:xx:xx) for UUID 0000111e-0000-1000-8000-00805f9b34fb
+Device: MSI (84:7B:57:xx:xx:xx) for UUID 0000110e-0000-1000-8000-00805f9b34fb
+Device: MSI (84:7B:57:xx:xx:xx) for UUID 0000110d-0000-1000-8000-00805f9b34fb
+Device: MSI (84:7B:57:xx:xx:xx) for UUID 0000110e-0000-1000-8000-00805f9b34fb
+Device: S24 Ultra de <utilisateur> (BC:93:07:xx:xx:xx) for UUID 0000111e-0000-1000-8000-00805f9b34fb
+Device: S24 Ultra de <utilisateur> (BC:93:07:xx:xx:xx) for UUID 0000110d-0000-1000-8000-00805f9b34fb
+Device: S24 Ultra de <utilisateur> (BC:93:07:xx:xx:xx) for UUID 0000111e-0000-1000-8000-00805f9b34fb
+Device: S24 Ultra de <utilisateur> (BC:93:07:xx:xx:xx) for UUID 0000110d-0000-1000-8000-00805f9b34fb
+** Message: 09:04:39.696: SIGUSR1 received
+Agent registered
+Default agent requested
+** Message: 09:21:43.671: SIGUSR1 received

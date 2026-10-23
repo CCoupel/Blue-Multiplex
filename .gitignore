@@ -74,3 +74,8 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# Spikes : sorties brutes et captures HCI (contiennent des adresses MAC complètes) — jamais commitées.
+# Les preuves publiées passent par spikes/common/mask_evidence.py puis docs/spikes/.
+spikes/*/out/
+*.snoop

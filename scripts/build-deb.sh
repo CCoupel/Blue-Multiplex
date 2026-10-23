@@ -6,12 +6,29 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${1:?usage: build-deb.sh <X.Y.Z>}"
-WHEEL=$(ls dist/btmux-"$VERSION"-py3-none-any.whl)
-STAGE=$(mktemp -d -p "${TMPDIR:-/tmp}" btmux-deb.XXXXXX); trap 'rm -rf "$STAGE"' EXIT
+# Wheel du tag CI (btmux-X.Y.Z-...) ou de dev (btmux-X.Y.Z.a-...) ; la plus recente si plusieurs.
+WHEELS=()
+for f in dist/btmux-"$VERSION"-py3-none-any.whl dist/btmux-"$VERSION".[0-9]*-py3-none-any.whl; do
+  [ -f "$f" ] && WHEELS+=("$f")
+done
+[ "${#WHEELS[@]}" -gt 0 ] || { echo "wheel dist/btmux-${VERSION}[.a]-py3-none-any.whl introuvable" >&2; exit 1; }
+[ -f "dist/btmux-$VERSION-py3-none-any.whl" ] && WHEELS=("dist/btmux-$VERSION-py3-none-any.whl")  # la wheel du tag prime
+WHEEL=$(printf '%s\n' "${WHEELS[@]}" | sort -V | tail -1)
+# Staging dans le projet par defaut ; BUILD_TMPDIR permet un FS Linux natif (dpkg-deb exige des modes
+# 755 que drvfs/WSL sous /mnt/c ne sait pas porter).
+BUILD_TMPDIR="${BUILD_TMPDIR:-_work/tmp}"
+mkdir -p "$BUILD_TMPDIR"
+STAGE=$(mktemp -d -p "$BUILD_TMPDIR" btmux-deb.XXXXXX); trap 'rm -rf "$STAGE"' EXIT
+chmod 755 "$STAGE"   # dpkg-deb refuse 777 (mktemp sur drvfs/WSL)
 
-install -d "$STAGE/DEBIAN" "$STAGE/usr/share/btmux" "$STAGE/lib/systemd/system" "$STAGE/etc/btmux"
+install -d -m 755 "$STAGE/DEBIAN" "$STAGE/usr/share/btmux" "$STAGE/lib/systemd/system" "$STAGE/etc/btmux"
 install -m 644 "$WHEEL" "$STAGE/usr/share/btmux/"
 [ -d systemd ] && install -m 644 systemd/*.service "$STAGE/lib/systemd/system/"
+install -d "$STAGE/usr/lib/btmux"
+install -m 755 scripts/btmux-set-user.sh "$STAGE/usr/lib/btmux/set-user.sh"
+install -m 755 scripts/btmux-install-wireplumber.sh "$STAGE/usr/lib/btmux/install-wireplumber.sh"
+install -d "$STAGE/usr/share/btmux/wireplumber"
+install -m 644 config/wireplumber/51-btmux-no-seat.conf "$STAGE/usr/share/btmux/wireplumber/"
 [ -f config/config.example.yaml ] && install -m 644 config/config.example.yaml "$STAGE/etc/btmux/config.example.yaml"
 
 cat > "$STAGE/DEBIAN/control" <<CTRL
@@ -33,6 +50,21 @@ cat > "$STAGE/DEBIAN/postinst" <<'POST'
 set -e
 python3 -m venv --upgrade-deps /opt/btmux
 /opt/btmux/bin/pip install --quiet --upgrade /usr/share/btmux/btmux-*.whl
+# Utilisateur de service : $BTMUX_USER, sinon l'utilisateur qui a lance sudo, sinon "ubuntu".
+# Un drop-in deja present (choix de l'administrateur) n'est pas ecrase sauf si BTMUX_USER est fourni.
+svc_user="${BTMUX_USER:-}"
+if [ -z "$svc_user" ] && [ ! -f /etc/systemd/system/btmuxd.service.d/user.conf ]; then
+  svc_user="${SUDO_USER:-ubuntu}"
+  [ "$svc_user" = root ] && svc_user=ubuntu
+fi
+if [ -n "$svc_user" ]; then
+  if id "$svc_user" >/dev/null 2>&1; then
+    /usr/lib/btmux/set-user.sh "$svc_user"
+    /usr/lib/btmux/install-wireplumber.sh "$svc_user" /usr/share/btmux/wireplumber/51-btmux-no-seat.conf || true
+  else
+    echo "btmux: utilisateur '$svc_user' inconnu — relancer /usr/lib/btmux/set-user.sh <utilisateur>" >&2
+  fi
+fi
 systemctl daemon-reload
 if [ -f /etc/btmux/config.yaml ]; then systemctl restart btmuxd.service || true; fi
 POST

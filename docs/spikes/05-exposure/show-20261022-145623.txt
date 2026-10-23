@@ -1,0 +1,31 @@
+Controller B8:27:EB:1A:2E:D6 (public)
+	Manufacturer: 0x000f (15)
+	Version: 0x08 (8)
+	Name: pi-qualif
+	Alias: btmux
+	Class: 0x00000404 (1028)
+	Powered: yes
+	PowerState: on
+	Discoverable: yes
+	DiscoverableTimeout: 0x000000b4 (180)
+	Pairable: yes
+	UUID: Generic Attribute Profile (00001801-0000-1000-8000-00805f9b34fb)
+	UUID: Generic Access Profile    (00001800-0000-1000-8000-00805f9b34fb)
+	UUID: PnP Information           (00001200-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control Target (0000110c-0000-1000-8000-00805f9b34fb)
+	UUID: A/V Remote Control        (0000110e-0000-1000-8000-00805f9b34fb)
+	UUID: Device Information        (0000180a-0000-1000-8000-00805f9b34fb)
+	Modalias: usb:v1D6Bp0246d0555
+	Discovering: no
+	Roles: central
+	Roles: peripheral
+Advertising Features:
+	ActiveInstances: 0x00 (0)
+	SupportedInstances: 0x05 (5)
+	SupportedIncludes: tx-power
+	SupportedIncludes: appearance
+	SupportedIncludes: local-name
+	SupportedCapabilities.MinTxPower: 0x0007 (7)
+	SupportedCapabilities.MaxTxPower: 0x0000 (0)
+	SupportedCapabilities.MaxAdvLen: 0x1f (31)
+	SupportedCapabilities.MaxScnRspLen: 0x1f (31)

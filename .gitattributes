@@ -1,0 +1,4 @@
+# Scripts et unites systemd : toujours LF (execution sous Linux, indifferent au poste de dev Windows)
+*.sh text eol=lf
+scripts/* text eol=lf
+systemd/* text eol=lf

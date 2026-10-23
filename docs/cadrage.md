@@ -62,6 +62,14 @@ Les noms hci0/hci1 ne sont pas stables : identifier les adaptateurs par adresse 
 
 Nom et classe se règlent par adaptateur (`btmgmt -i <idx> name|class`) au démarrage, et non via `main.conf` qui s'applique globalement.
 
+> **Note (spike #5, 2026-10-23, provisoire)** : avec les quatre rôles, la classe réelle est **0x006C0404** et non
+> 0x240404 (le noyau ajoute les bits *Capturing* et *Telephony* liés à HFP). Windows et le téléphone classent quand
+> même btmux comme casque. Le Bluetooth interne du Pi 3 ne convient pas à deux liens (UART, antenne partagée) : le
+> bi-adaptateur reste la cible. Détail : [spikes/05-exposure.md](spikes/05-exposure.md).
+
+> **Note (2026-10-23)** : BT interne abandonné pour les spikes (décision utilisateur du jour) ; cible bi-adaptateur
+> 2 × TP-Link UB500 (RTL8761BU) dès v0.2.0. Détail : [spikes/07-routing.md](spikes/07-routing.md).
+
 Les rôles PipeWire (`bluez5.roles`) doivent être restreints par adaptateur pour qu'aucun profil AG/source n'apparaisse côté sources et inversement. Mécanisme exact à valider en phase 0 (règles WirePlumber sur les propriétés d'adaptateur/périphérique). Fallback : filtrage par le daemon.
 
 ### 4.2 Appairage

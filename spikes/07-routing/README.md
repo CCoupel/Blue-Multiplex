@@ -1,0 +1,108 @@
+# spikes/07-routing — prototype de routage PipeWire (spike #7)
+
+> **Provisoire — à revalider avec dongle RTL8761B.** Validé hors matériel (sources virtuelles) sur `pi-qualif`
+> (Pi 3, Ubuntu 26.04, PipeWire 1.6.2, WirePlumber 0.5.13) ; les essais avec appareils Bluetooth réels viennent
+> avec la séance (voir la procédure) et sont limités à **2 liens ACL** sur le Bluetooth interne.
+> Code jetable : stdlib Python 3.12+ seulement, aucune dépendance.
+
+## Contenu
+
+| Fichier | Rôle |
+|---------|------|
+| `pw_graph.py` | Modèle nœuds / ports / liens alimenté par **événements** (`pw-dump -m`), `wait_for(prédicat)` sans polling, détection `running` et apparition/disparition de nœuds. Une suppression arrive sans `type` : `{"id": N, "info": null}`. |
+| `router.py` | Bascule A → B → A par création/suppression de liens, **chronométrée** (`t_link`, `t_active`, `t_running`). Méthodes : `pwlink-seq`, `pwlink-par`, `pwcli` (session `pw-cli` persistante). `--virtual` (tout virtuel), `--virtual-b` (A et sink réels, B virtuelle), ou nœuds existants. |
+| `relink_after_restart.py` | Mémorise la route, `systemctl --user restart pipewire wireplumber`, attend le démon puis les nœuds (événements), recrée sink/sources virtuels si besoin et reconstruit les liens. |
+| `virtual.py` | Sink `support.null-audio-sink` (linger) + sources `pw-play` (`node.autoconnect=false`). |
+| `wireplumber/btmux-route.lua`, `52-btmux-route.conf` | Variante Lua : route pilotée par la métadonnée `btmux.route` (`SRC>SINK`). |
+| `measure_lua.py` | Mesure la bascule de la variante Lua. |
+| `sink_state.py` | Pause / reprise d'un flux vers un sink réel : délais `running` ↔ `idle`. |
+| `skew_probe.py` | Trou/chevauchement et écart FL/FR d'une bascule, à partir des événements du graphe. |
+| `list_nodes.py` | Liste les nœuds (nom, classe, état, ports) pour choisir `--sink` / `--a`. |
+| `watch_uart.sh` | Garde-fou (seuils : 1 `tx timeout`/`stalled`, ou ≥ 3 `Frame reassembly` en 30 s) : arrête `router.py` par son PID (`out/router.pid`, SIGINT, jamais `pkill -f`), déconnecte les appareils BT, puis **se ré-arme** et continue. |
+
+## Résultats hors matériel (sources virtuelles, 12 cycles A↔B = 24 bascules, `pi-qualif`, 2026-10-23)
+
+| Méthode | médiane | p95 | max | Remarque |
+|---------|---------|-----|-----|----------|
+| `pw-link` un processus par lien, séquentiel | 315 ms | 392 ms | 430 ms | ~100–140 ms par fork sur Pi 3 |
+| `pw-link` en parallèle | 270 ms | 282 ms | 288 ms | |
+| **session `pw-cli` persistante** (`create-link`/`destroy`) | **94 ms** | 104 ms | 106 ms | aucun fork ; `t_active` ≈ `t_running` |
+| Lua WirePlumber (clé `btmux.route`) | 168 ms | 177 ms | 180 ms | dont ~69 ms de lancement de `pw-metadata` : ≈ 100 ms dans WirePlumber (timer de regroupement 20 ms inclus) |
+
+Tous < 1 s (cible du cadrage). Mesures `t_active`, depuis la commande jusqu'aux liens `active`.
+Fichiers : `out/router-virtual-*.json`, `out/lua-virtual.json` (non versionnés).
+
+## Résultats avec un sink Bluetooth réel (Bose, 1 seul lien ACL, sources virtuelles 440/660 Hz, séance du 2026-10-23)
+
+24 bascules A↔B (hold 1,5 s) vers le sink A2DP du casque ; `t_active` en ms (0 erreur UART sur toute la période Bose seul).
+
+| Méthode | médiane | p95 | max | (rappel sink virtuel) |
+|---------|---------|-----|-----|------------------------|
+| session `pw-cli` persistante | **153 ms** | 170 ms | 187 ms | 94 ms |
+| `pw-link` séquentiel | 442 ms | 528 ms | 531 ms | 315 ms |
+| Lua WirePlumber (clé `btmux.route`) | 275 ms | 311 ms | 319 ms | 168 ms |
+
+Lua : ≈ 207 ms dans WirePlumber une fois retirés ~67 ms de lancement de `pw-metadata`. Le sink Bluetooth ajoute ~60–110 ms
+à chaque méthode (négociation du lien et passage à `running`). Tous < 1 s.
+Pause / reprise du flux (3 tours) : le sink quitte `running` (→ `idle`) en **65–71 ms** après la suppression des liens ;
+la reprise le ramène à `running` en **114–209 ms**. L'écoute a été faite par l'utilisateur (voir le rapport de séance).
+
+**Deux sources BT réelles : impossible sur le Bluetooth interne.** Téléphone + Bose connectés, le démarrage de l'audio du
+téléphone a provoqué une rafale d'erreurs UART (~140 `Frame reassembly failed` + `tx timeout`) ; la séance a donc été
+menée avec le Bose seul et deux sources virtuelles. À refaire avec le dongle (T3.2b).
+
+### Trou / chevauchement et écart FL/FR pendant une bascule (`skew_probe.py`, sink virtuel, 20 bascules par méthode)
+
+`router.py` fait **unlink de l'ancienne source puis link de la nouvelle** (rupture avant liaison, exclusif, pas de mixage) :
+il y a donc un **trou** de quelques dizaines de ms au niveau du graphe, jamais de chevauchement. (Un éventuel recouvrement
+perçu à l'oreille vient de la mise en tampon du sink A2DP, qui joue encore la fin de l'ancien flux.)
+
+| Méthode | trou médian (min–max) | écart FL/FR médian (max) |
+|---------|------------------------|--------------------------|
+| `pwcli` (session persistante) | 71 ms (58–79) | **0 ms** (0) |
+| `pwlink-seq` (2 forks) | 119 ms (103–132) | **71 ms** (93) |
+| `pwlink-par` | 144 ms (136–180) | 0,8 ms (16) |
+| Lua | 65 ms (39–83) | **0 ms** (0) |
+| `pwcli` make-before-break (`skew_probe.py --methods pwcli-mbb`) | −10 ms (chevauchement 7–19 ms) | 0 ms (0) |
+
+L'écart FL/FR de `pwlink-seq` (un `pw-link` par canal, ~70 ms) est audible comme une légère « alternance droite/gauche » au
+changement ; `pwcli` et Lua créent les deux liens dans le même cycle du graphe (0 ms). Correctif : écrire les deux
+`create-link` en un seul envoi dans la session `pw-cli` (déjà le cas) ou créer les liens dans le même appel côté WirePlumber.
+
+### Après `systemctl --user restart pipewire wireplumber` (sans appareil BT)
+
+| Variante | Résultat |
+|----------|----------|
+| Python (`relink_after_restart.py --virtual`) | PipeWire répond de nouveau à **0,67 s**, nœuds à **1,5 s**, liens reconstruits et `active` à **1,67 s** (nœuds virtuels recréés par le script ; avec BT les nœuds `bluez_*` réapparaissent seuls — non testé, cf. ci-dessous). |
+| Lua | Après un restart de WirePlumber, **les liens et la clé `btmux.route` sont perdus** (métadonnée non persistante) ; ré-émettre la clé reconstruit les liens (~1,5 s). Le script se recharge seul mais n'a plus la route. |
+
+## Tableau comparatif (préliminaire — décision dans le rapport T2.8)
+
+| Critère | `pw-*` pilotés par Python asyncio | Lua WirePlumber |
+|---------|-----------------------------------|-----------------|
+| Temps de bascule | 94 ms (session `pw-cli`), 270–315 ms (fork par lien) | ≈ 100 ms dans WP + coût du canal de commande |
+| Détection `running`, apparition/disparition de nœuds | Oui, par événements (`pw-dump -m`), état complet du graphe côté btmuxd | Possible dans le script (ObjectManager) mais l'état n'est pas observable depuis btmuxd sans export |
+| Robustesse au restart PipeWire/WirePlumber | btmuxd détecte l'arrêt du flux d'événements, se reconnecte et reconstruit depuis la route voulue (1,67 s) | La route (métadonnée) est perdue ; doit être ré-émise par btmuxd, donc dépendance équivalente |
+| Observabilité | Journal applicatif de btmuxd, graphe en mémoire | Logs WP (`s-btmux-route`), pas d'état exposé |
+| Déploiement | Aucun changement côté WirePlumber | Fichier script + composant `required` ; un défaut de script peut empêcher WirePlumber de démarrer ; le charger exige **un restart WirePlumber** (interdit avec un appareil BT connecté sur le contrôleur interne) |
+| Contraintes du bac à sable Lua | — | `collectgarbage` absent ; `optional` ne charge pas le composant (il faut `required`) |
+| Test local | Oui (PipeWire sur une machine de dev) | Seulement sur une machine avec WirePlumber |
+
+**Robustesse de la session `pw-cli`** (vérifié sur sink virtuel) : les liens créés par `create-link` **sont détruits à la fermeture de la session**
+(`quit` ou SIGKILL de `pw-cli` : 4 liens pendant, 0 après) ; `pw-cli` ne signale une erreur de lien qu'en asynchrone
+(`error id:N … res:-22 …`), le routeur lit donc sa sortie et lève une `RuntimeError` explicite (erreur signalée ou délai de 5 s dépassé).
+
+Pistes pour `src/btmux/pipewire/` : un `PwGraph` (événements `pw-dump -m`), un `PwLinker` (session `pw-cli` persistante,
+repli `pw-link`), un `RouteManager` (route voulue + resynchronisation sur chaque événement de graphe) ; l'API native
+(bindings Python) n'a pas été évaluée (non disponible sur la cible).
+
+## Limites et sécurité du spike
+
+- Valeurs mesurées sur Pi 3 avec **sources virtuelles** : les délais en conditions réelles (Bluetooth) restent à mesurer.
+- **Incident (2026-10-23, 11:11 UTC)** : un `systemctl --user restart pipewire wireplumber` exécuté **avec** le Bose et le PC
+  connectés a figé le contrôleur interne (`link tx timeout`, `killing stalled connection`, `command 0x0406/0x0c24 tx timeout`,
+  bluetoothd `Failed to remove/add UUID: Authentication Failed (0x05)` en boucle) ; reboot nécessaire. Cause probable : le
+  restart désenregistre/ré-enregistre les profils auprès de BlueZ, d'où des commandes HCI (UUID, classe d'appareil) que le
+  contrôleur UART ne traite plus. **Interdit** : restart PipeWire/WirePlumber avec un appareil BT connecté sur le
+  Bluetooth interne (reporté en T3.2b avec dongle). Les essais sans BT se font **contrôleur éteint** (`btmgmt power off`).
+- Jamais plus de **2 liens ACL** simultanés ; arrêt immédiat au premier `Frame reassembly failed` / `tx timeout` (`watch_uart.sh`).
