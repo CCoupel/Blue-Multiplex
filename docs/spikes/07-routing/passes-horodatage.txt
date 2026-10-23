@@ -1,0 +1,12 @@
+# Passes de la séance spike #7 du 2026-10-23 — horodatage (UTC / heure de Paris = UTC + 2)
+# Ressentis de l'utilisateur relevés à l'heure de Paris ; les passes sont tirées des journaux de séance (out/*.log).
+UTC            Paris          Passe
+12:03:46       14:03:46       watch_uart.sh armé (base 0 erreur), Lua installé (contrôleur éteint puis rallumé)
+12:05-12:10    14:05-14:10    téléphone + Bose connectés, effondrement UART (premières erreurs de la rafale 12:10:22)
+12:14:36       14:14:36       repli : Bose seul, téléphone et PC bloqués, watch_uart relancé
+12:15:53-12:16:42  14:15:53-14:16:42  étape 3 — écoute : pwcli, 440/660 Hz, hold 4 s, 10 bascules   -> ressenti 14:16 « chevauchement »
+12:17:04-12:17:48  14:17:04-14:17:48  étape 4 — mesure pwcli, hold 1,5 s, 24 bascules               -> « aucune coupure »
+12:17:48-12:18:39  14:17:48-14:18:39  étape 4 — mesure pwlink-seq, hold 1,5 s, 24 bascules          -> ressenti 14:18 « légère alternance droite/gauche »
+12:19:00-12:19:22  14:19:00-14:19:22  étape 5 — Lua (clé btmux.route), 24 bascules                  -> ressenti 14:19 « bascule parfaite »
+12:19:22-12:19:34  14:19:22-14:19:34  étape 6 — pause / reprise du flux (3 tours)
+12:19:51       14:19:51       étape 7 — clôture

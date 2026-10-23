@@ -18,7 +18,7 @@
 | `sink_state.py` | Pause / reprise d'un flux vers un sink réel : délais `running` ↔ `idle`. |
 | `skew_probe.py` | Trou/chevauchement et écart FL/FR d'une bascule, à partir des événements du graphe. |
 | `list_nodes.py` | Liste les nœuds (nom, classe, état, ports) pour choisir `--sink` / `--a`. |
-| `watch_uart.sh` | Garde-fou (seuils : 1 `tx timeout`/`stalled`, ou ≥ 3 `Frame reassembly` en 30 s) : déconnecte les appareils BT, arrête le routeur. |
+| `watch_uart.sh` | Garde-fou (seuils : 1 `tx timeout`/`stalled`, ou ≥ 3 `Frame reassembly` en 30 s) : arrête `router.py` par son PID (`out/router.pid`, SIGINT, jamais `pkill -f`), déconnecte les appareils BT, puis **se ré-arme** et continue. |
 
 ## Résultats hors matériel (sources virtuelles, 12 cycles A↔B = 24 bascules, `pi-qualif`, 2026-10-23)
 
@@ -87,6 +87,10 @@ changement ; `pwcli` et Lua créent les deux liens dans le même cycle du graphe
 | Déploiement | Aucun changement côté WirePlumber | Fichier script + composant `required` ; un défaut de script peut empêcher WirePlumber de démarrer ; le charger exige **un restart WirePlumber** (interdit avec un appareil BT connecté sur le contrôleur interne) |
 | Contraintes du bac à sable Lua | — | `collectgarbage` absent ; `optional` ne charge pas le composant (il faut `required`) |
 | Test local | Oui (PipeWire sur une machine de dev) | Seulement sur une machine avec WirePlumber |
+
+**Robustesse de la session `pw-cli`** (vérifié sur sink virtuel) : les liens créés par `create-link` **sont détruits à la fermeture de la session**
+(`quit` ou SIGKILL de `pw-cli` : 4 liens pendant, 0 après) ; `pw-cli` ne signale une erreur de lien qu'en asynchrone
+(`error id:N … res:-22 …`), le routeur lit donc sa sortie et lève une `RuntimeError` explicite (erreur signalée ou délai de 5 s dépassé).
 
 Pistes pour `src/btmux/pipewire/` : un `PwGraph` (événements `pw-dump -m`), un `PwLinker` (session `pw-cli` persistante,
 repli `pw-link`), un `RouteManager` (route voulue + resynchronisation sur chaque événement de graphe) ; l'API native

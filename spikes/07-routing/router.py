@@ -18,10 +18,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import collections
 import json
+import os
+import re
 import statistics
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from pw_graph import Graph, Node, Port
@@ -46,6 +50,10 @@ class Linker:
         return None
 
     async def stop(self) -> None:  # pragma: no cover - interface
+        return None
+
+    def check(self) -> None:
+        """Lève RuntimeError si le mécanisme a signalé une erreur (par défaut : rien à signaler)."""
         return None
 
     async def unlink(self, link_ids: list[int]) -> None:
@@ -86,22 +94,52 @@ class PwLinkPar(Linker):
                 raise RuntimeError(f"pw-link : {out.strip()}")
 
 
+ERROR_RE = re.compile(r"error id:(\d+) seq:\d+ res:(-\d+) \(([^)]*)\): (.*)")
+
+
 class PwCliSession(Linker):
-    """Une session `pw-cli` persistante : on écrit `create-link` / `destroy` sur son stdin (aucun fork)."""
+    """Une session `pw-cli` persistante : on écrit `create-link` / `destroy` sur son stdin (aucun fork).
+
+    DURÉE DE VIE DES LIENS (vérifiée sur sink virtuel, 2026-10-23) : un lien créé par `create-link` appartient à la
+    session. Il est **détruit dès que la session se ferme**, que ce soit par `quit` ou par SIGKILL de `pw-cli`
+    (4 liens présents pendant la session, 0 après). Conséquence : si la session meurt, le routage est perdu ;
+    btmuxd doit surveiller `proc.returncode` (voir `_send`) et reconstruire la session et les liens.
+    ERREURS : `pw-cli` répond « 1 = @proxy:N » même pour un lien invalide ; l'échec arrive plus tard, en asynchrone
+    (« remote 0: error id:N seq:S res:-22 (Invalid argument): link-factory: unknown output port 99999 »). On lit donc
+    sa sortie (stdout+stderr) et `check()` lève RuntimeError avec ces lignes.
+    """
 
     name = "pwcli-session"
 
     def __init__(self, graph: Graph) -> None:
         self.graph = graph
         self.proc: asyncio.subprocess.Process | None = None
+        self.tail: collections.deque[str] = collections.deque(maxlen=40)
+        self.errors: list[str] = []
+        self._reader: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         self.proc = await asyncio.create_subprocess_exec(
             "pw-cli",
             stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
+        self._reader = asyncio.create_task(self._drain())
+
+    async def _drain(self) -> None:
+        assert self.proc is not None and self.proc.stdout is not None
+        async for raw in self.proc.stdout:
+            line = raw.decode(errors="replace").rstrip()
+            self.tail.append(line)
+            match = ERROR_RE.search(line)
+            if match:
+                self.errors.append(f"id {match[1]} res {match[2]} ({match[3]}) : {match[4]}")
+
+    def check(self) -> None:
+        if self.errors:
+            errors, self.errors = self.errors, []
+            raise RuntimeError("pw-cli a signalé : " + " ; ".join(errors))
 
     async def stop(self) -> None:
         if self.proc and self.proc.returncode is None:
@@ -109,10 +147,17 @@ class PwCliSession(Linker):
             self.proc.stdin.write(b"quit\n")
             await self.proc.stdin.drain()
             self.proc.stdin.close()
-            await asyncio.wait_for(self.proc.wait(), 5)
+            try:
+                await asyncio.wait_for(self.proc.wait(), 5)
+            except TimeoutError:
+                self.proc.kill()
+                raise RuntimeError("pw-cli ne s'est pas fermé en 5 s (tué)") from None
+        if self._reader:
+            await asyncio.gather(self._reader, return_exceptions=True)
 
     async def _send(self, text: str) -> None:
-        assert self.proc is not None and self.proc.stdin is not None
+        if self.proc is None or self.proc.returncode is not None or self.proc.stdin is None:
+            raise RuntimeError("session pw-cli terminée : les liens qu'elle portait sont perdus")
         self.proc.stdin.write(text.encode())
         await self.proc.stdin.drain()
 
@@ -130,13 +175,25 @@ def make_linker(method: str, graph: Graph) -> Linker:
     )()  # type: ignore[return-value]
 
 
+async def _wait(graph: Graph, linker: Linker, predicate: Callable[[], bool], what: str) -> None:
+    """Attend un état du graphe ; en cas de délai dépassé, remonte l'erreur du mécanisme de lien (pw-cli...)."""
+    try:
+        await graph.wait_for(predicate, timeout=5)
+    except TimeoutError:
+        linker.check()  # lève avec le détail si pw-cli a signalé une erreur
+        tail = " | ".join(getattr(linker, "tail", [])[-3:]) if hasattr(linker, "tail") else ""
+        raise RuntimeError(
+            f"délai dépassé (5 s) : {what}" + (f" ; sortie pw-cli : {tail}" if tail else "")
+        ) from None
+
+
 async def unlink_source(graph: Graph, source: Node, linker: Linker) -> int:
     """Supprime tous les liens sortants de `source` (routage exclusif : un seul flux vers le sink)."""
     links = graph.links_from(source.id)
     if links:
         ids = {lk.id for lk in links}
         await linker.unlink(sorted(ids))
-        await graph.wait_for(lambda: not (ids & set(graph.links)), timeout=5)
+        await _wait(graph, linker, lambda: not (ids & set(graph.links)), "suppression des liens")
     return len(links)
 
 
@@ -144,7 +201,10 @@ async def link_source(graph: Graph, source: Node, sink: Node, linker: Linker) ->
     pairs = pair_ports(graph.ports_of(source.id, "output"), graph.ports_of(sink.id, "input"))
     before = set(graph.links)
     await linker.link(pairs)
-    await graph.wait_for(lambda: len(set(graph.links) - before) >= len(pairs), timeout=5)
+    await _wait(
+        graph, linker, lambda: len(set(graph.links) - before) >= len(pairs), "apparition des liens"
+    )
+    linker.check()
     return sorted(set(graph.links) - before)
 
 
@@ -217,6 +277,10 @@ async def main_async(args: argparse.Namespace) -> int:
     await asyncio.wait_for(graph.synced.wait(), 10)
     virtual: Virtual | None = None
     linker = make_linker(args.method, graph)
+    # PID enregistré pour que watch_uart.sh puisse l'arrêter (SIGINT) sans `pkill -f`
+    pidfile = Path(__file__).resolve().parent / "out" / "router.pid"
+    pidfile.parent.mkdir(exist_ok=True)
+    pidfile.write_text(str(os.getpid()))
     try:
         if args.virtual:
             tone = Path(args.tone)
@@ -260,6 +324,7 @@ async def main_async(args: argparse.Namespace) -> int:
         finally:
             await linker.stop()
     finally:
+        pidfile.unlink(missing_ok=True)
         if virtual is not None:
             await virtual.destroy()
         await graph.stop()

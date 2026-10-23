@@ -7,6 +7,8 @@
 
 **Décision utilisateur du 2026-10-23 14:24 : plus aucune séance sur le Bluetooth interne** ; tout ce qui reste à démontrer attend les UB500 (voir § « À revalider »).
 
+T3.2b désigne la **revalidation avec les dongles UB500** (puce RTL8761BU), prévue après leur réception.
+
 Issue : #7 · Séance : 2026-10-23, 14:03–14:20 heure de Paris (12:03–12:20 UTC), précédée d'essais hors matériel (≈ 13:00–13:30 Paris) ·
 Prototype : `spikes/07-routing/` (README avec les tableaux détaillés) · Procédure QA : `tests/procedures/spikes/07-routing/routage-mono-adaptateur.md`.
 **Convention horaire** : heures de Paris (UTC+2) sauf mention « UTC » ; les annexes (`docs/spikes/07-routing/`) sont en UTC.
@@ -46,7 +48,7 @@ pause/reprise du flux, clôture.
 | Critère | Statut | Détail / preuve |
 |---------|--------|-----------------|
 | Deux sources A2DP (PC + téléphone) en sink + casque en source sur le même adaptateur, flux entrant et sortant simultanés, bascule A→B→A sans déconnexion BT, < 1 s | **PARTIEL** | Bascule A→B→A vers le **sink Bluetooth réel** (Bose, 1 ACL, aucune déconnexion BT) : OK, 153 ms (pwcli). **Deux sources réelles + casque : KO sur le BT interne** (effondrement UART, cf. Incidents) ; PC source réel non testé. Preuves : `router-real-*.json`, `incident-seance7-1210.txt`, `uart.log` |
-| Prototype Python asyncio : découverte des nœuds, création de liens, état `running`, apparition/disparition de nœuds par événements | **OK (virtuel), PARTIEL (BT réel)** | `pw_graph.py` (événements `pw-dump -m`, sans polling), `router.py` ; `running` détecté sur nœuds virtuels et sur le sink du Bose (`sink-state.json`) ; apparition/disparition de nœuds : nœuds virtuels et restart OK (`relink-virtual.json`) ; **nœuds `bluez_*` à la (dé)connexion non consignés par événements pendant la séance (NON TESTÉ)** |
+| Prototype Python asyncio : découverte des nœuds, création de liens, état `running`, apparition/disparition de nœuds par événements | **OK (virtuel), PARTIEL (BT réel)** | `pw_graph.py` (événements `pw-dump -m`, sans polling), `router.py` ; `running` détecté sur nœuds virtuels et sur le sink du Bose (`sink-state.json`) ; apparition/disparition de nœuds : nœuds virtuels et restart OK (`relink-virtual.json`) ; **nœuds `bluez_*` à la (dé)connexion non consignés par événements pendant la séance (NON TESTÉ)** ; **détection `running` d'une source Bluetooth réelle (le S24) : non testée** (la musique du téléphone n'a jamais produit de flux stable avant l'effondrement) |
 | Variante Lua WirePlumber évaluée sur les mêmes critères — tableau comparatif | **OK** | `lua-virtual.json`, `lua-real.json`, `skew-lua.json` ; restart WP : route et liens perdus (cf. ci-dessous) |
 | Après `systemctl --user restart pipewire wireplumber` : liens reconstruits par le prototype | **OK sans BT / NON TESTÉ avec BT** | 1,67 s (`relink-virtual.json`) ; **avec appareil BT connecté : interdit** (incident), reporté en T3.2b |
 | Rapport avec décision et squelette `src/btmux/pipewire/` | **OK** | Ce document |
@@ -60,6 +62,7 @@ pause/reprise du flux, clôture.
 | **session `pw-cli` persistante** | **94** (104, 106) | **153** (170, 187) ; écoute (n = 10) : 155 (186, 186) | `router-virtual-pwcli.json`, `router-real-mesure-pwcli.json`, `router-real-ecoute.json` |
 | Lua WirePlumber (`btmux.route`) | 168 (177, 180) dont ~67 ms de `pw-metadata` | 275 (311, 319) soit ≈ 207 hors `pw-metadata` | `lua-virtual.json`, `lua-real.json` |
 
+Le p95 est indicatif : sur n = 24 (n = 10 pour l'écoute) il correspond à l'avant-dernière valeur triée, pas à une estimation robuste.
 Tous < 1 s (cible du cadrage), y compris vers le sink Bluetooth réel (+60 à +110 ms par rapport au virtuel). **Indicatif** :
 sources virtuelles uniquement, un seul sink réel, un seul Pi.
 
@@ -82,6 +85,8 @@ Le sink quitte `running` (→ `idle`) **65–71 ms** après la suppression des l
 | `pwcli` **make-before-break** (lie B puis supprime A) | **−10 ms** (−19 à −7), soit un **chevauchement** de 7 à 19 ms | 0 ms (0) |
 
 (`skew-virtual.json`, `skew-lua.json`, `skew-mbb.json` ; trou positif = silence, négatif = les deux sources sont liées en même temps.)
+Note : le trou de `pwcli` figure deux fois (71 ms ici, 70 ms dans le tableau « break-before-make ») : ce sont deux passes
+indépendantes de 20 bascules (`skew-virtual.json` et `skew-mbb.json`), l'écart de 1 ms est dans la dispersion de mesure.
 
 ### Restart PipeWire + WirePlumber (sans appareil BT ; contrôleur éteint pour Lua)
 
@@ -106,13 +111,13 @@ Le sink quitte `running` (→ `idle`) **65–71 ms** après la suppression des l
    auprès de BlueZ = commandes HCI (UUID, classe d'appareil) que le contrôleur UART ne traite plus. Preuve :
    `incident-restart-pipewire-bt.txt`. **Interdit en séance avec BT connecté ; contournement validé : contrôleur éteint
    (`btmgmt power off`) pendant les restarts.**
-2. **Téléphone + Bose connectés, démarrage de l'audio du téléphone** (12:10:31 UTC = 14:10 Paris) : rafale d'environ 140
-   `Frame reassembly failed` + 2 `command tx timeout` ; le garde-fou `watch_uart.sh` déconnecte les deux appareils. Une erreur de
+2. **Téléphone + Bose connectés, démarrage de l'audio du téléphone** (premières erreurs de la rafale à **12:10:22 UTC** = 14:10:22
+   Paris, 2 `command tx timeout` à 12:10:33) : environ 145 `Frame reassembly failed` dans l'extrait conservé ; le garde-fou `watch_uart.sh` déconnecte les deux appareils. Une erreur de
    trame isolée était déjà apparue à l'établissement du 2e lien (12:06:43) et deux autres juste avant la chute du lien du
    téléphone (12:08:46). Preuves : `incident-seance7-1210.txt`, `uart.log`.
 3. **Reconnexion spontanée des sources** : le téléphone s'est reconnecté seul (12:11:27 UTC) pendant la mise en place du repli ;
-   j'ai connecté le Bose sans m'arrêter sur « 1 ACL déjà actif » (erreur de ma part) → ~900 erreurs de trame supplémentaires (1038
-   au total sur le boot, 2 timeouts) avant déconnexion de tout à 12:14. Remède appliqué : `bluetoothctl block` du téléphone et du
+   le Bose a été connecté sans tenir compte du signal « 1 ACL déjà actif » (erreur de procédure) → ~900 erreurs de trame
+   supplémentaires (**1036 erreurs de trame et 2 `tx timeout` au total sur le boot**, soit 1038 lignes) avant déconnexion de tout à 12:14. Remède appliqué : `bluetoothctl block` du téléphone et du
    PC pendant le repli (débloqués à la clôture).
 4. **Alias non persistant** : `btmgmt name btmux` ne survit pas au reboot (le téléphone voyait « pi-qualif ») → prévoir
    `bluetoothctl system-alias` ou `Name=` dans `main.conf` à l'installation.
@@ -141,6 +146,15 @@ Python asyncio dans btmuxd (repli `pw-link` si `pw-cli` indisponible). Lua WireP
 | Observabilité | graphe complet en mémoire dans btmuxd (nœuds, ports, liens, états), journal applicatif | logs WirePlumber, aucun état exposé à btmuxd | — |
 | Dépendances / déploiement | binaires `pw-dump`/`pw-cli` de PipeWire, aucun fichier WirePlumber à installer | script + composant `required` (un défaut empêche WP de démarrer ; `optional` ne charge pas), `collectgarbage` absent du bac à sable ; restart WP à chaque mise à jour | bindings Python absents |
 | Risque Bluetooth | aucun restart nécessaire | restart WP à l'installation = risque contrôleur sur BT interne | — |
+
+Deux points de robustesse mesurés sur ce mécanisme (à reprendre dans l'implémentation) :
+
+- **Durée de vie des liens** : un lien créé par `create-link` appartient à la session `pw-cli` ; il est **détruit dès que la session se ferme**
+  (`quit` ou SIGKILL : 4 liens pendant la session, 0 après). btmuxd doit donc surveiller la session, la rouvrir et reconstruire les liens
+  (`RouteManager.run()`), et traiter sa mort comme une perte de routage, pas comme une simple erreur.
+- **Erreurs de `pw-cli`** : il répond « 1 = @proxy:N » même pour un lien invalide ; l'échec arrive plus tard, en asynchrone
+  (« remote 0: error id:57 … res:-22 (Invalid argument): link-factory: unknown output port 99999 »). Le prototype lit maintenant
+  stdout+stderr de la session et remonte ces lignes ; un délai dépassé est une erreur explicite (RuntimeError), jamais silencieux.
 
 Verdict normalisé sur le critère « routage par liens PipeWire sans reconnexion BT avec sink Bluetooth réel » : **RÉSERVES — provisoire — à revalider avec dongle UB500 (T3.2b)**. Pour : bascule exclusive en 153 ms (médiane) vers un sink A2DP réel, sans déconnexion
 Bluetooth, restart reconstruit en 1,7 s (sans BT) ; la variante Lua offre le meilleur ressenti (« parfaite ») mais pas de robustesse
@@ -203,7 +217,8 @@ l'état réel et recrée les liens manquants. `running`/`idle` d'un nœud source
 3. **Relink après restart** : détecter l'EOF de `pw-dump -m`, reconnecter, recréer sink/nœuds attendus, relier ; **ne jamais redémarrer PipeWire/WirePlumber avec un appareil BT connecté sur le contrôleur interne** (contrôleur éteint, ou dongle).
 4. **Reconnexion des sources** : les sources se reconnectent d'elles-mêmes et peuvent dépasser le plafond de liens ; politique de connexions dans btmuxd (`block`/`Trusted`, plafond d'ACL) et watchdog UART (arrêt au premier `tx timeout`).
 5. **Alias persistant** : `bluetoothctl system-alias` ou `Name=` dans `main.conf` à l'installation (l'alias `btmgmt` ne survit pas au reboot).
-6. Sink Bluetooth : le sink repasse `idle` ~70 ms après la suppression des liens et revient `running` en 110–210 ms : tenir compte de ce délai dans la règle « source `running` ».
+6. **Session `pw-cli` mortelle pour les liens** (cf. Décision) : surveiller `returncode`, reconstruire ; lire stdout/stderr pour détecter les `error id:` asynchrones.
+7. Sink Bluetooth : le sink repasse `idle` ~70 ms après la suppression des liens et revient `running` en 110–210 ms : tenir compte de ce délai dans la règle « source `running` ».
 
 ## À revalider avec le dongle UB500 (T3.2b)
 
@@ -224,5 +239,6 @@ Fichiers versionnés dans `docs/spikes/07-routing/` (horaires UTC ; MAC des appa
 | `router-real-ecoute.json`, `router-real-mesure-pwcli.json`, `router-real-mesure-pwlink-seq.json` | bascules vers le Bose réel (écoute n = 10, mesures n = 24) |
 | `lua-virtual.json`, `lua-real.json` | variante Lua (sink virtuel / Bose réel) |
 | `sink-state.json`, `relink-virtual.json`, `skew-virtual.json`, `skew-lua.json`, `skew-mbb.json` | pause/reprise, restart sans BT, trou et écart FL/FR |
+| `passes-horodatage.txt` | horodatage (UTC et Paris) de chaque passe de la séance, pour attribuer les ressentis |
 | `uart.log` | journal du garde-fou `watch_uart.sh` pendant la séance |
 | `incident-seance7-1210.txt`, `incident-restart-pipewire-bt.txt` | journaux dmesg des deux incidents |
