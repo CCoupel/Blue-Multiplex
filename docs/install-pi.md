@@ -301,3 +301,17 @@ python spikes/common/mask_evidence.py --pi-mac <MAC du Pi> --check docs/spikes  
 ```
 
 Critère d'acceptation (point 5.11) : [procédure QA du spike #5](../tests/procedures/spikes/05-exposure/exposition-mono-adaptateur.md).
+
+## 12. Mise à jour vers le paquet 0.2.0
+
+Un `.deb` 0.2.0 installé sur un Pi en 0.1.0 :
+
+- **Environnement Python** : le venv `/opt/btmux` est réutilisé s'il est complet (`pip` présent), sinon recréé. Les
+  dépendances sont installées depuis le lockfile haché (`--require-hashes --only-binary=:all:`), puis la wheel est
+  installée sans index (`--no-index`). Le réseau n'est requis que pour une dépendance absente du venv.
+- **Configuration** : `/etc/btmux/config.yaml` n'est **jamais réécrit** (il est créé depuis l'exemple seulement s'il est
+  absent). Une configuration mono-adaptateur v0.1.0 reste valide ; ajouter le second adaptateur est une modification manuelle.
+- **Jeton d'API** : `/etc/btmux/token` est conservé ; il n'est généré que s'il manque.
+- **Utilisateur de service** : déterminé comme à l'installation (`BTMUX_USER`, drop-in existant, sinon `sudo`, sinon `ubuntu`).
+- **Redémarrage des services** : `btmux-adapters` et `btmuxd` sont redémarrés à l'installation (sauf `--no-restart`),
+  puis la policy D-Bus est rechargée ; un fichier WirePlumber déjà présent n'est pas modifié (§5 bis).

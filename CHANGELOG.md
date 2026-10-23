@@ -11,6 +11,12 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
   `deploy.sh` exige le lockfile à côté de la wheel (`btmux-<V>.requirements.lock.txt`).
 - Configuration bi-adaptateur (#14) : règle V4 levée (1 ou 2 adaptateurs acceptés ; 3 refusés avec
   `config: at most 2 adapters are supported (found N)`), `config/config.example.yaml` en deux adaptateurs (forme mono en commentaire).
+- `btmuxd --config <path>` ne sort plus immédiatement : il valide la configuration, se connecte à BlueZ (code 3 si un
+  adaptateur de `adapters[]` reste introuvable pendant 30 s), démarre l'API HTTP et reste actif jusqu'à SIGTERM/SIGINT
+  (code 0). `--check-config` est inchangé (#20 #21).
+- Jeton d'API : généré dans `/etc/btmux/token` (0600) à l'installation s'il manque, jamais régénéré (#17).
+- Mise à jour : le `.deb` 0.2.0 ne réécrit pas `/etc/btmux/config.yaml` (créé depuis l'exemple seulement s'il est absent) et
+  ne régénère pas le jeton ; une configuration mono-adaptateur v0.1.0 reste valide (#17).
 
 ### Added
 - Packaging déterministe (#17) : lockfile runtime haché (`dist/requirements.lock.txt`, produit par `scripts/ci.sh`), paquet `.deb` avec
@@ -18,6 +24,13 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
   de l'utilisateur de service, jeton d'API 0600 généré, `scripts/btmux-configure.sh` partagé avec `scripts/deploy.sh`.
 - Clé de configuration optionnelle `pairing` (`default_duration` 1..300 s, `accept_incoming`), règle V11 (#14, #20).
 - Brouillons de contrats `contracts/http-endpoints.md` et `contracts/models.md` (DRAFT, API appairages — #20 #21 #16).
+- Outils de séance bi-adaptateur `spikes/common` (`watch_hci`, `link_guard`, agent, `roles.conf`, résolution par rôle) et
+  orchestration des spikes `spikes/t32b` (scripts #6 voix et #8 latence, routage par adaptateur) (#18).
+- Environnement QUALIF : companions `deploy.qualif.md` et `qualif.env.example` avec `FORBIDDEN_HOSTS` (hôtes interdits :
+  jamais de `ssh`/`scp` vers un Pi en service) (#18).
+
+### Reporté
+- Policy D-Bus de l'utilisateur de service : resserrement des droits à faire avant la mise en production (#20).
 
 ## [0.1.0] — 2026-10-23 (non publié : exploration mono-adaptateur, clôturée sans release)
 

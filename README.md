@@ -6,6 +6,10 @@ via le daemon `btmuxd`. Aucun logiciel n'est requis côté sources.
 
 > **Statut** : v0.1.0 clôturée le 2026-10-23 **sans release** (aucun tag, aucun paquet publié). Le daemon valide sa
 > configuration et reste actif ; le routage audio arrive en v0.3.0.
+>
+> **v0.2.0 (LOT-1 livré, sans matériel)** : configuration bi-adaptateur, packaging déterministe (lockfile haché, jeton
+> d'API), unité durcie. Les deux dongles UB500 restent à réceptionner : procédure dans
+> [docs/install-pi.md §6](docs/install-pi.md#6-deux-dongles-ub500-cible-bi-adaptateur).
 
 - Cadrage : [docs/cadrage.md](docs/cadrage.md)
 - Installation du Pi : [docs/install-pi.md](docs/install-pi.md)
@@ -65,6 +69,8 @@ Le paquet `btmux_<X.Y.Z>_all.deb` est produit par `scripts/build-deb.sh` (aucune
    ```
 
    Le schéma de référence est dans [contracts/config-schema.md](contracts/config-schema.md).
+   Le jeton de l'API HTTP (v0.2.0) est généré à l'installation dans `/etc/btmux/token` (mode 0600, propriétaire
+   l'utilisateur de service) et n'est jamais régénéré s'il existe ; il s'envoie en `Authorization: Bearer <jeton>`.
 3. Installer le paquet : `sudo dpkg -i btmux_<X.Y.Z>_all.deb`, puis `sudo systemctl enable --now btmuxd`.
    L'utilisateur de service de `btmuxd` (celui dont la session PipeWire est utilisée, linger activé) est, dans
    l'ordre : `BTMUX_USER` s'il est fourni, sinon l'utilisateur qui lance `sudo`, sinon `ubuntu`. Pour le choisir :
