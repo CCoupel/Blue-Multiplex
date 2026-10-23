@@ -5,6 +5,7 @@
 #   btmon pendant N secondes (à lancer pendant l'appairage d'une source) -> out/btmon-<date>.{snoop,txt}
 # Provisoire — à revalider avec dongle RTL8761B.
 . "$(dirname "$0")/common.sh"
+warn_multi_controller
 BTMON_S=0
 [ "${1:-}" = "--btmon" ] && BTMON_S="${2:?secondes}"
 mkdir -p "$OUT_DIR"

@@ -75,6 +75,11 @@ def main() -> int:
     group.add_argument("--path", action="store_true", help="affiche /org/bluez/hciN (défaut)")
     group.add_argument("--index", action="store_true", help="affiche N (pour btmgmt -i N)")
     args = parser.parse_args()
+    if "BTMUX_ADAPTER_MAC" not in os.environ and "--mac" not in sys.argv:
+        print(
+            f"AVERTISSEMENT: BTMUX_ADAPTER_MAC non défini, MAC par défaut {DEFAULT_MAC}",
+            file=sys.stderr,
+        )
     return asyncio.run(_main(args.mac, args.index))
 
 

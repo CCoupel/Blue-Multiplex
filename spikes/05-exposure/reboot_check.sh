@@ -4,6 +4,7 @@
 # Sortie : tableau par appareil appairé + délai de reconnexion ; copie dans out/reboot-<date>.txt.
 # Provisoire — à revalider avec dongle RTL8761B.
 . "$(dirname "$0")/common.sh"
+warn_multi_controller
 WAIT=120
 [ "${1:-}" = "--wait" ] && WAIT="${2:?secondes}"
 [[ "$WAIT" =~ ^[0-9]+$ ]] || { echo "--wait attend un entier" >&2; exit 2; }
