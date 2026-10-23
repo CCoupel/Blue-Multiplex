@@ -130,7 +130,9 @@
     "coverage": "uv run pytest --cov=btmux --cov-report=term-missing",
     "test_fast": "uv run pytest -m \"not slow\"",
     "test_targeted": "uv run pytest {TARGETS}",
-    "smoke": "bash -c 'set -a; . <(tr -d \"\\r\" < .claude/agents/environments/qualif.env); set +a; ssh -i \"$SSH_KEY_PATH\" -o BatchMode=yes -- \"$DEPLOY_HOST\" \"systemctl is-active btmuxd && /opt/btmux/bin/btmuxd --version && /opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config\"'"
+    "smoke": "bash -c 'set -a; . <(tr -d \"\\r\" < .claude/agents/environments/qualif.env); set +a; ssh -i \"$SSH_KEY_PATH\" -o BatchMode=yes -- \"$DEPLOY_HOST\" \"systemctl is-active btmuxd && /opt/btmux/bin/btmuxd --version && /opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml --check-config\"'",
+    "smoke_note": "LOT-1 v0.2.0 : is-active btmuxd + btmuxd --version + --check-config (via ssh, qualif.env). Apres LOT-2 (#21, T2.3) : remplacer commands.smoke par commands.smoke_api (GET /api/health public, /api/state 401 sans jeton et 200 avec le jeton lu sur le Pi) — voir .claude/agents/environments/deploy.qualif.md",
+    "smoke_api": "bash -c 'set -a; . <(tr -d \"\\r\" < .claude/agents/environments/qualif.env); set +a; ssh -i \"$SSH_KEY_PATH\" -o BatchMode=yes -- \"$DEPLOY_HOST\" \"set -e; systemctl is-active btmuxd; curl -fsS http://127.0.0.1:8088/api/health; test \\$(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:8088/api/state) = 401; curl -fsS -o /dev/null -H \\\"Authorization: Bearer \\$(sudo cat /etc/btmux/token)\\\" http://127.0.0.1:8088/api/state\"'"
   },
   "docs": {
     "mockup_dir": "docs/mockup",
