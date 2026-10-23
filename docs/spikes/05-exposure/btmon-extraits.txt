@@ -1,0 +1,20 @@
+# Extraits btmon (décodé) — btmon-20261023-083201.txt (tentatives Windows 08:32-08:39, 600 s)
+Authentication Failed (HCI Status 0x05) : 22
+     11         Reason: Remote User Terminated Connection (0x13)
+     11         Reason: Connection terminated by remote host (0x03)
+
+# btmon-20261023-084903.txt (08:49-09:04) — négociations AVDTP des sources (PC et téléphone mélangés ; capacités annoncées par chacun)
+     18         Service Category: Media Codec (0x07)
+     14           Media Codec: Non-A2DP (0xff)
+      4             Vendor Specific Codec ID: aptX (0x0001)
+      4             Vendor Specific Codec ID: Unknown (0x1005)
+      3           Media Codec: SBC (0x00)
+      2       AVDTP: Set Configuration (0x03) Response Accept (0x02) type 0x00 label 7 nosp 0
+      2       AVDTP: Set Configuration (0x03) Command (0x00) type 0x00 label 7 nosp 0
+      2       AVDTP: Open (0x06) Response Accept (0x02) type 0x00 label 8 nosp 0
+      2       AVDTP: Open (0x06) Command (0x00) type 0x00 label 8 nosp 0
+      2             Vendor Specific Codec ID: aptX HD (0x0024)
+      2             Vendor Specific Codec ID: Opus (Google) (0x0001)
+      1       AVDTP: Start (0x07) Response Accept (0x02) type 0x00 label 9 nosp 0
+      1       AVDTP: Start (0x07) Command (0x00) type 0x00 label 9 nosp 0
+      1           Media Codec: MPEG-2,4 AAC (0x02)

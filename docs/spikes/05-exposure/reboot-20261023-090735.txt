@@ -1,0 +1,11 @@
+09:07:37 uptime: up 1 minute — adaptateur B8:27:EB:1A:2E:D6 = hci0
+	Name: pi-qualif
+	Alias: btmux
+	Class: 0x006c0404 (7078916)
+	Powered: yes
+	Discoverable: yes
+	DiscoverableTimeout: 0x00000258 (600)
+	Pairable: yes
+MAC                 NOM                    PAIRED  TRUSTED  CONNECTED_APRES
+BC:93:07:xx:xx:xx   S24 Ultra de <utilisateur>     yes     yes      non reconnecté (120s)
+84:7B:57:xx:xx:xx   MSI                    yes     yes      non reconnecté (120s)

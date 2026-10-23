@@ -1,0 +1,52 @@
+# Erreurs HCI par minute (UTC), boot précédent (journalctl -k -b -1)
+08:44 x136 ; 08:53 x2935 ; total 3071 'Frame reassembly failed' + 35 'tx timeout' ; premiers timeouts 08:56:43 (0x2005 puis Opcode failed -110)
+# Boot courant (journalctl -k -b 0) : 09:11:30-09:12:35 x11 (reconnexion de 2 sources par le Pi, puis 'killing stalled connection' x2) ; 09:22:41 x17 (à la clôture, après arrêt des outils)
+
+# journalctl -k -b -1 (boot precedent, noyau) — erreurs HCI
+2026-10-23T08:44:06+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T08:44:06+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T08:44:06+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T08:44:06+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+...
+2026-10-23T09:02:14+00:00 pi-qualif kernel: Bluetooth: hci0: command 0x2005 tx timeout
+2026-10-23T09:04:43+00:00 pi-qualif kernel: Bluetooth: hci0: command 0x2005 tx timeout
+2026-10-23T09:04:43+00:00 pi-qualif kernel: Bluetooth: hci0: Opcode 0x0c1a failed: -110
+total lignes: 3071  reassembly, 35 timeouts
+
+# journalctl -u bluetooth -b -1 (bluetoothd)
+2026-07-27T20:44:33+00:00 pi-qualif (bluetoothd)[927]: bluetooth.service: ConfigurationDirectory 'bluetooth' already exists but the mode is different. (File system: 755 ConfigurationDirectoryMode: 555
+2026-07-27T20:44:34+00:00 pi-qualif bluetoothd[927]: Bluetooth daemon 5.85
+2026-07-27T20:44:35+00:00 pi-qualif bluetoothd[927]: Bluetooth management interface 1.23 initialized
+2026-07-27T20:44:35+00:00 pi-qualif bluetoothd[927]: Battery Provider Manager created
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/ldac
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSink/aptx_hd
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/aptx_hd
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSink/aptx
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/aptx
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSink/opus_g
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/opus_g
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSink/sbc
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/sbc
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/aptx_ll_1
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/aptx_ll_0
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/aptx_ll_duplex_1
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/aptx_ll_duplex_0
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/faststream
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSource/faststream_duplex
+2026-10-22T14:57:09+00:00 pi-qualif bluetoothd[927]: Endpoint registered: sender=:1.60 path=/MediaEndpoint/A2DPSink/opus_05
+
+# journalctl -k -b 0 — erreurs HCI du boot courant
+2026-10-23T09:11:30+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:11:32+00:00 pi-qualif kernel: Bluetooth: hci0: command tx timeout
+2026-10-23T09:11:32+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:11:36+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:11:36+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:11:45+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:11:45+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:11:45+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:12:35+00:00 pi-qualif kernel: Bluetooth: hci0: link tx timeout
+2026-10-23T09:12:35+00:00 pi-qualif kernel: Bluetooth: hci0: killing stalled connection bc:93:07:xx:xx:xx
+2026-10-23T09:12:35+00:00 pi-qualif kernel: Bluetooth: hci0: killing stalled connection 84:7b:57:xx:xx:xx
+2026-10-23T09:22:41+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:22:41+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
+2026-10-23T09:22:41+00:00 pi-qualif kernel: Bluetooth: hci0: Frame reassembly failed (-84)
