@@ -18,3 +18,5 @@
 | tests/procedures/packaging/deb-deploy/ | procedure | packaging | Build .deb, unite systemd, deploy.sh qualif, smoke | feature | critical |
 | tests/procedures/install/pi-qualif/ | procedure | packaging | Provisionnement du Pi de qualification | feature | |
 | tests/procedures/spikes/05-exposure/ | procedure | bluez | Spike #5 : exposition casque generique en mono-adaptateur (BT interne, provisoire) | feature | hardware |
+| tests/procedures/spikes/07-routing/ | procedure | pipewire | Spike #7 : routage PipeWire mono-adaptateur (BT interne / UB500) | feature | hardware |
+| tests/procedures/spikes/06-hfp-dual-role/ | procedure | bluez | Spike #6 : double role HFP HF+AG (BT interne / UB500) | feature | hardware |
