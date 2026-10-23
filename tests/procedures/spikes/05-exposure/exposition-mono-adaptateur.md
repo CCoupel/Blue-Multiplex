@@ -71,6 +71,7 @@ cette checklist **valide les preuves et le rapport** après la séance. Scripts 
 | 5.8 | « À revalider en bi-adaptateur » : liste des points dépendant du dongle / de la v0.2.0 | |
 | 5.9 | Annexes : captures Windows et sorties SDP jointes ou référencées par chemin | |
 | 5.10 | Cohérence : verdict compatible avec les observations §2–§3 (pas de PASS affiché malgré un échec constaté) | |
+| 5.11 | **Masquage avant commit** (dépôt public) : les preuves copiées sous `docs/spikes/` passent par `spikes/common/mask_evidence.py` ; `python spikes/common/mask_evidence.py --pi-mac <MAC du Pi> --check docs/spikes` retourne 0 et `grep -rE '([0-9A-Fa-f]{2}[:_-]){5}[0-9A-Fa-f]{2}' docs/spikes` ne montre que la MAC du Pi ; aucun appareil tiers du voisinage (scan) ni nom d'appareil personnel dans `pair.jsonl` | |
 
 ## Critères de validation
 
