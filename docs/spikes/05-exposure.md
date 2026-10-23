@@ -4,9 +4,10 @@
 > **Bluetooth interne du Raspberry Pi 3 Model B** (UART, antenne partagée avec le Wi-Fi, Bluetooth 4.2), faute de
 > dongle. Aucune décision d'architecture (v0.2.0) ne doit s'appuyer sur ce verdict seul.
 
-Issue : #5 · Séance : 2026-10-23, 09:08–09:22 UTC (11:08–11:22 heure de Paris ; le Pi est en UTC) ·
+Issue : #5 · Séance : 2026-10-23, 09:08–11:22 heure de Paris (07:08–09:22 UTC), sur **deux démarrages du Pi** (redémarrage à 11:04 Paris) ; le travail utile couvre ≈ 10:30–11:22 Paris (08:30–09:22 UTC) ·
 Outillage : `spikes/05-exposure/` · Procédure QA : `tests/procedures/spikes/05-exposure/exposition-mono-adaptateur.md`.
 Les adresses MAC des appareils de l'utilisateur sont masquées (`xx`) dans ce document et ses annexes.
+**Convention horaire** : les heures du texte sont en heure de Paris (UTC+2) sauf mention « UTC » ; le Pi journalise en UTC, donc `pair.jsonl`, `journal-extraits.txt`, `reboot-*.txt` et `agent.log` sont en UTC (Paris = UTC + 2 h).
 
 ## Objectif
 
@@ -40,7 +41,7 @@ Pilotage par SSH (l'agent exécute côté Pi, l'utilisateur manipule). Détail d
 
 ## Résultats
 
-### Par étape
+### Par étape (heures de Paris)
 
 | Étape | Résultat | Preuve |
 |-------|----------|--------|
@@ -73,7 +74,7 @@ Pilotage par SSH (l'agent exécute côté Pi, l'utilisateur manipule). Détail d
   « Headset » en entrée (pas de double entrée stéréo / mains libres dans cette vue).
 - Téléphone : btmux apparaît avec les profils « Appels » et « Audio ».
 
-## Mesures
+## Mesures (heures de Paris ; annexes en UTC)
 
 | Mesure | Valeur | Source |
 |--------|--------|--------|
@@ -94,22 +95,25 @@ Pilotage par SSH (l'agent exécute côté Pi, l'utilisateur manipule). Détail d
    (0x400000) s'ajoutent à *Audio* (0x200000) et *Rendering* (0x040000) à cause de HFP (AG et HF). `btmgmt class` ne fixe que
    majeur/mineur (4/4 = casque) ; le noyau recalcule les bits de service depuis les UUIDs enregistrés. Cela n'a pas empêché
    Windows ni le téléphone de classer btmux en casque.
-3. **Windows reste en HFP dès que le micro btmux est l'entrée par défaut** : le flux mesuré était en mSBC mono 16 kHz alors
-   que A2DP aptX stéréo était établi. Ce n'est pas un défaut de BlueZ mais un choix de profil de Windows (risque R4 réalisé
-   en partie) ; à traiter par la politique de profils de btmuxd ou par la séparation des rôles entre deux adaptateurs.
+3. **Windows est resté en HFP** : le flux mesuré était en mSBC mono 16 kHz alors que A2DP aptX stéréo était établi, et la
+   capture « Paramètres > Son » montre btmux comme entrée par défaut. C'est **consistant avec** un choix de profil de Windows
+   lié à ce micro par défaut (risque R4 en partie réalisé) ; il s'agit d'une **hypothèse non prouvée** (aucun essai avec un
+   autre micro par défaut, ni avec des rôles restreints). Pistes : politique de profils de btmuxd, ou séparation des rôles
+   entre deux adaptateurs.
 4. **L'autorisation des profils exige un agent** : sans agent, BlueZ rejette les connexions A2DP/HFP initiées par la source.
 5. **Un bond désynchronisé empêche toute connexion** (HCI 0x05) : il faut oublier l'appareil des deux côtés.
 6. **Les sources ne se reconnectent pas seules après un redémarrage** ; une connexion initiée par le Pi fonctionne avec
    des appareils Paired + Trusted.
-7. **Le contrôleur interne du Pi 3 n'est pas fiable sous charge** (cf. Limites).
+7. **Le contrôleur interne du Pi 3 s'est dégradé sous charge**, observé à deux reprises sur une seule séance et un seul Pi, sans répétition contrôlée (cf. Limites).
 
 ## Limites
 
 - **Bluetooth interne du Pi 3 (provisoire)** : HCI sur UART ; **l'audio SCO passe par l'UART** (SCO routé via HCI), antenne
   partagée avec le Wi-Fi actif (Ethernet non branché), Bluetooth 4.2. Des erreurs de trames UART sont apparues dès une seule
-  source (136 en une minute) et se sont aggravées à deux flux jusqu'à un contrôleur muet nécessitant un redémarrage ; elles sont
-  revenues dès la reconnexion simultanée de deux sources, sans audio. Avec un seul flux à la fois (PC + casque), 0 erreur sur
-  ~8 min.
+  source (136 en une minute) et se sont aggravées à deux flux jusqu'à un contrôleur muet nécessitant un redémarrage (**observé
+  une fois**) ; elles sont revenues, de façon moins sévère, à la reconnexion simultanée de deux sources, sans audio (11 erreurs
+  puis `killing stalled connection`). Avec un seul flux à la fois (PC + casque), 0 erreur sur ~8 min. Ces observations viennent
+  d'une seule séance sur un seul Pi : pas de répétition contrôlée, pas de mesure de charge UART.
 - Un seul contrôleur : les mêmes rôles (casque pour les sources, source pour les casques) sont exposés sur `hci0`.
 - **Non testés** : le vrai multiplexage (une source jouant vers le casque en même temps, c'est l'objet de la suite), HFP AG vers
   le casque et micro de retour, deux casques, PC + téléphone + casque simultanés, qualité de la voix (SCO), latence mesurée de
@@ -126,7 +130,8 @@ Pour : le PC pro et le téléphone s'appairent par l'interface standard, sans ri
 A2DP (aptX) et HFP (mSBC) s'établissent ; le Pi appaire, fait confiance et connecte un casque **de lui-même** pendant
 qu'une source est connectée, et le son sortant est entendu « propre, sans coupure » ; les appairages survivent au redémarrage.
 
-Réserves : le contrôleur interne s'effondre dès que deux sources sont actives ; les sources ne se reconnectent pas seules
+Réserves : le contrôleur interne s'est effondré une fois avec deux flux simultanés et s'est dégradé à nouveau à la reconnexion
+de deux sources (observé sur une seule séance, non reproduit de façon contrôlée) ; les sources ne se reconnectent pas seules
 (la reconnexion doit être pilotée par le Pi) ; Windows reste en HFP 16 kHz mono tant que le micro btmux est l'entrée par
 défaut ; le critère « reconnexion automatique » est KO, le critère « captures Windows » est partiel, et le multiplexage
 réel (une source vers le casque) n'a pas été éprouvé. Aucune réserve ne remet en cause la contrainte non négociable côté
@@ -138,7 +143,8 @@ source (rien à installer), mais elles pèsent sur l'expérience.
 - **Classe** : ne pas forcer 0x240404. Garder majeur 4 / mineur 4 (casque) et laisser BlueZ composer les bits de service ;
   la classe 0x006C0404 a été acceptée par Windows et le téléphone.
 - **Filtrage des enregistrements SDP** : pas nécessaire pour l'appairage (réussi sans filtrage). Le problème observé (HFP
-  au lieu d'A2DP) tient au micro par défaut de Windows, pas aux enregistrements SDP. À tester seulement si une source se
+  au lieu d'A2DP) est consistant avec le micro btmux choisi comme entrée par défaut de Windows, plutôt qu'avec les
+  enregistrements SDP (hypothèse non prouvée : aucun essai avec un autre micro par défaut). À tester seulement si une source se
   comporte mal : `bluez5.roles = [ a2dp_sink hfp_hf ]` (fichier prêt, non activé).
 - **Structure** : en bi-adaptateur (v0.2.0), exposer **seulement les rôles « casque » sur l'adaptateur côté sources** (A2DP sink
   + HFP HF) et les rôles « source » sur l'adaptateur côté casques (A2DP source + HFP AG) supprime le sujet du filtrage à la
