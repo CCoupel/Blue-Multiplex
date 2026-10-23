@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+DEVICE = "PipeWire:Interface:Device"
 NODE = "PipeWire:Interface:Node"
 PORT = "PipeWire:Interface:Port"
 LINK = "PipeWire:Interface:Link"
@@ -36,6 +37,17 @@ class Node:
     @property
     def media_class(self) -> str:
         return str(self.props.get("media.class", ""))
+
+
+@dataclass
+class Device:
+    id: int
+    props: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def bluez_path(self) -> str:
+        """Chemin BlueZ du périphérique distant (ex. /org/bluez/hci1/dev_AA_BB_…) pour une carte Bluetooth."""
+        return str(self.props.get("api.bluez5.path", ""))
 
 
 @dataclass
@@ -67,6 +79,7 @@ class Graph:
     """Graphe courant ; `events` reçoit (horodatage perf_counter, genre, objet) à chaque changement."""
 
     def __init__(self) -> None:
+        self.devices: dict[int, Device] = {}
         self.nodes: dict[int, Node] = {}
         self.ports: dict[int, Port] = {}
         self.links: dict[int, Link] = {}
@@ -98,6 +111,7 @@ class Graph:
             await asyncio.gather(self._task, return_exceptions=True)
 
     def reset(self) -> None:
+        self.devices.clear()
         self.nodes.clear()
         self.ports.clear()
         self.links.clear()
@@ -142,7 +156,11 @@ class Graph:
             if info is None:
                 self._remove(oid, now)
                 continue
-            if kind == NODE:
+            if kind == DEVICE:
+                dev = self.devices.setdefault(oid, Device(oid))
+                dev.props.update(info.get("props") or {})
+                self._emit(now, "device", dev)
+            elif kind == NODE:
                 node = self.nodes.setdefault(oid, Node(oid))
                 node.props.update(info.get("props") or {})
                 node.state = info.get("state", node.state)
@@ -165,7 +183,12 @@ class Graph:
 
     def _remove(self, oid: int, now: float) -> None:
         # En mode moniteur, un objet supprimé arrive sans `type` : {"id": N, "info": null}.
-        for kind, table in (("node", self.nodes), ("port", self.ports), ("link", self.links)):
+        for kind, table in (
+            ("device", self.devices),
+            ("node", self.nodes),
+            ("port", self.ports),
+            ("link", self.links),
+        ):
             if oid in table:
                 self._emit(now, f"{kind}-removed", table.pop(oid))
                 return
@@ -187,6 +210,12 @@ class Graph:
     # ---- requêtes ----------------------------------------------------------------------------
     def node_by_name(self, name: str) -> Node | None:
         return next((n for n in self.nodes.values() if n.name == name), None)
+
+    def adapter_of(self, node: Node) -> str:
+        """Adaptateur BlueZ (`hciN`) d'un nœud Bluetooth, déduit de sa carte (`device.id` -> `api.bluez5.path`)."""
+        dev = self.devices.get(int(node.props.get("device.id", -1)))
+        parts = dev.bluez_path.split("/") if dev else []
+        return parts[3] if len(parts) > 3 and parts[3].startswith("hci") else ""
 
     def ports_of(self, node_id: int, direction: str) -> list[Port]:
         found = [

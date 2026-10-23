@@ -11,6 +11,7 @@ Usage :
   router.py --sink bluez_output.XX --a bluez_input.YY --b virt-srcB --cycles 10   (nœuds existants)
   router.py --sink bluez_output.XX --a bluez_input.YY --virtual-b --cycles 10     (B = tonalité virtuelle)
   router.py --sink bluez_output.XX --virtual-sources --cycles 10 --hold 4          (A/B = tonalités 440/660 Hz)
+  --sink/--a/--b acceptent `@hciN[:classe[:texte]]` (nœud d'un adaptateur) : router.py --sink @hci1:Audio/Sink --a @hci0:Stream/Output/Audio --virtual-b
 Provisoire — à revalider avec dongle RTL8761B (spike #7).
 """
 
@@ -30,6 +31,26 @@ from pathlib import Path
 
 from pw_graph import Graph, Node, Port
 from virtual import SINK_NAME, SOURCE_NAMES, Virtual, _run, make_tone
+
+
+def resolve_node(graph: Graph, spec: str) -> Node | None:
+    """Résout un nœud : nom exact, ou `@hciN[:classe[:sous-chaîne]]` = nœud Bluetooth de cet adaptateur.
+
+    Exemples : `@hci1:Audio/Sink` (sink du casque sur hci-hp), `@hci0:Stream/Output/Audio:84_7B` (flux d'un appareil
+    dont le nom contient 84_7B sur hci0). Sans classe : premier nœud de l'adaptateur.
+    """
+    if not spec.startswith("@"):
+        return graph.node_by_name(spec)
+    adapter, _, rest = spec[1:].partition(":")
+    media_class, _, needle = rest.partition(":")
+    candidates = [
+        n
+        for n in graph.nodes.values()
+        if graph.adapter_of(n) == adapter
+        and (not media_class or n.media_class == media_class)
+        and (not needle or needle in n.name)
+    ]
+    return sorted(candidates, key=lambda n: n.name)[0] if candidates else None
 
 
 def pair_ports(src: list[Port], sink: list[Port]) -> list[tuple[Port, Port]]:
@@ -310,7 +331,7 @@ async def main_async(args: argparse.Namespace) -> int:
             sink_name, a_name, b_name = args.sink, args.a, SOURCE_NAMES[1]
         else:
             sink_name, a_name, b_name = args.sink, args.a, args.b
-        nodes = [graph.node_by_name(n) for n in (a_name, b_name, sink_name)]
+        nodes = [resolve_node(graph, n) for n in (a_name, b_name, sink_name)]
         if not all(nodes):
             print(
                 "nœuds introuvables :",
