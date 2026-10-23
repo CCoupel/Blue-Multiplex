@@ -149,13 +149,26 @@ async def link_source(graph: Graph, source: Node, sink: Node, linker: Linker) ->
 
 
 async def switch(
-    graph: Graph, old: Node | None, new: Node, sink: Node, linker: Linker
+    graph: Graph, old: Node | None, new: Node, sink: Node, linker: Linker, order: str = "bbm"
 ) -> dict[str, float]:
-    """Bascule `old` -> `new` vers `sink` ; retourne les délais en millisecondes depuis la commande."""
+    """Bascule `old` -> `new` vers `sink` ; retourne les délais en millisecondes depuis la commande.
+
+    order="bbm" (break-before-make, défaut) : supprime l'ancienne source puis lie la nouvelle (trou, jamais de mixage).
+    order="mbb" (make-before-break) : lie la nouvelle puis supprime l'ancienne (pas de trou, bref mixage des deux).
+    """
     t0 = time.perf_counter()
-    if old is not None:
-        await unlink_source(graph, old, linker)
-    ids = await link_source(graph, new, sink, linker)
+    if order == "bbm":
+        if old is not None:
+            await unlink_source(graph, old, linker)
+        ids = await link_source(graph, new, sink, linker)
+    else:
+        ids = await link_source(graph, new, sink, linker)
+        t_link = time.perf_counter()
+        await graph.wait_for(
+            lambda: all(graph.links[i].state == "active" for i in ids if i in graph.links), 5
+        )
+        if old is not None:
+            await unlink_source(graph, old, linker)
     t_link = time.perf_counter()
     await graph.wait_for(
         lambda: all(graph.links[i].state == "active" for i in ids if i in graph.links), 5

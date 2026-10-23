@@ -63,6 +63,7 @@ perçu à l'oreille vient de la mise en tampon du sink A2DP, qui joue encore la 
 | `pwlink-seq` (2 forks) | 119 ms (103–132) | **71 ms** (93) |
 | `pwlink-par` | 144 ms (136–180) | 0,8 ms (16) |
 | Lua | 65 ms (39–83) | **0 ms** (0) |
+| `pwcli` make-before-break (`skew_probe.py --methods pwcli-mbb`) | −10 ms (chevauchement 7–19 ms) | 0 ms (0) |
 
 L'écart FL/FR de `pwlink-seq` (un `pw-link` par canal, ~70 ms) est audible comme une légère « alternance droite/gauche » au
 changement ; `pwcli` et Lua créent les deux liens dans le même cycle du graphe (0 ms). Correctif : écrire les deux

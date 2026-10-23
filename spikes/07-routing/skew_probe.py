@@ -5,7 +5,7 @@ Pour chaque bascule A<->B (sink et sources virtuels, aucun accès Bluetooth) :
   gap_ms  = (1er lien de la nouvelle source `active`) - (dernier lien de l'ancienne source supprimé)
             > 0 : trou (silence), < 0 : chevauchement (les deux sources audibles en même temps)
   skew_ms = écart entre les liens FL et FR de la nouvelle source (instants où chaque lien devient `active`)
-Méthodes : pwcli, pwlink-seq, pwlink-par (router.py) et lua (clé `btmux.route`, script déjà chargé).
+Méthodes : pwcli, pwlink-seq, pwlink-par (router.py ; suffixe -mbb = make-before-break) et lua (clé `btmux.route`, script déjà chargé).
 Provisoire — à revalider avec dongle RTL8761B (spike #7).
 """
 
@@ -46,7 +46,8 @@ async def run(method: str, cycles: int, tone: Path) -> list[dict[str, float | No
     a, b = (graph.node_by_name(n) for n in SOURCE_NAMES)
     sink = graph.node_by_name(SINK_NAME)
     assert a and b and sink
-    linker = None if method == "lua" else make_linker(method, graph)
+    order = "mbb" if method.endswith("-mbb") else "bbm"
+    linker = None if method == "lua" else make_linker(method.removesuffix("-mbb"), graph)
     if linker:
         await linker.start()
     results = []
@@ -55,7 +56,7 @@ async def run(method: str, cycles: int, tone: Path) -> list[dict[str, float | No
         for target in [a, b] * cycles + [a]:
             mark = len(graph.events)
             if linker:
-                await switch(graph, current, target, sink, linker)
+                await switch(graph, current, target, sink, linker, order)
             else:
                 await _run(
                     "pw-metadata", "-n", "default", "0", "btmux.route",

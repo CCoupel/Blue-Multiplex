@@ -5,6 +5,8 @@
 > Bluetooth réelle** : la topologie « deux sources réelles + casque » s'est effondrée (cf. Incidents). Les temps de bascule
 > sont **indicatifs** ; la mesure opposable réel ↔ réel est renvoyée à T3.2b.
 
+**Décision utilisateur du 2026-10-23 14:24 : plus aucune séance sur le Bluetooth interne** ; tout ce qui reste à démontrer attend les UB500 (voir § « À revalider »).
+
 Issue : #7 · Séance : 2026-10-23, 14:03–14:20 heure de Paris (12:03–12:20 UTC), précédée d'essais hors matériel (≈ 13:00–13:30 Paris) ·
 Prototype : `spikes/07-routing/` (README avec les tableaux détaillés) · Procédure QA : `tests/procedures/spikes/07-routing/routage-mono-adaptateur.md`.
 **Convention horaire** : heures de Paris (UTC+2) sauf mention « UTC » ; les annexes (`docs/spikes/07-routing/`) sont en UTC.
@@ -77,6 +79,9 @@ Le sink quitte `running` (→ `idle`) **65–71 ms** après la suppression des l
 | `pwlink-seq` | 119 ms (103–132) | **71 ms** (93) |
 | `pwlink-par` | 144 ms (136–180) | 0,8 ms (16) |
 | Lua | 65 ms (39–83) | 0 ms (0) |
+| `pwcli` **make-before-break** (lie B puis supprime A) | **−10 ms** (−19 à −7), soit un **chevauchement** de 7 à 19 ms | 0 ms (0) |
+
+(`skew-virtual.json`, `skew-lua.json`, `skew-mbb.json` ; trou positif = silence, négatif = les deux sources sont liées en même temps.)
 
 ### Restart PipeWire + WirePlumber (sans appareil BT ; contrôleur éteint pour Lua)
 
@@ -142,6 +147,20 @@ Bluetooth, restart reconstruit en 1,7 s (sans BT) ; la variante Lua offre le mei
 supérieure. Contre / réserves : la configuration à **deux sources réelles + casque n'a pas pu être jouée** sur le BT interne
 (effondrement UART) ; trou de ~70 ms à chaque bascule ; restart sous BT non testé.
 
+### Break-before-make ou make-before-break ?
+
+| | break-before-make (défaut du prototype) | make-before-break |
+|---|-----------------------------------------|-------------------|
+| Mesuré (pwcli, sink virtuel, 20 bascules) | trou médian **70 ms** (59–93), jamais de mixage | chevauchement médian **10 ms** (7–19), pas de silence |
+| Cadrage | bascule **exclusive**, mixage hors périmètre v1 : conforme | mixage bref des deux sources pendant le chevauchement : écart au cadrage |
+| Risque audible | silence de ~70 ms (noyé dans le tampon A2DP du sink : « aucune coupure » signalé à 14:17) | somme des deux sources pendant ~10 ms (clic possible) |
+| Simplicité | une source `running` à la fois, règle de routage n°3 inchangée | deux sources `running` brièvement : à gérer dans la machine d'états |
+
+**Décision : break-before-make par défaut**, conforme au cadrage (exclusivité) et sans coupure perçue par l'utilisateur ; garder
+`exclusive=True` comme paramètre de `RouteManager.set_route` et prévoir `make_before_break=True` en option, à n'activer que si un
+trou est audible avec le dongle UB500 (à écouter en T3.2b). Limite : ces durées sont mesurées sur le graphe, pas à l'oreille ni
+par capture audio ; l'effet du tampon A2DP du Bose (recouvrement perçu à 14:16) n'est pas chiffré.
+
 ## Squelette proposé pour `src/btmux/pipewire/`
 
 ```
@@ -204,6 +223,6 @@ Fichiers versionnés dans `docs/spikes/07-routing/` (horaires UTC ; MAC des appa
 | `router-virtual-pwlink-seq.json`, `router-virtual-pwlink-par.json`, `router-virtual-pwcli.json` | 24 bascules chacune, sink virtuel |
 | `router-real-ecoute.json`, `router-real-mesure-pwcli.json`, `router-real-mesure-pwlink-seq.json` | bascules vers le Bose réel (écoute n = 10, mesures n = 24) |
 | `lua-virtual.json`, `lua-real.json` | variante Lua (sink virtuel / Bose réel) |
-| `sink-state.json`, `relink-virtual.json`, `skew-virtual.json`, `skew-lua.json` | pause/reprise, restart sans BT, trou et écart FL/FR |
+| `sink-state.json`, `relink-virtual.json`, `skew-virtual.json`, `skew-lua.json`, `skew-mbb.json` | pause/reprise, restart sans BT, trou et écart FL/FR |
 | `uart.log` | journal du garde-fou `watch_uart.sh` pendant la séance |
 | `incident-seance7-1210.txt`, `incident-restart-pipewire-bt.txt` | journaux dmesg des deux incidents |
