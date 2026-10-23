@@ -11,7 +11,7 @@
 ```yaml
 adapters:                              # liste, 1 entrée en v0.1.0 (2 en v0.2.0)
   - mac: "AA:BB:CC:00:00:01"           # obligatoire — identification par MAC, jamais hci0/hci1
-    name: "btmux"                      # obligatoire — nom Bluetooth annoncé (1..248 octets UTF-8)
+    name: "btmux"                      # obligatoire — nom Bluetooth annoncé (1..248 octets UTF-8, sans caractère de contrôle — V12)
     roles: [sources, headsets]         # obligatoire — sous-ensemble non vide de {sources, headsets}
 devices:                               # liste, peut être vide
   - { mac: "...", alias: "pc-pro",    kind: source,  priority: 10 }
@@ -40,6 +40,7 @@ mqtt:                                  # optionnel ; défaut { enabled: false }
 | V8 | `api.listen` = `host:port` (port 1..65535) ; `api.token_file` chemin absolu | `config: api.listen: expected host:port` |
 | V9 | Clés inconnues refusées à tous les niveaux (strict) | `config: unknown key '...' in devices[0]` |
 | V10 | Fichier absent / YAML invalide → code 2, message `config: cannot read '<path>': ...` | |
+| V12 | `adapters[].mac` **uniques** entre adaptateurs ; `adapters[].name` : 1..248 octets UTF-8, **sans caractère de contrôle ni séparateur** (catégories Unicode `Cc Cf Cs Co Cn Zl Zp` refusées) — ajouté le 2026-10-23 (#14, f554edb) | `config: adapters[1].mac: duplicate adapter mac 'AA:..'` · `config: adapters[0].name: required, 1..248 bytes (UTF-8), no control characters` |
 
 Toutes les erreurs sont collectées et affichées (une par ligne) avant de sortir en code 2 — pas d'arrêt à la première.
 

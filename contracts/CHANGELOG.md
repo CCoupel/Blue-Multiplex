@@ -17,3 +17,7 @@
 - **[NEW]** `contracts/http-endpoints.md` — API HTTP `btmuxd` périmètre appairages (`/api/state`, `/api/pairing`, `/api/devices/{mac}/*`, `/api/events` SSE), jeton Bearer, aiohttp.
 - **[NEW]** `contracts/models.md` — modèles `State`, `Adapter`, `Device`, `Discovered`, `PairingWindow`, événements SSE.
 - **[CHANGED]** `contracts/config-schema.md` — `btmuxd --config` ne sort plus immédiatement : démarre le daemon (BlueZ + API) ; nouvelle clé optionnelle `pairing: { default_duration: 60, accept_incoming: true }` ; `api.token_file` généré à l'installation (0600). Rétrocompatible (défauts).
+
+## [20261023-c] — v0.2.0 LOT-1 (#14)
+
+- **[CHANGED]** `contracts/config-schema.md` — règle V12 : `adapters[].mac` uniques, `adapters[].name` sans caractère de contrôle (248 octets UTF-8 conservés). Mineur, non BREAKING : toute configuration valide existante le reste.
