@@ -113,8 +113,5 @@ def test_uv_lock_is_in_sync_with_pyproject():
 def test_ci_script_exports_the_lockfile():
     """scripts/ci.sh (T1.8) produit dist/requirements.lock.txt avec l'export epingle et hashe."""
     text = (REPO_ROOT / "scripts" / "ci.sh").read_text()
-    if "requirements.lock.txt" not in text:
-        pytest.xfail(
-            "T1.8 #17 (dev-backend, Batch 2) non livre : ci.sh n'exporte pas encore le lockfile"
-        )
+    assert "dist/requirements.lock.txt" in text
     assert "--no-dev" in text and "--frozen" in text and "--hashes" in text
