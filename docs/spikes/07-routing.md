@@ -228,6 +228,7 @@ l'état réel et recrée les liens manquants. `running`/`idle` d'un nœud source
 - Trou et écart FL/FR mesurés sur le sink Bluetooth réel ; latence A2DP de bout en bout ; chevauchement perçu (capture audio).
 - Variante Lua avec sources BT réelles ; API native PipeWire si des bindings existent.
 - Ethernet branché et `disable-wifi` posé (antenne partagée).
+- Détection de l'état `running` du nœud du téléphone (S24) : **non testée** (réserve QA ; le critère « running » du tableau n'a été vérifié que sur le virtuel).
 
 ## Annexes
 
