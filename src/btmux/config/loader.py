@@ -59,11 +59,17 @@ def _mac(value: Any, where: str, err: _Errors) -> str | None:
     return None
 
 
-def _adapters(raw: Any, err: _Errors) -> list[Adapter]:
+def _adapters(raw: Any, err: _Errors) -> tuple[list[Adapter], list[list[str]], int]:
+    """Retourne (adaptateurs valides, rôles valides de toutes les entrées, nombre d'entrées).
+
+    Les règles croisées (V3, V4) portent sur toutes les entrées, même si l'une a une erreur de champ
+    (« toutes les erreurs sont collectées »).
+    """
     if not isinstance(raw, list) or not raw:
         err.add("adapters: expected a non-empty list")
-        return []
+        return [], [], 0
     result: list[Adapter] = []
+    all_roles: list[list[str]] = []
     for i, item in enumerate(raw):
         where = f"adapters[{i}]"
         if not isinstance(item, dict):
@@ -78,9 +84,11 @@ def _adapters(raw: Any, err: _Errors) -> list[Adapter]:
         if not name_ok:
             err.add(f"{where}.name: required, 1..{MAX_NAME_BYTES} bytes (UTF-8)")
         roles = _roles(item.get("roles"), where, err)
+        if roles:
+            all_roles.append(roles)
         if mac is not None and name_ok and roles:
             result.append(Adapter.model_validate({"mac": mac, "name": name, "roles": tuple(roles)}))
-    return result
+    return result, all_roles, len(raw)
 
 
 def _roles(raw: Any, where: str, err: _Errors) -> list[str]:
@@ -245,16 +253,15 @@ def _pairing(raw: Any, err: _Errors) -> PairingConfig:
     return PairingConfig(default_duration=duration, accept_incoming=accept)
 
 
-def _role_policy(adapters: list[Adapter], err: _Errors) -> None:
+def _role_policy(all_roles: list[list[str]], count: int, err: _Errors) -> None:
     """V3 (rôle porté par exactement un adaptateur) et V4 (au plus 2 adaptateurs)."""
-    if not adapters:
-        return
-    for role in ROLES:
-        count = sum(1 for a in adapters if role in a.roles)
-        if count != 1:
-            err.add(f"role '{role}' must be provided by exactly one adapter (found {count})")
-    if len(adapters) > MAX_ADAPTERS:
-        err.add(f"at most {MAX_ADAPTERS} adapters are supported (found {len(adapters)})")
+    if count:
+        for role in ROLES:
+            found = sum(1 for roles in all_roles if role in roles)
+            if found != 1:
+                err.add(f"role '{role}' must be provided by exactly one adapter (found {found})")
+    if count > MAX_ADAPTERS:
+        err.add(f"at most {MAX_ADAPTERS} adapters are supported (found {count})")
 
 
 def parse_config(data: Any) -> Config:
@@ -263,13 +270,13 @@ def parse_config(data: Any) -> Config:
     if not isinstance(data, dict):
         raise ConfigError([f"{PREFIX}expected a YAML mapping at top level"])
     err.unknown_keys(data, TOP_KEYS, None)
-    adapters = _adapters(data.get("adapters"), err)
+    adapters, all_roles, adapter_count = _adapters(data.get("adapters"), err)
     devices = _devices(data.get("devices"), err)
     routes = _routes(data.get("default_routes"), devices, err)
     api = _api(data.get("api"), err)
     mqtt = _mqtt(data.get("mqtt"), err)
     pairing = _pairing(data.get("pairing"), err)
-    _role_policy(adapters, err)
+    _role_policy(all_roles, adapter_count, err)
     if err.items:
         raise ConfigError(err.items)
     return Config(

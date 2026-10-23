@@ -184,3 +184,16 @@ def test_example_config_is_bi_adapter(tmp_path: Path) -> None:
     cfg = load_config(root / "config" / "config.example.yaml")
     assert len(cfg.adapters) == 2
     assert cfg.adapter_for_role("sources") is not cfg.adapter_for_role("headsets")
+
+
+def test_v4_and_v3_are_collected_even_with_a_field_error() -> None:
+    """Contrat : toutes les erreurs sont collectées (V4 ne dépend pas de la validité des champs)."""
+    data = _bi()
+    data["adapters"].append({"mac": "bad", "name": "x", "roles": ["sources"]})
+    errors = _errors(data)
+    assert "config: at most 2 adapters are supported (found 3)" in errors
+    assert any("adapters[2].mac" in e for e in errors)
+    # le rôle `sources` est porté par deux entrées (dont celle au MAC invalide) : V3 le voit aussi
+    assert any(
+        "role 'sources' must be provided by exactly one adapter (found 2)" in e for e in errors
+    )
