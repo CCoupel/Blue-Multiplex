@@ -307,7 +307,7 @@ def test_sse_resyncs_with_a_full_state_and_restarted_ids_after_the_restart(swap)
 
 
 def test_restart_pending_scenario_reports_pending_at_start(api_factory):
-    c = api_factory("restart-pending", time_scale=1.0)
+    c = api_factory("restart-pending", time_scale=0.1)
     roles = c.call("GET", "/api/controllers")[1]["roles"]
     assert roles["pending"] is True and roles["restart_expected"] is True
 

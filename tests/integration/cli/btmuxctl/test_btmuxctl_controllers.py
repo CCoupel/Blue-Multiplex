@@ -162,6 +162,6 @@ def test_roles_set_pairing_open_exits_1(make_ctl):
 
 
 def test_roles_set_while_change_pending_exits_1(make_ctl):
-    run, client = make_ctl("restart-pending")
+    run, client = make_ctl("restart-pending", time_scale=0.1)  # coupure à ~30 s réelles
     proc = run("roles", "set", "--sources", HP, "--headsets", SRC)
     assert proc.returncode == 1 and "change_pending" in proc.stderr
