@@ -87,11 +87,6 @@ async def _crawl() -> dict[str, int]:
     return statuses
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="QA B1 : index.html reference style.css/app.js sans /static/ -> 404 sur l'app reelle ; "
-    "passe au vert avec le correctif de dev-frontend (#16) — retirer alors ce xfail",
-)
 def test_index_and_every_referenced_resource_load_without_token():
     statuses = asyncio.run(asyncio.wait_for(_crawl(), timeout=30))
     assert statuses["/"] == 200
