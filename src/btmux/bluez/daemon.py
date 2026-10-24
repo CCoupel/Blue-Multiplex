@@ -10,6 +10,7 @@ import os
 from btmux.bluez.adapters import ADAPTER_IFACE, AdapterRegistry
 from btmux.bluez.agent import AGENT_CAPABILITY, AGENT_PATH, Agent
 from btmux.bluez.bus import Bus, BusSignal, DBusCallError, DBusFastBus
+from btmux.bluez.controllers import RoleManager
 from btmux.bluez.errors import AdaptersNotFound, BluezError
 from btmux.bluez.inventory import Inventory
 from btmux.bluez.pairing import PairingManager
@@ -46,12 +47,16 @@ class BluezService:
         self.inventory = Inventory(config, self.registry)
         self.pairing = PairingManager(self.bus, self.registry, self.inventory, config.pairing)
         self.agent = Agent(self.pairing, self.inventory)
+        self.roles = RoleManager(config, self.inventory, self.pairing, self.on_roles_written)
         self.adapter_wait = adapter_wait_from_env() if adapter_wait is None else adapter_wait
         self.retry_interval = retry_interval
         self.ready = asyncio.Event()
         self._lost = asyncio.Event()
         self._handlers_installed = False
         self._guards: set[asyncio.Future[None]] = set()
+
+    def on_roles_written(self) -> None:
+        """L'état des rôles vient d'être écrit (le redémarrage piloté est géré en R-14)."""
 
     # ----- démarrage / arrêt -----------------------------------------------------------------
     def _on_signal(self, signal: BusSignal) -> None:

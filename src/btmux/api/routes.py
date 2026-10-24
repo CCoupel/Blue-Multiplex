@@ -12,7 +12,13 @@ from btmux import __version__
 from btmux.api.auth import error_response
 from btmux.api.sse import EventHub
 from btmux.bluez.daemon import BluezService
-from btmux.bluez.errors import BluezUnavailable, InvalidMac, InvalidRequest, UnknownDevice
+from btmux.bluez.errors import (
+    BluezUnavailable,
+    ControllerError,
+    InvalidMac,
+    InvalidRequest,
+    UnknownDevice,
+)
 from btmux.config.loader import ALIAS_RE
 
 SERVICE = web.AppKey("service", BluezService)
@@ -22,10 +28,12 @@ MAC_RE = re.compile(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}")
 routes = web.RouteTableDef()
 
 
-def _service(request: web.Request) -> BluezService:
+def _service(request: web.Request, *, write: bool = False) -> BluezService:
     service = request.app[SERVICE]
     if not service.ready.is_set():
         raise BluezUnavailable("BlueZ unavailable (daemon starting or BlueZ stopped)")
+    if write:
+        service.roles.check_writable()  # 409 change_pending entre l'écriture des rôles et l'arrêt
     return service
 
 
@@ -76,7 +84,7 @@ async def discovered(request: web.Request) -> web.Response:
 
 @routes.post("/api/pairing")
 async def open_pairing(request: web.Request) -> web.Response:
-    service = _service(request)
+    service = _service(request, write=True)
     body = await _json_body(request)
     adapter = body.get("adapter")
     if adapter not in ("sources", "headsets"):
@@ -87,41 +95,41 @@ async def open_pairing(request: web.Request) -> web.Response:
 
 @routes.delete("/api/pairing")
 async def close_pairing(request: web.Request) -> web.Response:
-    await _service(request).pairing.close()
+    await _service(request, write=True).pairing.close()
     return web.Response(status=204)
 
 
 @routes.post("/api/devices/{mac}/pair")
 async def pair(request: web.Request) -> web.Response:
-    service, mac = _service(request), _mac(request)
+    service, mac = _service(request, write=True), _mac(request)
     await service.pairing.pair(mac)
     return web.json_response(_device_json(service, mac), status=202)
 
 
 @routes.post("/api/devices/{mac}/connect")
 async def connect(request: web.Request) -> web.Response:
-    service, mac = _service(request), _mac(request)
+    service, mac = _service(request, write=True), _mac(request)
     await service.pairing.connect(mac)
     return web.json_response(_device_json(service, mac), status=202)
 
 
 @routes.post("/api/devices/{mac}/disconnect")
 async def disconnect(request: web.Request) -> web.Response:
-    service, mac = _service(request), _mac(request)
+    service, mac = _service(request, write=True), _mac(request)
     await service.pairing.disconnect(mac)
     return web.json_response(_device_json(service, mac), status=202)
 
 
 @routes.post("/api/devices/{mac}/forget")
 async def forget(request: web.Request) -> web.Response:
-    service, mac = _service(request), _mac(request)
+    service, mac = _service(request, write=True), _mac(request)
     await service.pairing.forget(mac)
     return web.Response(status=204)
 
 
 @routes.patch("/api/devices/{mac}")
 async def patch_device(request: web.Request) -> web.Response:
-    service, mac = _service(request), _mac(request)
+    service, mac = _service(request, write=True), _mac(request)
     body = await _json_body(request)
     unknown = set(body) - {"trusted", "alias"}
     if unknown or not body:
@@ -137,6 +145,28 @@ async def patch_device(request: web.Request) -> web.Response:
     if "alias" in body:
         service.inventory.set_alias(mac, alias)
     return web.json_response(_device_json(service, mac))
+
+
+@routes.get("/api/controllers")
+async def controllers(request: web.Request) -> web.Response:
+    inventory = _service(request).inventory
+    return web.json_response(
+        {
+            "controllers": [c.to_dict() for c in inventory.controllers()],
+            "roles": inventory.roles().to_dict(),
+        }
+    )
+
+
+@routes.put("/api/controllers/roles")
+async def put_roles(request: web.Request) -> web.Response:
+    service = _service(request, write=True)
+    try:
+        body: Any = json.loads(await request.read() or b"null")
+    except ValueError as exc:
+        raise ControllerError("invalid_body", "body is not valid JSON") from exc
+    status, roles = await service.roles.set_roles(body)
+    return web.json_response(roles.to_dict(), status=status)
 
 
 @routes.get("/api/events")

@@ -48,8 +48,13 @@ def load_token(path: Path) -> str | None:
     return token
 
 
-def error_response(status: int, code: str, message: str) -> web.Response:
-    return web.json_response({"error": code, "message": message}, status=status)
+def error_response(
+    status: int, code: str, message: str, details: list[dict[str, object]] | None = None
+) -> web.Response:
+    body: dict[str, object] = {"error": code, "message": message}
+    if details is not None:
+        body["details"] = details
+    return web.json_response(body, status=status)
 
 
 def is_public(path: str) -> bool:
@@ -84,7 +89,7 @@ async def error_middleware(request: web.Request, handler: Handler) -> web.Stream
     try:
         return await handler(request)
     except BluezError as exc:
-        return error_response(exc.status, exc.code, str(exc))
+        return error_response(exc.status, exc.code, str(exc), getattr(exc, "details", None))
     except web.HTTPException as exc:
         if exc.status < 400:
             raise

@@ -10,6 +10,14 @@ class BluezError(Exception):
     status = 502
 
 
+class ApiError(BluezError):
+    """Erreur typée avec `details` optionnel (champ du corps d'erreur, contracts/http-endpoints.md)."""
+
+    def __init__(self, message: str, details: list[dict[str, object]] | None = None) -> None:
+        super().__init__(message)
+        self.details = details
+
+
 class BluezUnavailable(BluezError):
     """BlueZ / bus système injoignable, adaptateur absent — HTTP 503."""
 
@@ -50,6 +58,28 @@ class RoleUnassigned(BluezError):
 
     code = "role_unassigned"
     status = 409
+
+
+class ChangePending(ApiError):
+    """Changement de rôles accepté, redémarrage imminent : toute écriture est refusée — HTTP 409."""
+
+    code = "change_pending"
+    status = 409
+
+
+class DevicesConnected(ApiError):
+    """Des appareils sont connectés sur les rôles modifiés (`confirm:true` pour les déconnecter) — HTTP 409."""
+
+    code = "devices_connected"
+    status = 409
+
+
+class ControllerError(InvalidRequest):
+    """Validation de `PUT /api/controllers/roles` — HTTP 400, `code` propre à chaque cas."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class OperationInProgress(BluezError):

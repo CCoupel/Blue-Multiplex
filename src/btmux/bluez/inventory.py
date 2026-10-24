@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from btmux import __version__
-from btmux.bluez.adapters import ADAPTER_IFACE, AdapterRegistry
+from btmux.bluez.adapters import ADAPTER_IFACE, AdapterInfo, AdapterRegistry
 from btmux.bluez.bus import BusSignal, ManagedObjects, Props
 from btmux.bluez.models import (
     AdapterModel,
@@ -75,6 +75,7 @@ class Inventory:
     ) -> None:
         self._probe = probe
         self._roles_pending = False
+        self._pending_assignment: dict[str, str | None] = {}
         self._last_controllers: list[dict[str, Any]] = []
         self._config = config
         self._registry = registry
@@ -192,9 +193,11 @@ class Inventory:
             self._last_controllers = current
             self.emit("controllers", current)
 
-    def mark_roles_pending(self) -> None:
+    def mark_roles_pending(self, sources: str | None, headsets: str | None) -> None:
         """Après l'écriture de l'état : `roles {pending, restart_expected}` (dernier événement avant la coupure)."""
         self._roles_pending = True
+        self._pending_assignment = {"sources": sources, "headsets": headsets}
+        self._emit_controllers()
         self.emit("roles", self.roles().to_dict())
 
     @property
@@ -370,6 +373,12 @@ class Inventory:
         assigned = self._registry.paths()
         return sorted(p for p in self._adapters if p not in assigned)
 
+    def _controller_role(self, mac: str, info: AdapterInfo | None) -> RoleName | None:
+        roles: tuple[RoleName, ...] = ("sources", "headsets")
+        if self._roles_pending:  # affectation écrite, pas encore appliquée par le redémarrage
+            return next((r for r in roles if self._pending_assignment.get(r) == mac), None)
+        return next((r for r in roles if info and r in info.roles), None)
+
     def controllers(self) -> list[ControllerModel]:
         """Tous les contrôleurs présents + les contrôleurs affectés mais absents (`present:false`)."""
         connected: dict[str, int] = {}
@@ -389,7 +398,7 @@ class Inventory:
                     name=str(props.get("Alias") or (info.name if info else hci)),
                     bus=bus,
                     usb_id=usb_id,
-                    role=info.roles[0] if info and info.roles else None,  # type: ignore[arg-type]
+                    role=self._controller_role(str(props.get("Address", "")).upper(), info),
                     powered=bool(props.get("Powered")),
                     pairable=bool(props.get("Pairable")),
                     discoverable=bool(props.get("Discoverable")),
@@ -406,7 +415,7 @@ class Inventory:
                         name=info.name,
                         bus="unknown",
                         usb_id=None,
-                        role=info.roles[0] if info.roles else None,  # type: ignore[arg-type]
+                        role=self._controller_role(info.mac, info),
                         powered=False,
                         pairable=False,
                         discoverable=False,
@@ -418,6 +427,8 @@ class Inventory:
 
     def roles(self) -> RolesModel:
         def mac_of(role: str) -> str | None:
+            if self._roles_pending:
+                return self._pending_assignment.get(role)
             return next((i.mac for i in self._registry.infos if role in i.roles), None)
 
         return RolesModel(

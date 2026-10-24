@@ -94,6 +94,10 @@ class PairingManager:
             remaining_s=remaining,
         )
 
+    @property
+    def window_open(self) -> bool:
+        return self._window is not None
+
     def view(self) -> PairingWindowModel:
         """Fenêtre ouverte, sinon objet explicite `open: false` (jamais `None`)."""
         opened = self.window()
