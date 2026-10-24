@@ -10,7 +10,12 @@ from btmux.config.models import (
     MqttConfig,
     PairingConfig,
 )
-from btmux.config.state import load_effective, load_state, write_state_atomic
+from btmux.config.state import (
+    load_effective,
+    load_state,
+    write_identity_request,
+    write_state_atomic,
+)
 
 __all__ = [
     "Adapter",
@@ -25,5 +30,6 @@ __all__ = [
     "load_state",
     "parse_adapter_list",
     "parse_config",
+    "write_identity_request",
     "write_state_atomic",
 ]

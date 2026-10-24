@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import os
+from datetime import UTC, datetime
 
 from btmux.bluez.adapters import ADAPTER_IFACE, AdapterRegistry
 from btmux.bluez.agent import AGENT_CAPABILITY, AGENT_PATH, Agent
@@ -14,7 +15,7 @@ from btmux.bluez.controllers import RoleManager
 from btmux.bluez.errors import AdaptersNotFound, BluezError
 from btmux.bluez.inventory import Inventory
 from btmux.bluez.pairing import PairingManager
-from btmux.config import Config
+from btmux.config import Config, write_identity_request
 from btmux.log import kv
 
 log = logging.getLogger("btmux.bluez")
@@ -104,17 +105,35 @@ class BluezService:
             and any(signal.data[p] for p in opened)
         ):
             return
-        task = asyncio.ensure_future(self._close_controller(signal.path))
+        added = signal.kind == "interfaces_added"
+        task = asyncio.ensure_future(self._close_controller(signal.path, request_identity=added))
         self._guards.add(task)
         task.add_done_callback(self._guards.discard)
 
-    async def _close_controller(self, path: str) -> None:
-        assigned = self.registry.info_for_path(path) is not None
+    async def _close_controller(self, path: str, *, request_identity: bool = False) -> None:
+        info = self.registry.info_for_path(path)
+        assigned = info is not None
         props = (("Powered", True),) if assigned else ()
         for prop, value in (*props, ("Pairable", False), ("Discoverable", False)):
             with contextlib.suppress(DBusCallError, BluezError):
                 await self.bus.set_property(path, ADAPTER_IFACE, prop, "b", value)
         log.info(kv("controller_closed", path=path, assigned=assigned))
+        if (
+            request_identity and info is not None
+        ):  # seulement à l'apparition d'un contrôleur affecté
+            await self._request_identity(info.hci or path, info.mac)
+
+    async def _request_identity(self, hci: str, mac: str) -> None:
+        """Le daemon n'est pas root : il demande à `btmux-adapters-identity.path` de rejouer l'identité
+        (alias + classe). Jamais fatal : l'échec est journalisé, l'identité sera rétablie au prochain démarrage."""
+        target = self.config.identity_request_path
+        when = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        try:
+            await asyncio.to_thread(write_identity_request, target, when, hci, mac)
+        except OSError as exc:
+            log.warning(kv("identity_request_failed", hci=hci, mac=mac, error=exc.strerror or exc))
+            return
+        log.info(kv("identity_requested", hci=hci, mac=mac))
 
     async def _start_once(self) -> list[str]:
         """Connexion + inventaire + agent ; retourne les MAC d'adaptateurs absents (liste vide = OK)."""

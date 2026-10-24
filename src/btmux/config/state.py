@@ -55,21 +55,17 @@ def load_effective(config_path: str | Path, state_path: str | Path = DEFAULT_STA
     return config.model_copy(update=update)
 
 
-def write_state_atomic(path: str | Path, adapters: Sequence[Adapter]) -> None:
-    """Écrit le fichier d'état de façon atomique (temporaire voisin, fsync, rename), mode 0640."""
+def write_text_atomic(path: str | Path, body: str, mode: int = 0o640) -> None:
+    """Écrit `body` de façon atomique (temporaire voisin, fsync, rename, fsync du répertoire)."""
     file = Path(path)
-    document = {
-        "adapters": [{"mac": a.mac, "name": a.name, "roles": list(a.roles)} for a in adapters]
-    }
-    body = HEADER + yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
     file.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".adapters.", suffix=".tmp", dir=file.parent)
+    fd, tmp = tempfile.mkstemp(prefix=f".{file.stem}.", suffix=".tmp", dir=file.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(body)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(tmp, 0o640)
+        os.chmod(tmp, mode)
         os.replace(tmp, file)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -79,3 +75,16 @@ def write_state_atomic(path: str | Path, adapters: Sequence[Adapter]) -> None:
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
+
+
+def write_state_atomic(path: str | Path, adapters: Sequence[Adapter]) -> None:
+    """Écrit le fichier d'état de façon atomique (temporaire voisin, fsync, rename), mode 0640."""
+    document = {
+        "adapters": [{"mac": a.mac, "name": a.name, "roles": list(a.roles)} for a in adapters]
+    }
+    write_text_atomic(path, HEADER + yaml.safe_dump(document, sort_keys=False, allow_unicode=True))
+
+
+def write_identity_request(path: str | Path, when: str, hci: str, mac: str) -> None:
+    """Requête d'identité : une ligne `horodatage<TAB>hci<TAB>MAC` (déclenche l'unité `.path`)."""
+    write_text_atomic(path, f"{when}\t{hci}\t{mac}\n")

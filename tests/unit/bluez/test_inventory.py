@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 
 from fakes import (
@@ -329,3 +330,65 @@ def test_probe_controller_reads_usb_ids_and_uart(tmp_path: Path) -> None:
     assert probe_controller("hci0", root) == ("uart", None)
     assert probe_controller("hci2", root) == ("unknown", None)
     assert probe_controller("hci9", root) == ("unknown", None)
+
+
+# ----- B-2 : requête d'identité au hotplug d'un contrôleur affecté -----
+def _identity_service(config, bus, tmp_path):  # type: ignore[no-untyped-def]
+    cfg = config.model_copy(update={"state_path": tmp_path / "adapters.yaml"})
+    return BluezService(
+        cfg, bus, adapter_wait=0.3, retry_interval=0.02
+    ), tmp_path / "identity.request"
+
+
+async def test_assigned_controller_hotplug_writes_identity_request_once(
+    config, bus, tmp_path, caplog
+) -> None:
+    caplog.set_level(logging.INFO)
+    service, request = _identity_service(config, bus, tmp_path)
+    await started(service)
+    assert not request.exists()  # pas de requête au chargement initial
+    bus.emit(BusSignal("interfaces_removed", SRC_PATH, None, ["org.bluez.Adapter1"]))
+    ifaces = adapter_obj("AA:BB:CC:00:00:01")
+    bus.objects[SRC_PATH] = ifaces
+    bus.emit(BusSignal("interfaces_added", SRC_PATH, None, ifaces))
+    await asyncio.sleep(0.1)
+    when, hci, mac = request.read_text().rstrip("\n").split("\t")
+    assert (hci, mac) == ("hci1", "AA:BB:CC:00:00:01") and when.endswith("Z")
+    assert oct(request.stat().st_mode & 0o777) == "0o640"
+    assert "event=identity_requested hci=hci1 mac=AA:BB:CC:00:00:01" in caplog.text
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
+    # PropertiesChanged (alias/classe posés par la passe) : aucune nouvelle requête
+    request.unlink()
+    bus.change(SRC_PATH, "org.bluez.Adapter1", Alias="btmux", Class=0x6C0404)
+    await asyncio.sleep(0.1)
+    assert not request.exists()
+
+
+async def test_unassigned_controller_hotplug_writes_no_identity_request(
+    config, bus, tmp_path
+) -> None:
+    service, request = _identity_service(config, bus, tmp_path)
+    await started(service)
+    ifaces = adapter_obj("AA:BB:CC:00:00:09", "raspberrypi", Pairable=True)
+    bus.objects["/org/bluez/hci5"] = ifaces
+    bus.emit(BusSignal("interfaces_added", "/org/bluez/hci5", None, ifaces))
+    await asyncio.sleep(0.1)
+    assert not request.exists()
+    assert ("/org/bluez/hci5", "org.bluez.Adapter1", "Pairable", False) in bus.sets  # fermé
+
+
+async def test_identity_request_write_failure_is_logged_not_fatal(
+    config, bus, tmp_path, caplog
+) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    cfg = config.model_copy(update={"state_path": blocker / "adapters.yaml"})
+    service = BluezService(cfg, bus, adapter_wait=0.3, retry_interval=0.02)
+    await started(service)
+    ifaces = adapter_obj("AA:BB:CC:00:00:01")
+    bus.emit(BusSignal("interfaces_removed", SRC_PATH, None, ["org.bluez.Adapter1"]))
+    bus.emit(BusSignal("interfaces_added", SRC_PATH, None, ifaces))
+    await asyncio.sleep(0.1)
+    assert "event=identity_request_failed" in caplog.text
+    assert ("/org/bluez/hci1", "org.bluez.Adapter1", "Pairable", False) in bus.sets
+    assert service.inventory.state()["controllers"]
