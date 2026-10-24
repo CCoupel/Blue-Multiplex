@@ -28,3 +28,5 @@
 | tests/integration/api/mock/ | integration | api | Fonctions propres au mock API (pilotage, statique, scenarios) (#16) | feature | |
 | tests/integration/api/auth/ | integration | api | Authentification Bearer, routes protegees, jeton (#21) | feature | critical |
 | tests/integration/api/pairing/ | integration | api | API appairages : fenetre, decouverte, pair/connect/forget, erreurs, SSE (#20 #21) | feature | |
+| tests/hardware/bluez/pairing/ | hardware | bluez | Appairages sur le Pi reel : fenetre sources, refus hors fenetre, casque initie par le Pi, forget (#20) | feature | hardware |
+| tests/procedures/ui/pairing/ | procedure | webui | Web UI appairages : jeton, fenetre, sources, casques, erreurs, SSE, responsive (#16 #21) | feature | critical |
