@@ -49,3 +49,8 @@
 - **[NEW]** `contracts/http-endpoints.md` — interface `btmuxctl controllers` et `btmuxctl roles set --sources <MAC|none> --headsets <MAC|none> [--confirm]`.
 - **[CHANGED]** `contracts/models.md` — `Controller.name` = alias BlueZ courant ; valeurs d'un contrôleur `present:false` (`hci:null`, `bus:"unknown"`…) ; source sysfs de `bus`/`usb_id` ; compteur SSE : `state` initial à l'id courant (0 au démarrage), premier événement réel à 1 ; forme des erreurs avec `details`.
 - **[CHANGED]** `contracts/config-schema.md` — fichier d'état invalide = repli config + journal `state_invalid` ; `btmuxd --check-config` affiche la provenance ; `python -m btmux.config adapters --state` documenté (liste effective pour `btmux-adapters.sh`).
+
+## [20261024-f] — précisions #23 post-revue (validées par l'utilisateur le 2026-10-24) — non BREAKING
+
+- **[CHANGED]** `contracts/http-endpoints.md` — `PUT /api/controllers/roles` : le no-op (200) est évalué avant tout 409 d'état (prioritaire sur `pairing_open`) ; ordre de contrôle 400 → no-op → `change_pending` → `pairing_open` → `devices_connected` ; **[NEW]** code 500 `state_write_failed` (écriture du fichier d'état impossible : aucune déconnexion, `pending:false`, `Roles` inchangé).
+- **[CHANGED]** `contracts/config-schema.md` — séquence D3 : l'écriture de l'état précède la fermeture de la fenêtre et les déconnexions (échec → 500 sans effet) ; délai de repli code 4 porté de **20 s à 30 s**.

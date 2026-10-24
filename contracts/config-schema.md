@@ -122,13 +122,14 @@ Règles :
   (reste propriété de l'administrateur, lecture seule pour le daemon — `ProtectSystem=strict`).
 - `name` d'un contrôleur nouvellement affecté : repris de `config.yaml` si la MAC y figure, sinon défaut `btmux` (sources) / `btmux-hp` (headsets).
 - **Application par redémarrage piloté du service (D3 b)** — séquence :
-  1. `PUT` validé → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → **écriture atomique** de l'état → réponse 202 + événement
+  1. `PUT` validé (no-op → 200 sans suite) → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, rien n'est
+     déconnecté, `pending` reste faux) → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → réponse 202 + événement
      `roles {pending:true, restart_expected:true}` ; toute écriture ultérieure répond 409 `change_pending`.
   2. `btmux-adapters.path` (`PathChanged=/var/lib/btmux/adapters.yaml`) déclenche **`btmux-adapters-reload.service`** (root, oneshot) :
      `btmux-adapters.sh --state … --config …` (alias, classe, fermeture de **tous** les contrôleurs sans rôle, ≈ 4 s) puis
      `ExecStartPost=systemctl restart --no-block btmuxd.service` → arrêt propre (SIGTERM, code 0) et relance immédiate (pas de `RestartSec`,
      ce n'est pas un échec ; `StartLimitBurst` inchangé).
-  3. **Repli** : si le daemon n'a pas reçu SIGTERM 20 s après l'écriture (unité path absente/inactive), il sort en code **4**
+  3. **Repli** : si le daemon n'a pas reçu SIGTERM **30 s** après l'écriture (unité path absente/inactive), il sort en code **4**
      (`RestartForceExitStatus=4` ; `RestartSec=30` s'applique alors — journal `restart_fallback`).
   Coupure attendue de l'API : ≈ 10–15 s (arrêt ≤ 2 s + démarrage ≈ 5–10 s, mesuré 9,5 s en QUALIF 0.2.0.4) ; les clients SSE
   reconnectent et reçoivent un `state` complet (`roles.pending:false`, `source:"state"`). `btmux-adapters.service` (démarrage) est inchangé.
