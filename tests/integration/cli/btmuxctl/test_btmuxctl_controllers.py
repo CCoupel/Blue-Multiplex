@@ -24,6 +24,7 @@ SRC = "AA:BB:CC:00:00:01"
 HP = "AA:BB:CC:00:00:02"
 UART = "B8:27:EB:1A:2E:D6"
 PC_PRO = "11:22:33:44:55:01"
+XM5 = "11:22:33:44:55:03"
 
 
 @pytest.fixture
@@ -80,7 +81,9 @@ def test_roles_set_swaps_the_roles(make_ctl):
     run, client = make_ctl()
     proc = run("roles", "set", "--sources", HP, "--headsets", SRC)
     assert proc.returncode == 0, proc.stderr
+    printed = json.loads(proc.stdout)  # contrat : JSON de la réponse (Roles)
     roles = _roles(client)
+    assert printed["pending"] is True and printed["sources"] == HP
     assert (roles["sources"], roles["headsets"]) == (HP, SRC)
     assert roles["pending"] is True and roles["restart_expected"] is True
 
@@ -101,7 +104,9 @@ def test_roles_set_uart_controller_is_accepted(make_ctl):
 
 def test_roles_set_unchanged_assignment_exits_zero(make_ctl):
     run, client = make_ctl()
-    assert run("roles", "set", "--sources", SRC, "--headsets", HP).returncode == 0
+    proc = run("roles", "set", "--sources", SRC, "--headsets", HP)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["pending"] is False  # G1 : 200 no-op
     assert _roles(client)["pending"] is False
 
 
@@ -133,9 +138,9 @@ def test_roles_set_409_devices_connected_exits_1_and_prints_details(make_ctl):
     run, client = make_ctl("default", time_scale=20.0)
     proc = run("roles", "set", "--sources", HP, "--headsets", SRC)
     assert proc.returncode == 1
-    text = proc.stdout + proc.stderr
-    assert "devices_connected" in text or "connect" in text.lower()
-    assert PC_PRO in text  # `details` : la liste des appareils connectés est affichée
+    assert proc.stderr.startswith("error:") or "devices_connected" in proc.stderr
+    assert PC_PRO in proc.stderr  # G2 : `details`, une ligne par appareil, sur stderr
+    assert sum(PC_PRO in line or XM5 in line for line in proc.stderr.splitlines()) >= 2
     assert _roles(client)["pending"] is False
 
 
@@ -153,10 +158,10 @@ def test_roles_set_pairing_open_exits_1(make_ctl):
     run, client = make_ctl()
     client.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
     proc = run("roles", "set", "--sources", HP, "--headsets", SRC)
-    assert proc.returncode == 1 and "pairing_open" in proc.stdout + proc.stderr
+    assert proc.returncode == 1 and "pairing_open" in proc.stderr
 
 
 def test_roles_set_while_change_pending_exits_1(make_ctl):
     run, client = make_ctl("restart-pending")
     proc = run("roles", "set", "--sources", HP, "--headsets", SRC)
-    assert proc.returncode == 1 and "change_pending" in proc.stdout + proc.stderr
+    assert proc.returncode == 1 and "change_pending" in proc.stderr
