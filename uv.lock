@@ -263,7 +263,7 @@ wheels = [
 
 [[package]]
 name = "btmux"
-version = "0.2.0.3"
+version = "0.2.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
