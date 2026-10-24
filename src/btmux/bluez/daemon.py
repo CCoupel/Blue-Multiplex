@@ -76,10 +76,10 @@ class BluezService:
 
     async def _start_connected(self) -> list[str]:
         objects = await self.bus.get_managed_objects()
-        missing = self.registry.update(objects)
-        if missing:
-            await self.bus.close()
-            return missing
+        for mac in self.registry.update(
+            objects
+        ):  # tolérant (#23) : rôle non affecté, pas de code 3
+            log.warning(kv("adapter_missing", mac=mac))
         self.inventory.load(objects)
         await self.bus.export_agent(AGENT_PATH, self.agent)
         await self.bus.call(
@@ -96,14 +96,15 @@ class BluezService:
         # BlueZ passe Pairable à vrai dès qu'un agent est enregistré : l'état sûr (alimenté, appairage et
         # découverte fermés) doit donc être posé APRÈS l'enregistrement, et vérifié.
         await self._close_adapters()
-        log.info(kv("bluez_ready", adapters=len(self.registry.infos)))
+        log.info(kv("bluez_ready", adapters=sum(i.present for i in self.registry.infos)))
         return []
 
     async def _close_adapters(self) -> None:
         """Alimente les adaptateurs, ferme appairage et découverte, puis le vérifie (3 essais)."""
         for _ in range(3):
             for info in self.registry.infos:
-                assert info.path is not None
+                if info.path is None:
+                    continue
                 for prop, value in (
                     ("Powered", True),
                     ("Pairable", False),

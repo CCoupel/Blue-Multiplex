@@ -12,7 +12,7 @@ from btmux import daemon
 from btmux.bluez import agent_dbus
 from btmux.bluez.bus import BusSignal, DBusCallError, DBusFastBus, unwrap
 from btmux.bluez.daemon import BluezService, adapter_wait_from_env
-from btmux.bluez.errors import AdaptersNotFound, AgentRejected, BluezUnavailable
+from btmux.bluez.errors import AdaptersNotFound, AgentRejected, BluezUnavailable, RoleUnassigned
 from btmux.cli import btmuxd
 from btmux.config import Config
 
@@ -42,12 +42,37 @@ async def test_start_registers_agent_and_closes_adapters(service: BluezService, 
     assert service.inventory.state()["pairing"]["open"] is False  # fenêtre fermée à l'arrêt
 
 
-async def test_missing_adapter_raises_after_wait(config: Config):
+async def test_missing_adapter_starts_with_role_unassigned(
+    config: Config, caplog: pytest.LogCaptureFixture
+):
+    """#23 : MAC absente = rôle non affecté (journal `adapter_missing`), plus de code 3."""
     bus = FakeBus({SRC_PATH: adapter_obj("AA:BB:CC:00:00:01")})  # il manque le second
     service = BluezService(config, bus, adapter_wait=0.2, retry_interval=0.02)
-    with pytest.raises(AdaptersNotFound) as info:
-        await service.run(asyncio.Event())
-    assert info.value.missing == ["AA:BB:CC:00:00:02"]
+    stop = asyncio.Event()
+    task = asyncio.create_task(service.run(stop))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    assert "event=adapter_missing mac=AA:BB:CC:00:00:02" in caplog.text
+    absent = next(i for i in service.registry.infos if i.mac == "AA:BB:CC:00:00:02")
+    assert not absent.present and service.registry.path_for("headsets") is None
+    with pytest.raises(RoleUnassigned):
+        await service.pairing.open("headsets", 30)
+    with pytest.raises(RoleUnassigned):
+        await service.pairing.pair("11:22:33:44:55:02")
+    await service.pairing.open("sources", 30)  # l'autre rôle reste utilisable
+    stop.set()
+    assert await task == 0
+
+
+async def test_no_adapter_at_all_starts_and_every_role_is_unassigned(config: Config):
+    service = BluezService(config, FakeBus({}), adapter_wait=0.2, retry_interval=0.02)
+    stop = asyncio.Event()
+    task = asyncio.create_task(service.run(stop))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    for role in ("sources", "headsets"):
+        with pytest.raises(RoleUnassigned):
+            await service.pairing.open(role, 30)
+    stop.set()
+    assert await task == 0
 
 
 async def test_adapter_appearing_during_wait_is_accepted(config: Config):
@@ -126,8 +151,10 @@ async def test_serve_prints_started_and_exit_codes(
     assert await task == 0
     out = capsys.readouterr().out
     assert "started" in out and "stopped" in out and entered == ["in", "out"]
-    # adaptateur absent : code 3 et message
-    bad = BluezService(config, FakeBus({}), adapter_wait=0.1, retry_interval=0.02)
+    # BlueZ injoignable : code 3 et message (une MAC absente n'est plus fatale, #23)
+    broken = FakeBus({})
+    broken.connect_failures = 10**6
+    bad = BluezService(config, broken, adapter_wait=0.1, retry_interval=0.02)
     assert await daemon.serve(asyncio.Event(), config, service=bad) == 3
     assert "adapter not found" in capsys.readouterr().err
 
@@ -325,3 +352,16 @@ async def test_agent_dbus_interface_maps_rejection(service: BluezService, bus: F
     raw("Cancel")()
     with pytest.raises(AgentRejected):
         await service.agent.request_authorization("/org/bluez/hci0/dev_x")
+
+
+async def test_connect_of_configured_device_on_unassigned_role_is_409(config: Config):
+    bus = FakeBus({SRC_PATH: adapter_obj("AA:BB:CC:00:00:01")})
+    service = BluezService(config, bus, adapter_wait=0.2, retry_interval=0.02)
+    stop = asyncio.Event()
+    task = asyncio.create_task(service.run(stop))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    headset = next(d.mac for d in config.devices if d.kind == "headset")
+    with pytest.raises(RoleUnassigned):
+        await service.pairing.connect(headset)
+    stop.set()
+    await task

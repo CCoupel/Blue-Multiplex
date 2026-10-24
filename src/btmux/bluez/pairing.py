@@ -20,6 +20,7 @@ from btmux.bluez.errors import (
     InvalidRequest,
     NotDiscovered,
     OperationInProgress,
+    RoleUnassigned,
     UnknownDevice,
     WindowClosed,
     WindowOpen,
@@ -111,7 +112,7 @@ class PairingManager:
     def _adapter_path(self, role: str) -> str:
         path = self._registry.path_for(role)
         if path is None:
-            raise BluezUnavailable(f"no adapter for role '{role}'")
+            raise RoleUnassigned(f"no controller assigned to role '{role}'")
         return path
 
     async def _set(self, path: str, prop: str, signature: str, value: object) -> None:
@@ -249,6 +250,9 @@ class PairingManager:
     def _path(self, mac: str, role: str | None = None) -> str:
         path = self._inventory.device_path(mac, role)
         if path is None:
+            role = self._inventory.configured_role(mac)
+            if role is not None:
+                self._adapter_path(role)  # 409 role_unassigned si le rôle n'a pas de contrôleur
             raise UnknownDevice(f"device {mac.upper()} unknown")
         return path
 
@@ -258,6 +262,7 @@ class PairingManager:
         L'opération tourne dans une tâche de fond protégée : si le client HTTP se déconnecte, BlueZ
         termine l'appairage et l'agent reste autorisé jusqu'à la fin (pas d'état incohérent).
         """
+        self._adapter_path("headsets")  # 409 role_unassigned avant tout
         if self._window is None or self._window.role != "headsets":
             raise WindowClosed("a 'headsets' pairing window must be open")
         path = self._inventory.device_path(mac, "headsets")

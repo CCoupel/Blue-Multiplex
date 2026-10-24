@@ -45,6 +45,13 @@ class NotDiscovered(NotFound):
     code = "not_discovered"
 
 
+class RoleUnassigned(BluezError):
+    """Le rôle visé n'a pas de contrôleur affecté ou présent (#23) — HTTP 409."""
+
+    code = "role_unassigned"
+    status = 409
+
+
 class OperationInProgress(BluezError):
     """Une opération est déjà en cours sur cet appareil — HTTP 409."""
 

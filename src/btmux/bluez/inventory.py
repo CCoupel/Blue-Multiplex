@@ -358,6 +358,13 @@ class Inventory:
             found.sort(key=lambda p: AdapterRegistry.adapter_of_device(p) != wanted)
         return found[0] if found else None
 
+    def configured_role(self, mac: str) -> str | None:
+        """Rôle (`sources`/`headsets`) d'un appareil connu de la config, sinon `None`."""
+        cfg = self._cfg_devices.get(mac.upper())
+        if cfg is None:
+            return None
+        return "sources" if cfg.kind == "source" else "headsets"
+
     def device_props(self, path: str) -> Props | None:
         return self._devices.get(path)
 

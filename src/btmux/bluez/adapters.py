@@ -18,6 +18,10 @@ class AdapterInfo:
     path: str | None = None
 
     @property
+    def present(self) -> bool:
+        return self.path is not None
+
+    @property
     def hci(self) -> str | None:
         return self.path.rsplit("/", 1)[-1] if self.path else None
 
