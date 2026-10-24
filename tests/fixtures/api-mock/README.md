@@ -52,7 +52,7 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
 ## Hypothèses du mock à confirmer au contrat (questions posées à dev-backend)
 
 1. Événement SSE `pairing` à la **fermeture** de la fenêtre : le mock envoie `data: null`.
-2. Auth du flux SSE : le mock accepte aussi `?token=` (EventSource ne peut pas envoyer `Authorization`).
+2. Auth du flux SSE : en-tête `Authorization` uniquement (comme l'application réelle ; le front lit le SSE par `fetch`). Le mock n'émet pas l'événement `state` (resynchronisation) que l'application réelle envoie quand le tampon ne couvre plus `Last-Event-ID` : à simuler via `POST /__mock__/event {"event":"state","data":<State>}`.
 3. `forget` : événement `device` avec `paired:false` (le mock retire l'appareil de `/api/state` s'il n'est pas dans la config).
 4. Codes d'erreur applicatifs (`error`) : `unauthorized`, `invalid_*`, `pairing_open`, `pairing_closed`, `stale_bond`, `not_discovered`,
    `unknown_device`, `bluez_error`, `bluez_unavailable`, `not_found` — non fixés par le contrat (seuls les statuts le sont).

@@ -379,11 +379,7 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
             got = self.headers.get("Authorization", "")
             if got.startswith("Bearer "):
                 return hmac.compare_digest(got[7:].encode(), token.encode())
-            # hypothese mock pour EventSource (pas d'en-tete possible) — a confirmer au contrat
-            if urlparse(self.path).path != "/api/events":
-                return False
-            q = query.get("token", [""])[0]
-            return bool(q) and hmac.compare_digest(q.encode(), token.encode())
+            return False
 
         def _json_body(self):
             n = int(self.headers.get("Content-Length") or 0)

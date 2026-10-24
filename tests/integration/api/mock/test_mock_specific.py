@@ -71,6 +71,7 @@ def test_static_dir_is_public_and_confined(tmp_path: Path):
         api.stop()
 
 
-def test_query_token_is_accepted_only_on_the_event_stream(api):
+def test_query_token_is_never_accepted(api):
+    """Comme l'application reelle : seul l'en-tete Authorization (le front lit le SSE par fetch)."""
     assert api.call("GET", "/api/state?token=t0k3n", token=None)[0] == 401
-    assert api.sse(0, headers={}, path="/api/events?token=t0k3n")[0] == 200
+    assert api.sse(0, headers={}, path="/api/events?token=t0k3n")[0] == 401
