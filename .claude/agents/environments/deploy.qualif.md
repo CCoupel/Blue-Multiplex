@@ -123,6 +123,10 @@ scripts/deploy.sh qualif "$WHEEL"          # lockfile trouve a cote de la wheel
 "${SSH[@]}" "journalctl -u btmux-adapters.service -b --no-pager -n 20"
 # LOT-1 sans dongle : un avertissement « adaptateur absent » est attendu et NON bloquant (consigne au rapport)
 
+# 4a bis. Redemarrage pilote (#23) : le watcher d'identite des adaptateurs doit etre arme
+"${SSH[@]}" "systemctl is-enabled btmux-adapters.path && systemctl is-active btmux-adapters.path"
+# attendu : enabled puis active (sinon repli code 4 apres 30 s non declenche automatiquement)
+
 # 4b. Dependances = lockfile (aucune dependance hors lockfile, environnement coherent)
 "${SSH[@]}" "/opt/btmux/bin/pip check"
 
