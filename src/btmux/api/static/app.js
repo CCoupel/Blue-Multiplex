@@ -9,6 +9,7 @@ const ROLES = {
 const S = {
   version: "", adapters: [], devices: [], discovered: [],
   pairing: null, deadline: 0, // deadline = Date.now() + remaining_s*1000 à la réception
+  pending: new Map(), // mac -> échéance (ms) : opération asynchrone pair/connect en cours
   live: false, durations: { headsets: 60, sources: 60 }, busy: new Set(), errors: [],
 };
 let events = null, pollTimer = null, tickTimer = null;
@@ -45,7 +46,8 @@ function log(type, text) {
 // ---------- erreurs ----------
 function pushError(err, ctx = {}) {
   if (err instanceof ApiError && err.status === 401) { askToken(); return; }
-  const e = { id: Math.random(), title: ctx.title || "Erreur", message: err.message, code: err.code, ctx, status: err.status };
+  const msg = err.code === "operation_in_progress" ? "Une opération est déjà en cours pour cet appareil, patientez." : err.message;
+  const e = { id: Math.random(), title: ctx.title || "Erreur", message: msg, code: err.code, ctx, status: err.status };
   S.errors = [e, ...S.errors].slice(0, 3);
   renderErrors();
 }
@@ -79,6 +81,21 @@ async function act(key, fn, ctx) {
   try { await fn(); } catch (e) { pushError(e, ctx); }
   finally { S.busy.delete(key); await refresh(); }
 }
+
+const PENDING_MS = 60000;
+// Opération asynchrone (202) : le bouton reste grisé jusqu'à l'événement `device` du MAC, ou 60 s.
+function withPending(mac, call) {
+  return async () => {
+    S.pending.set(mac, Date.now() + PENDING_MS);
+    render();
+    try { await call(); } catch (e) {
+      if (e.code !== "operation_in_progress") S.pending.delete(mac); // sinon l'opération en cours reste suivie
+      throw e;
+    }
+  };
+}
+const isPending = (mac) => S.pending.has(mac);
+const pendingTag = () => h("span", { class: "pending", role: "status" }, "en cours…");
 
 const confirmDlg = () => $("confirm");
 function confirmForget(d) {
@@ -137,7 +154,8 @@ function deviceRow(d) {
     h("td", { class: "actions" },
       d.connected
         ? h("button", { disabled: busy("disconnect"), onclick: () => act(key("disconnect"), () => api.disconnect(d.mac), { title: "Déconnexion impossible", mac: d.mac }) }, "Déconnecter")
-        : h("button", { class: "primary", disabled: busy("connect"), onclick: () => act(key("connect"), () => api.connect(d.mac), { title: "Connexion impossible", mac: d.mac }) }, "Connecter"),
+        : h("button", { class: "primary", disabled: busy("connect") || isPending(d.mac), onclick: () => act(key("connect"), withPending(d.mac, () => api.connect(d.mac)), { title: "Connexion impossible", mac: d.mac }) }, "Connecter"),
+      isPending(d.mac) ? pendingTag() : null,
       h("button", { disabled: busy("trust"), onclick: () => act(key("trust"), () => api.patch(d.mac, { trusted: !d.trusted }), { title: "Modification refusée", mac: d.mac }) },
         d.trusted ? "Retirer la confiance" : "Faire confiance"),
       h("button", { class: "danger", disabled: busy("forget"), onclick: () => onForget(d) }, "Oublier")));
@@ -183,8 +201,9 @@ function discoveredBlock() {
         h("thead", {}, h("tr", {}, h("th", {}, "Appareil"), h("th", {}, "MAC"), h("th", {}, "Signal"), h("th", {}, "Actions"))),
         h("tbody", {}, rows.map((x) => h("tr", {},
           h("td", {}, x.name || "(sans nom)"), h("td", { class: "mac" }, x.mac), h("td", {}, x.rssi != null ? `${x.rssi} dBm` : "—"),
-          h("td", { class: "actions" }, h("button", { class: "primary", disabled: S.busy.has("pair:" + x.mac),
-            onclick: () => act("pair:" + x.mac, () => api.pair(x.mac), { title: "Appairage refusé", mac: x.mac }) }, "Appairer")))))),
+          h("td", { class: "actions" }, h("button", { class: "primary", disabled: S.busy.has("pair:" + x.mac) || isPending(x.mac),
+            onclick: () => act("pair:" + x.mac, withPending(x.mac, () => api.pair(x.mac)), { title: "Appairage refusé", mac: x.mac }) }, "Appairer"),
+            isPending(x.mac) ? pendingTag() : null))))),
   ];
 }
 
@@ -208,6 +227,9 @@ function render() {
 }
 
 function tick() {
+  let expired = false;
+  for (const [mac, t] of S.pending) if (Date.now() >= t) { S.pending.delete(mac); expired = true; }
+  if (expired) render();
   document.querySelectorAll("[data-countdown]").forEach((n) => { n.textContent = fmtTime(remaining()); });
   if (S.pairing && remaining() === 0) refresh();
 }
@@ -246,12 +268,14 @@ function onEvent(type, data) {
       break;
     }
     case "device": {
+      S.pending.delete(data.mac);
       const i = S.devices.findIndex((d) => d.mac === data.mac);
       i >= 0 ? (S.devices[i] = data) : S.devices.push(data);
       log("device", `${ROLES[data.adapter]?.hci ?? data.adapter}  ${label(data)}  ${data.connected ? "connecté" : "déconnecté"}${data.paired ? ", appairé" : ""}`);
       break;
     }
     case "device.removed": {
+      S.pending.delete(data.mac);
       S.devices = S.devices.filter((d) => d.mac !== data.mac);
       log("device", `${ROLES[data.adapter]?.hci ?? data.adapter}  ${data.mac}  retiré`);
       break;
