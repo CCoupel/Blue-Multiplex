@@ -2,8 +2,9 @@
 Description=btmux — surveillance du fichier d'état des rôles (redémarrage piloté, #23 D3)
 Documentation=https://github.com/CCoupel/Blue-Multiplex
 # Le daemon écrit /var/lib/btmux/adapters.yaml de façon atomique (temporaire voisin + rename) après un
-# PUT /api/controllers/roles accepté ; ce changement déclenche btmux-adapters-reload.service (root), qui applique
-# l'identité des contrôleurs puis redémarre btmuxd. Sans cette unité, le daemon sort en code 4 après 20 s (repli).
+# PUT /api/controllers/roles accepté ; ce changement déclenche btmux-adapters-reload.service (root), qui redémarre
+# btmuxd (l'ExecStartPre de btmuxd applique l'identité des contrôleurs). Sans cette unité, le daemon sort en code 4
+# après 30 s (repli) ; l'identité est alors appliquée par le même ExecStartPre à la relance.
 
 [Path]
 PathChanged=/var/lib/btmux/adapters.yaml

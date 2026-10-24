@@ -7,9 +7,9 @@ ConditionPathExists=/etc/btmux/config.yaml
 
 [Service]
 Type=oneshot
-# Root, hors bac à sable de btmuxd : alias et classe des contrôleurs affectés, fermeture (bondable off, discov no)
-# de tous les autres (≈ 4 s). Liste effective = fichier d'état s'il est valide, sinon config.yaml.
-ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 0
-# Arrêt propre de btmuxd (SIGTERM, code 0) puis relance immédiate ; --no-block : ne pas attendre la fin du cycle.
-ExecStartPost=/usr/bin/systemctl restart --no-block btmuxd.service
-TimeoutStartSec=60
+# Simple redémarrage de btmuxd : arrêt propre (SIGTERM, code 0 ; ExecStopPost referme appairage/découverte) puis relance,
+# dont l'ExecStartPre (root) applique l'identité des contrôleurs selon la nouvelle liste effective. L'identité n'est donc
+# appliquée qu'une fois, et le SIGTERM arrive en < 1 s après l'écriture de l'état : pas de course avec le repli code 4 (30 s),
+# donc pas de double redémarrage. --no-block : ne pas attendre la fin du cycle.
+ExecStart=/usr/bin/systemctl restart --no-block btmuxd.service
+TimeoutStartSec=30

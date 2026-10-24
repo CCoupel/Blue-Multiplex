@@ -234,16 +234,38 @@ def test_path_unit_watches_the_state_file_and_triggers_reload() -> None:
     assert "WantedBy=multi-user.target" in unit
 
 
-def test_reload_unit_applies_identity_then_restarts_btmuxd_without_blocking() -> None:
+def test_reload_unit_only_restarts_btmuxd_without_blocking() -> None:
     unit = _unit("btmux-adapters-reload.service")
-    assert "Type=oneshot" in unit and "User=" not in unit  # root : btmgmt, hors bac à sable
-    assert (
-        f"ExecStart=/usr/lib/btmux/btmux-adapters.sh --state {STATE} "
-        "--config /etc/btmux/config.yaml --wait 0\n" in unit
-    )
-    assert "ExecStartPost=/usr/bin/systemctl restart --no-block btmuxd.service\n" in unit
+    assert "Type=oneshot" in unit and "User=" not in unit  # root : systemctl restart
+    assert "ExecStart=/usr/bin/systemctl restart --no-block btmuxd.service\n" in unit
+    # identité appliquée une seule fois, par l'ExecStartPre de btmuxd (pas de double application) ;
+    # pas d'ExecStartPost : le SIGTERM part aussitôt, sans course avec le repli code 4.
+    assert "btmux-adapters.sh --" not in unit
+    assert "\nExecStartPost=" not in unit
     assert "\n[Install]" not in unit  # déclenchée uniquement par btmux-adapters.path
     assert "RemainAfterExit" not in unit  # chaque changement doit pouvoir la relancer
+
+
+def test_btmuxd_unit_reapplies_controller_identity_on_every_start() -> None:
+    """Repli code 4 : Restart= ne rejoue pas btmux-adapters.service (oneshot déjà active)."""
+    unit = _unit("btmuxd.service")
+    pre = (
+        f"ExecStartPre=-+/usr/lib/btmux/btmux-adapters.sh --state {STATE} "
+        "--config /etc/btmux/config.yaml --wait 0\n"
+    )
+    assert pre in unit  # '-' : jamais bloquant ; '+' : root hors bac à sable
+    assert unit.count("ExecStartPre=") == 1
+    assert unit.index(pre) < unit.index("ExecStart=/opt/btmux/bin/btmuxd")
+    assert "--reset" not in pre
+    assert "TimeoutStartSec=90\n" in unit  # couvre ExecStartPre (btmgmt plafonné à 10 s par appel)
+    assert "RestartSec=30\n" in unit and "RestartForceExitStatus=4\n" in unit
+    assert "30 s" in unit and "20 s" not in unit  # délai de repli du daemon (RESTART_TIMEOUT_S)
+
+
+def test_d3_units_and_deploy_document_the_30s_fallback() -> None:
+    assert "30 s" in _unit("btmux-adapters.path") and "20 s" not in _unit("btmux-adapters.path")
+    deploy = (ROOT / "scripts" / "deploy.sh").read_text()
+    assert "repli code 4 après 30 s" in deploy and "repli code 4 après 20 s" not in deploy
 
 
 def test_btmuxd_unit_has_state_directory_fallback_code_and_path_dependency() -> None:

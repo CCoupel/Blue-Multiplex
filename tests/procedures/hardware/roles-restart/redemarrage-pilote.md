@@ -9,7 +9,7 @@
 - [ ] `/deploy qualif` joué ; `systemctl is-enabled btmux-adapters.path` → `enabled`, `systemctl is-active btmux-adapters.path` → `active`
 - [ ] `btmuxd` actif, `btmuxctl controllers` liste ≥ 2 contrôleurs (dongles UB500) ; noter `SRC` (rôle sources), `HP` (rôle headsets)
 - [ ] Aucun appareil connecté (sauf scénario 3), aucune fenêtre d'appairage ouverte
-- [ ] Un terminal avec `journalctl -u btmuxd -u btmux-adapters-reload -f` ouvert pendant toute la procédure
+- [ ] Un terminal avec `journalctl -u btmuxd -u btmux-adapters-reload -f` (les sorties `btmux-adapters:` de l'ExecStartPre apparaissent sous `btmuxd`) ouvert pendant toute la procédure
 - [ ] `/var/lib/btmux/` existe, propriétaire = utilisateur de service, mode 0750
 
 ## Scénarios
@@ -22,8 +22,8 @@
 |-------|--------|------------------|--------|------|
 | 1 | `btmuxctl roles set --sources $HP --headsets $SRC` ; chronométrer | Code 0 ; `roles.pending=true`, `restart_expected=true` | | |
 | 2 | `stat -c '%a' /var/lib/btmux/adapters.yaml` ; `cat` du fichier | Mode `640` ; sources = `$HP`, headsets = `$SRC`, schéma identique à `adapters` de config.yaml | | |
-| 3 | Journal | `btmux-adapters.path` déclenche `btmux-adapters-reload.service` ; arrêt propre de `btmuxd` (SIGTERM) ; **pas** de `restart_fallback` | | |
-| 4 | Boucler `btmuxctl state` toutes les secondes | API injoignable pendant la coupure ≈ 10–15 s, puis réponse | | |
+| 3 | Journal | `btmux-adapters.path` déclenche `btmux-adapters-reload.service` (simple `systemctl restart`) ; arrêt propre de `btmuxd` (SIGTERM) < 1 s après l'écriture ; **une seule** passe `btmux-adapters:` (ExecStartPre de `btmuxd`, lignes `alias=… classe=…`) ; **pas** de `restart_fallback` ; **un seul** démarrage de `btmuxd` | | |
+| 4 | Boucler `btmuxctl state` toutes les secondes | API injoignable pendant la coupure ≈ 15–20 s (dont ≈ 4 s d'ExecStartPre), puis réponse | | |
 | 5 | `btmuxctl controllers` après retour | `roles.sources=$HP`, `roles.headsets=$SRC`, `source=state`, `pending=false`, `restart_expected=false` | | |
 | 6 | `bluetoothctl list` / `btmuxctl state` | Classe 0x006C0404 et alias portés par le nouveau contrôleur sources ; `adapters[]` reflète la permutation | | |
 | 7 | Rétablir : `btmuxctl roles set --sources $SRC --headsets $HP` et attendre le retour | Situation initiale rétablie | | |
@@ -65,7 +65,9 @@
 | 1 | `sudo systemctl mask --now btmux-adapters.path` | Unité masquée | | |
 | 2 | `btmuxctl roles set --sources $HP --headsets $SRC` | Code 0 (202) ; `pending=true` | | |
 | 3 | Attendre ≈ 30 s sans rien faire | Journal `restart_fallback` ; `btmuxd` sort en **code 4** (`systemctl show btmuxd -p ExecMainStatus`) | | |
-| 4 | Attendre | systemd relance `btmuxd` (`RestartForceExitStatus=4`) ; le service revient avec la nouvelle affectation | | |
+| 4 | Attendre ≈ 30 s de plus (`RestartSec=30`) | systemd relance `btmuxd` (`RestartForceExitStatus=4`) ; journal : passe `btmux-adapters:` de l'ExecStartPre (`$HP` → `rôles=sources alias=… classe='4 4'`) **avant** le démarrage du daemon ; le service revient avec la nouvelle affectation | | |
+| 4b | `bluetoothctl show $HP` et `bluetoothctl show $SRC` (ou `busctl get-property org.bluez /org/bluez/hciN org.bluez.Adapter1 Alias Class`) | `$HP` (nouveau sources) : alias de l'entrée sources, classe 0x006C0404 (casque) ; `$SRC` (nouveau headsets) : alias de l'entrée headsets, classe « ordinateur » ; les deux `Pairable: no`, `Discoverable: no` | | |
+| 4c | Depuis le PC Windows (recherche d'appareils pendant une fenêtre `btmuxctl pairing open sources 60`) | btmux apparaît comme **casque** (icône audio), plus comme ordinateur | | |
 | 5 | Nettoyage : `sudo systemctl unmask btmux-adapters.path && sudo systemctl start btmux-adapters.path`, rétablir l'affectation initiale | `is-active` = `active` | | |
 
 **Verdict** : [ ] PASS  [ ] FAIL
@@ -97,7 +99,8 @@
 
 ## Critères de Validation
 
-- [ ] Coupure du service ≈ 10–15 s, retour automatique avec la nouvelle affectation
+- [ ] Coupure du service ≈ 15–20 s, retour automatique avec la nouvelle affectation, une seule application de l'identité
+- [ ] Après repli code 4, alias et classe portés par les nouveaux contrôleurs (ExecStartPre), PC vu en casque
 - [ ] Repli code 4 observé quand `.path` est masquée
 - [ ] Aucune écriture acceptée pendant `change_pending`
 - [ ] Aucun contrôleur sans rôle ne reste appairable/découvrable

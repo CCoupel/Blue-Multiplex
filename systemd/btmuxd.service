@@ -17,7 +17,15 @@ Type=simple
 # l'utilisateur reel est fixe par le drop-in genere par scripts/btmux-set-user.sh (deploy.sh / postinst du .deb).
 User=ubuntu
 Environment=XDG_RUNTIME_DIR=/run/user/1000
+# #23 : identité des contrôleurs (alias, classe, fermeture des sans-rôle) réappliquée à CHAQUE démarrage, liste effective
+# (état puis config) : couvre le redémarrage piloté (btmux-adapters-reload.service ne fait que « systemctl restart ») ET le
+# repli code 4 (relance par Restart=, btmux-adapters.service oneshot déjà active n'est pas rejouée). Idempotent (≈ 4 s ;
+# au boot, redondant avec btmux-adapters.service). '+' : root hors bac à sable ; '-' : un échec ne bloque jamais le démarrage
+# (config invalide : btmuxd sort lui-même en code 2).
+ExecStartPre=-+/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 0
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
+# Couvre ExecStartPre (btmgmt plafonné à 10 s par appel) ; dépassement = échec de démarrage, relancé par Restart=.
+TimeoutStartSec=90
 # #23 : fichier d'état des rôles /var/lib/btmux/adapters.yaml (propriétaire = User=, 0750 ; chown suivi du drop-in d'utilisateur)
 StateDirectory=btmux
 StateDirectoryMode=0750
@@ -27,8 +35,9 @@ Restart=on-failure
 # Code 2 (configuration invalide ou API impossible à démarrer) : inutile de boucler (cf. contrat config-schema).
 # Code 3 (adaptateur introuvable après BTMUX_ADAPTER_WAIT, 30 s) : on réessaie (dongle USB lent à énumérer).
 RestartPreventExitStatus=2
-# Code 4 (#23 D3, repli) : nouvelle affectation écrite mais aucun SIGTERM reçu 20 s après (btmux-adapters.path inactive) ;
-# le daemon sort de lui-même et est relancé (RestartSec ci-dessous) avec la nouvelle liste effective.
+# Code 4 (#23 D3, repli) : nouvelle affectation écrite mais aucun SIGTERM reçu 30 s après (btmux-adapters.path inactive) ;
+# le daemon sort de lui-même et est relancé (RestartSec ci-dessous) : ExecStartPre applique alors l'identité des contrôleurs
+# et le daemon reprend la nouvelle liste effective.
 RestartForceExitStatus=4
 RestartSec=30
 # Durcissement : lecture seule partout, sauf le socket PipeWire de l'utilisateur (drop-in : ReadWritePaths=-/run/user/<uid>)

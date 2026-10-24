@@ -92,7 +92,7 @@ fi
 echo "deploy: btmuxd.service actif"
 systemctl show -p Result,ExecMainStatus btmux-adapters.service
 systemctl is-active --quiet btmux-adapters.path \
-  || echo "deploy: ATTENTION btmux-adapters.path inactif (redémarrage piloté #23 : repli code 4 après 20 s)" >&2
+  || echo "deploy: ATTENTION btmux-adapters.path inactif (redémarrage piloté #23 : repli code 4 après 30 s)" >&2
 /opt/btmux/bin/btmuxd --version
 REMOTE
 echo "== deploy $ENV_NAME termine"
