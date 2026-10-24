@@ -81,12 +81,6 @@ class BluezService:
             await self.bus.close()
             return missing
         self.inventory.load(objects)
-        for info in self.registry.infos:
-            assert info.path is not None
-            # État sûr au démarrage : alimenté, découverte et appairage fermés (c'est btmuxd qui ouvre).
-            for prop, value in (("Powered", True), ("Pairable", False), ("Discoverable", False)):
-                with contextlib.suppress(DBusCallError):
-                    await self.bus.set_property(info.path, ADAPTER_IFACE, prop, "b", value)
         await self.bus.export_agent(AGENT_PATH, self.agent)
         await self.bus.call(
             "/org/bluez",
@@ -98,8 +92,40 @@ class BluezService:
         await self.bus.call(
             "/org/bluez", "org.bluez.AgentManager1", "RequestDefaultAgent", "o", [AGENT_PATH]
         )
+        log.info(kv("agent_registered", path=AGENT_PATH, capability=AGENT_CAPABILITY))
+        # BlueZ passe Pairable à vrai dès qu'un agent est enregistré : l'état sûr (alimenté, appairage et
+        # découverte fermés) doit donc être posé APRÈS l'enregistrement, et vérifié.
+        await self._close_adapters()
         log.info(kv("bluez_ready", adapters=len(self.registry.infos)))
         return []
+
+    async def _close_adapters(self) -> None:
+        """Alimente les adaptateurs, ferme appairage et découverte, puis le vérifie (3 essais)."""
+        for _ in range(3):
+            for info in self.registry.infos:
+                assert info.path is not None
+                for prop, value in (
+                    ("Powered", True),
+                    ("Pairable", False),
+                    ("Discoverable", False),
+                ):
+                    with contextlib.suppress(DBusCallError):
+                        await self.bus.set_property(info.path, ADAPTER_IFACE, prop, "b", value)
+            objects = await self.bus.get_managed_objects()
+            open_ = [
+                info.mac
+                for info in self.registry.infos
+                if info.path
+                and (
+                    objects.get(info.path, {}).get(ADAPTER_IFACE, {}).get("Pairable")
+                    or objects.get(info.path, {}).get(ADAPTER_IFACE, {}).get("Discoverable")
+                )
+            ]
+            if not open_:
+                return
+            log.warning(kv("adapter_still_open", adapters=",".join(open_)))
+            await asyncio.sleep(0.2)
+        log.error(kv("adapter_not_closed", adapters=",".join(open_)))
 
     async def _teardown(self) -> None:
         with contextlib.suppress(Exception):

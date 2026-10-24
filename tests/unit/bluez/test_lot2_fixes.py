@@ -338,3 +338,29 @@ async def test_security_headers_and_filtered_statics(service: BluezService, tmp_
         assert fav.status == 204
         resp = await client.get("/api/state", headers=AUTH)
         assert resp.headers["X-Frame-Options"] == "DENY"
+
+
+async def test_adapters_closed_after_agent_registration(
+    service: BluezService, bus: FakeBus, caplog: pytest.LogCaptureFixture
+) -> None:
+    """BlueZ rend Pairable à l'enregistrement de l'agent : l'état sûr est posé ensuite."""
+    caplog.set_level(logging.INFO, logger="btmux.bluez")
+    await started(service)
+    members = [m for _, _, m, _ in bus.calls]
+    assert "RequestDefaultAgent" in members
+    for path in (SRC_PATH, HP_PATH):
+        adapter = bus.objects[path]["org.bluez.Adapter1"]
+        assert adapter["Pairable"] is False and adapter["Discoverable"] is False
+    assert "event=agent_registered" in caplog.text
+    assert caplog.text.index("agent_registered") < caplog.text.index("bluez_ready")
+    assert all(a["pairable"] is False for a in service.inventory.state()["adapters"])
+
+
+async def test_adapter_stuck_open_is_reported(
+    service: BluezService, bus: FakeBus, caplog: pytest.LogCaptureFixture
+) -> None:
+    bus.set_errors[("org.bluez.Adapter1", "Pairable")] = DBusCallError(
+        "org.bluez.Error.Failed", "x"
+    )
+    await started(service)
+    assert "event=adapter_not_closed" in caplog.text

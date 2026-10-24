@@ -23,6 +23,9 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
 - API : arrêt < 5 s avec flux SSE ouverts ; `Authorization`/`Last-Event-ID` invalides sans trace ; évènement `state` à l'ouverture du flux ; jeton lisible par groupe/autres → API verrouillée ; CSP, `nosniff`, `X-Frame-Options`, `Referrer-Policy` ; statiques limités à html/js/css ; avertissement `api_listening_cleartext` hors loopback.
 - BlueZ : `PairableTimeout`, rollback de `open()`, `pair()` découplé de la requête HTTP (409 `operation_in_progress`), `ExecStopPost` de btmuxd (`btmux-adapters.sh --reset`) ; regex MAC/alias en `fullmatch`.
 
+### Fixed (QUALIF 0.2.0.2)
+- `btmuxd` : BlueZ rend l'adaptateur `Pairable` dès qu'un agent est enregistré (constaté sur pi-qualif) ; l'état sûr (Pairable/Discoverable faux) est maintenant posé APRÈS l'enregistrement de l'agent, vérifié (3 essais, `adapter_not_closed` en ERROR sinon) ; journal `agent_registered`.
+
 ### Changed (LOT-2)
 - `btmuxd.service` : `RestartPreventExitStatus=2` seul (le code 3, adaptateur absent, est relancé), `RestartSec=30`, `StartLimitBurst=30` / 1 h — dongles USB lents à énumérer.
 

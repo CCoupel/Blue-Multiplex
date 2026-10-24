@@ -81,6 +81,7 @@ class FakeBus:
         self.errors: dict[tuple[str, str], DBusCallError] = {}
         self.set_errors: dict[tuple[str, str], DBusCallError] = {}
         self.connect_failures = 0
+        self.pairable_on_register = True
         self.connected = False
         self.connect_count = 0
         self.agent: Agent | None = None
@@ -121,6 +122,11 @@ class FakeBus:
     ) -> list[Any]:
         self._require()
         self.calls.append((path, interface, member, list(body)))
+        if member == "RegisterAgent" and self.pairable_on_register:
+            # BlueZ (constaté sur pi-qualif) : un agent enregistré rend l'adaptateur « Pairable »
+            for obj_path, ifaces in self.objects.items():
+                if "org.bluez.Adapter1" in ifaces:
+                    self.objects[obj_path]["org.bluez.Adapter1"]["Pairable"] = True
         error = self.errors.get((interface, member))
         if error is not None:
             raise error
