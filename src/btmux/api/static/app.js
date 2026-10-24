@@ -131,6 +131,7 @@ async function forgetThenRepair(mac) {
 // ---------- rendu ----------
 function setStatus(kind, text) {
   const s = $("status");
+  if (restarting() && kind !== "err") { kind = "warn"; text = "redémarrage du service…"; } // libellé stable pendant toute la coupure
   s.replaceChildren(h("span", { class: `dot ${kind === "ok" ? "" : kind}` }), text);
   $("mode-tag").textContent = S.live ? "SSE" : (pollTimer ? "polling 5 s" : "—");
 }
