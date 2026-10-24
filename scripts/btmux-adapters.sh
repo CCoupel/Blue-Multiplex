@@ -34,9 +34,13 @@ SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO="sudo -n"
 
 log() { echo "btmux-adapters: $*"; }
+FAILED=0
 run() {
-  if [ "$DRY" = 1 ]; then echo "DRY-RUN: $*"; else "$@"; fi
+  if [ "$DRY" = 1 ]; then echo "DRY-RUN: $*"; elif ! "$@"; then FAILED=1; echo "btmux-adapters: AVERTISSEMENT commande en échec: $*" >&2; fi
 }
+# btmgmt se bloque quand stdin est /dev/null (contexte systemd) : on lui donne un tube fermé après une ligne, et un plafond.
+# shellcheck disable=SC2086
+mgmt() { printf '\n' | timeout 10 $SUDO $BTMGMT "$@"; }
 
 rc=0
 LIST="$("$PY" -I -P -m btmux.config adapters --config "$CONFIG")" || rc=$?
@@ -52,8 +56,7 @@ fi
 MGMT_ERR=0
 index_of() {   # MAC -> index hciN (vide si absent ou si btmgmt échoue : MGMT_ERR=1)
   local out
-  # shellcheck disable=SC2086
-  if ! out="$($SUDO $BTMGMT info 2>/dev/null)"; then MGMT_ERR=1; return 0; fi
+  if ! out="$(mgmt info 2>/dev/null)"; then MGMT_ERR=1; return 0; fi
   printf '%s\n' "$out" | awk -v mac="$1" '
     /^hci[0-9]+:/ { idx = substr($1, 4); sub(/:$/, "", idx) }
     tolower($1) == "addr" && toupper($2) == toupper(mac) { print idx; exit }'
@@ -92,14 +95,14 @@ while IFS=$'\t' read -r mac name roles; do
   log "$mac -> hci$idx rôles=$roles alias='$name' classe='$class'"
   # shellcheck disable=SC2086
   {
-    run $SUDO $BTMGMT -i "$idx" power on
+    run mgmt -i "$idx" power on
     current="$($BUSCTL get-property org.bluez "/org/bluez/hci$idx" org.bluez.Adapter1 Alias 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p' || true)"
     if [ "$current" != "$name" ]; then
       run $SUDO $BUSCTL set-property org.bluez "/org/bluez/hci$idx" org.bluez.Adapter1 Alias s "$name"
     fi
-    run $SUDO $BTMGMT -i "$idx" class $class
-    run $SUDO $BTMGMT -i "$idx" bondable off
-    run $SUDO $BTMGMT -i "$idx" discov no
+    run mgmt -i "$idx" class $class
+    run mgmt -i "$idx" bondable off
+    run mgmt -i "$idx" discov no
   }
 done <<< "$LIST"
 exit 0

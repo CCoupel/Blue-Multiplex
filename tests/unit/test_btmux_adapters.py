@@ -145,7 +145,37 @@ def test_btmgmt_failure_exits_zero_with_message(tmp_path: Path) -> None:
     assert "btmgmt" in proc.stderr and "aucun adaptateur configurable" in proc.stderr
 
 
+def test_runs_without_tty_stdin_devnull(tmp_path: Path) -> None:
+    """Contexte systemd (stdin /dev/null) : btmgmt s'y bloque, le script lui fournit un tube."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(BI_CONFIG)
+    env = _env(tmp_path, BTMGMT_INFO_BI)
+    log = tmp_path / "calls.log"
+    (tmp_path / "btmgmt").write_text(
+        '#!/bin/sh\n[ "$(readlink /proc/self/fd/0)" = /dev/null ] && exec sleep 60\n'
+        'if [ "$1" = info ]; then printf "' + BTMGMT_INFO_BI + '"; exit 0; fi\n'
+        f'echo "btmgmt $*" >> "{log}"\n'
+    )
+    (tmp_path / "btmgmt").chmod(0o755)
+    sudo = tmp_path / "sudo"
+    sudo.write_text('#!/bin/sh\nshift\nexec "$@"\n')
+    sudo.chmod(0o755)
+    env["PATH"] = f"{tmp_path}:{env['PATH']}"
+    proc = subprocess.run(
+        ["bash", str(SCRIPT), "--config", str(cfg), "--wait", "0"],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "btmgmt -i 1 class 4 4" in log.read_text()
+
+
 def test_unit_file_shape() -> None:
     unit = (ROOT / "systemd" / "btmux-adapters.service").read_text()
+    assert "TimeoutStartSec=60" in unit and "Requires=" not in unit
     assert "Type=oneshot" in unit and "After=bluetooth.service" in unit
     assert "/usr/lib/btmux/btmux-adapters.sh" in unit and "RemainAfterExit=yes" in unit
