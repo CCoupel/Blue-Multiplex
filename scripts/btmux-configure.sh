@@ -5,7 +5,8 @@
 # Usage : btmux-configure.sh --user UTILISATEUR --share DIR [--units DIR] [--no-restart]
 #   --share : dossier des fichiers de données (config.example.yaml, btmux.conf.in, 51-btmux-no-seat.conf, roles.conf),
 #             à plat ou avec un sous-dossier wireplumber/ ;
-#   --units : copie btmuxd.service et btmux-adapters.service dans /etc/systemd/system (déploiement ; le .deb les installe lui-même).
+#   --units : copie btmuxd.service, btmux-adapters.service, btmux-adapters.path et btmux-adapters-reload.service dans
+#             /etc/systemd/system (déploiement ; le .deb les installe lui-même).
 # Variables (tests) : BTMUX_ROOT (préfixe de tous les chemins système ; désactive chown et systemctl), BTMUX_UID, BTMUX_HOME.
 set -eu
 
@@ -49,8 +50,16 @@ fi
 # --- unités (déploiement) --------------------------------------------------------------------------------
 if [ -n "$UNITS" ]; then
   mkdir -p "$ROOT/etc/systemd/system"
-  for u in btmuxd.service btmux-adapters.service; do install -m 644 "$UNITS/$u" "$ROOT/etc/systemd/system/$u"; done
+  for u in btmuxd.service btmux-adapters.service btmux-adapters.path btmux-adapters-reload.service; do
+    install -m 644 "$UNITS/$u" "$ROOT/etc/systemd/system/$u"
+  done
 fi
+
+# --- répertoire d'état (#23 : affectation des rôles /var/lib/btmux/adapters.yaml) ----------------------------
+# Créé dès l'installation pour que btmux-adapters.path le surveille avant le premier démarrage de btmuxd ;
+# StateDirectory=btmux (btmuxd.service) en maintient ensuite propriétaire et mode. Contenu jamais touché.
+install -d -m 750 "$ROOT/var/lib/btmux"
+[ -n "$ROOT" ] || chown "$USER_NAME:$(id -gn "$USER_NAME")" "$ROOT/var/lib/btmux"
 
 # --- policy D-Bus de l'utilisateur de service -------------------------------------------------------------
 mkdir -p "$ROOT/etc/dbus-1/system.d"
@@ -89,10 +98,11 @@ mkdir -p "$ROOT/usr/share/btmux/wireplumber"
 # --- systemd -----------------------------------------------------------------------------------------------
 if [ -z "$ROOT" ]; then
   systemctl daemon-reload
-  systemctl enable btmux-adapters.service btmuxd.service >/dev/null 2>&1 || true
+  systemctl enable btmux-adapters.service btmux-adapters.path btmuxd.service >/dev/null 2>&1 || true
   systemctl reload dbus.service >/dev/null 2>&1 || true
   if [ "$RESTART" = 1 ]; then
     systemctl restart btmux-adapters.service || true
+    systemctl restart btmux-adapters.path || true
     systemctl restart btmuxd.service || true
   fi
 fi

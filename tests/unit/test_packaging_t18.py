@@ -211,3 +211,128 @@ def test_deploy_and_deb_use_the_same_dbus_template_name() -> None:
     for script in ("deploy.sh", "build-deb.sh", "btmux-configure.sh"):
         text = (ROOT / "scripts" / script).read_text()
         assert "btmux.conf.in" in text and "dbus-btmux.conf.in" not in text
+
+
+# --- #23 D3 : redémarrage piloté (unités .path / -reload, StateDirectory, code 4) -----------------
+STATE = "/var/lib/btmux/adapters.yaml"
+D3_UNITS = (
+    "btmuxd.service",
+    "btmux-adapters.service",
+    "btmux-adapters.path",
+    "btmux-adapters-reload.service",
+)
+
+
+def _unit(name: str) -> str:
+    return (ROOT / "systemd" / name).read_text()
+
+
+def test_path_unit_watches_the_state_file_and_triggers_reload() -> None:
+    unit = _unit("btmux-adapters.path")
+    assert f"PathChanged={STATE}\n" in unit
+    assert "Unit=btmux-adapters-reload.service\n" in unit
+    assert "WantedBy=multi-user.target" in unit
+
+
+def test_reload_unit_applies_identity_then_restarts_btmuxd_without_blocking() -> None:
+    unit = _unit("btmux-adapters-reload.service")
+    assert "Type=oneshot" in unit and "User=" not in unit  # root : btmgmt, hors bac à sable
+    assert (
+        f"ExecStart=/usr/lib/btmux/btmux-adapters.sh --state {STATE} "
+        "--config /etc/btmux/config.yaml --wait 0\n" in unit
+    )
+    assert "ExecStartPost=/usr/bin/systemctl restart --no-block btmuxd.service\n" in unit
+    assert "\n[Install]" not in unit  # déclenchée uniquement par btmux-adapters.path
+    assert "RemainAfterExit" not in unit  # chaque changement doit pouvoir la relancer
+
+
+def test_btmuxd_unit_has_state_directory_fallback_code_and_path_dependency() -> None:
+    unit = _unit("btmuxd.service")
+    for line in (
+        "StateDirectory=btmux\n",
+        "StateDirectoryMode=0750\n",
+        "RestartForceExitStatus=4\n",
+        "Wants=btmux-adapters.path\n",
+        "Restart=on-failure\n",
+    ):
+        assert line in unit, line
+    assert (
+        f"ExecStopPost=-+/usr/lib/btmux/btmux-adapters.sh --state {STATE} "
+        "--config /etc/btmux/config.yaml --reset --wait 0\n" in unit
+    )
+    assert "RestartPreventExitStatus=2 4" not in unit  # le repli code 4 doit relancer
+
+
+def test_boot_adapters_unit_reads_the_effective_list() -> None:
+    unit = _unit("btmux-adapters.service")
+    assert f"--state {STATE} --config /etc/btmux/config.yaml --wait 30" in unit
+
+
+def test_configure_installs_all_units_and_state_directory(tmp_path: Path) -> None:
+    fake_root = tmp_path / "root"
+    env = {
+        **os.environ,
+        "BTMUX_ROOT": str(fake_root),
+        "BTMUX_UID": "1234",
+        "BTMUX_HOME": str(tmp_path / "home"),
+    }
+    (tmp_path / "home").mkdir()
+    proc = subprocess.run(
+        [
+            "sh",
+            str(CONFIGURE),
+            "--user",
+            "alice",
+            "--share",
+            str(_share(tmp_path)),
+            "--units",
+            str(ROOT / "systemd"),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    for name in D3_UNITS:
+        assert (fake_root / "etc/systemd/system" / name).read_text() == _unit(name), name
+    state_dir = fake_root / "var/lib/btmux"
+    assert state_dir.is_dir() and oct(state_dir.stat().st_mode & 0o777) == "0o750"
+
+
+def test_configure_keeps_an_existing_state_file(tmp_path: Path) -> None:
+    assert _configure(tmp_path).returncode == 0
+    state = tmp_path / "root/var/lib/btmux/adapters.yaml"
+    state.write_text("adapters: []\n")
+    assert _configure(tmp_path).returncode == 0
+    assert state.read_text() == "adapters: []\n"
+
+
+def test_configure_enables_the_path_unit() -> None:
+    text = CONFIGURE.read_text()
+    assert "systemctl enable btmux-adapters.service btmux-adapters.path btmuxd.service" in text
+    assert "systemctl restart btmux-adapters.path" in text
+
+
+def test_deploy_ships_all_units() -> None:
+    text = (ROOT / "scripts" / "deploy.sh").read_text()
+    for name in D3_UNITS:
+        assert text.count(f"systemd/{name}") >= 2, name  # contrôle de présence + scp
+
+
+@needs_dpkg
+def test_build_deb_ships_d3_units_and_maintainer_scripts_handle_them(tmp_path: Path) -> None:
+    proc, dist = _build(tmp_path, "0.2.0", ["btmux-0.2.0.5-py3-none-any.whl"])
+    assert proc.returncode == 0, proc.stderr
+    deb = dist / "btmux_0.2.0_all.deb"
+    contents = subprocess.run(
+        ["dpkg-deb", "--contents", str(deb)], capture_output=True, text=True
+    ).stdout
+    for name in D3_UNITS:
+        assert f"lib/systemd/system/{name}" in contents, name
+    ctrl = tmp_path / "ctrl"
+    subprocess.run(["dpkg-deb", "-e", str(deb), str(ctrl)], check=True)
+    prerm = (ctrl / "prerm").read_text()
+    assert prerm.index("systemctl stop btmux-adapters.path") < prerm.index("btmuxd.service")
+    assert "disable btmuxd.service btmux-adapters.service btmux-adapters.path" in prerm
+    assert "/var/lib/btmux" in (ctrl / "postrm").read_text().split("purge)", 1)[1]

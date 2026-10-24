@@ -10,8 +10,9 @@ Before=btmuxd.service
 Type=oneshot
 RemainAfterExit=yes
 # Pas de règle udev : les adaptateurs sont identifiés par leur MAC au démarrage (--wait laisse l'USB s'énumérer).
+# Liste effective : fichier d'état /var/lib/btmux/adapters.yaml (#23) s'il est valide, sinon config.yaml.
 # Code 0 même sans adaptateur (avertissement) ; code 2 si la configuration est invalide.
-ExecStart=/usr/lib/btmux/btmux-adapters.sh --config /etc/btmux/config.yaml --wait 30
+ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 30
 TimeoutStartSec=60
 
 [Install]

@@ -1,0 +1,15 @@
+[Unit]
+Description=btmux — application d'une nouvelle affectation des rôles puis redémarrage de btmuxd (#23 D3)
+Documentation=https://github.com/CCoupel/Blue-Multiplex
+# Déclenchée uniquement par btmux-adapters.path (aucune section d'installation).
+After=bluetooth.service btmux-adapters.service
+ConditionPathExists=/etc/btmux/config.yaml
+
+[Service]
+Type=oneshot
+# Root, hors bac à sable de btmuxd : alias et classe des contrôleurs affectés, fermeture (bondable off, discov no)
+# de tous les autres (≈ 4 s). Liste effective = fichier d'état s'il est valide, sinon config.yaml.
+ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 0
+# Arrêt propre de btmuxd (SIGTERM, code 0) puis relance immédiate ; --no-block : ne pas attendre la fin du cycle.
+ExecStartPost=/usr/bin/systemctl restart --no-block btmuxd.service
+TimeoutStartSec=60

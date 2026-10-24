@@ -18,7 +18,8 @@ ENV_FILE="${BTMUX_ENV_FILE:-.claude/agents/environments/${ENV_NAME}.env}"   # BT
 [ -f "$ENV_FILE" ] || { echo "deploy: $ENV_FILE absent (modele: ${ENV_NAME}.env.example)" >&2; exit 1; }
 LOCK="${WHEEL%-py3-none-any.whl}.requirements.lock.txt"
 [ -f "$LOCK" ] || { echo "deploy: lockfile introuvable a cote de la wheel: $LOCK" >&2; exit 1; }
-for f in systemd/btmuxd.service systemd/btmux-adapters.service config/config.example.yaml config/dbus/btmux.conf.in \
+for f in systemd/btmuxd.service systemd/btmux-adapters.service systemd/btmux-adapters.path \
+  systemd/btmux-adapters-reload.service config/config.example.yaml config/dbus/btmux.conf.in \
   config/wireplumber/51-btmux-no-seat.conf config/wireplumber/roles.conf scripts/btmux-configure.sh \
   scripts/btmux-set-user.sh scripts/btmux-install-wireplumber.sh scripts/btmux-adapters.sh; do
   [ -f "$f" ] || { echo "deploy: fichier du depot absent: $f" >&2; exit 1; }
@@ -51,6 +52,7 @@ trap 'ssh "${SSH_OPTS[@]}" -- "$DEPLOY_HOST" "rm -rf $REMOTE_DIR" >/dev/null 2>&
 LOCK_NAME="$(basename "$LOCK")"
 [[ "$LOCK_NAME" =~ ^[A-Za-z0-9._+-]+$ ]] || { echo "deploy: nom de lockfile invalide: $LOCK_NAME" >&2; exit 1; }
 scp "${SSH_OPTS[@]}" -q -- "$WHEEL" "$LOCK" systemd/btmuxd.service systemd/btmux-adapters.service \
+  systemd/btmux-adapters.path systemd/btmux-adapters-reload.service \
   config/config.example.yaml config/dbus/btmux.conf.in config/wireplumber/51-btmux-no-seat.conf config/wireplumber/roles.conf \
   scripts/btmux-configure.sh scripts/btmux-set-user.sh scripts/btmux-install-wireplumber.sh scripts/btmux-adapters.sh \
   "$DEPLOY_HOST:$REMOTE_DIR/"
@@ -89,6 +91,8 @@ if ! systemctl is-active --quiet btmuxd.service; then
 fi
 echo "deploy: btmuxd.service actif"
 systemctl show -p Result,ExecMainStatus btmux-adapters.service
+systemctl is-active --quiet btmux-adapters.path \
+  || echo "deploy: ATTENTION btmux-adapters.path inactif (redémarrage piloté #23 : repli code 4 après 20 s)" >&2
 /opt/btmux/bin/btmuxd --version
 REMOTE
 echo "== deploy $ENV_NAME termine"

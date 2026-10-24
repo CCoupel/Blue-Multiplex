@@ -3,6 +3,8 @@ Description=btmuxd — multiplexeur audio Bluetooth
 Documentation=https://github.com/CCoupel/Blue-Multiplex
 After=bluetooth.service btmux-adapters.service user@1000.service dbus.service
 Wants=bluetooth.service btmux-adapters.service user@1000.service
+# #23 D3 : surveillance du fichier d'état (redémarrage piloté après changement de rôles)
+Wants=btmux-adapters.path
 Requires=dbus.service
 # ~1 tentative par minute en cas d'adaptateur absent ; abandon après 30 échecs en 1 h
 StartLimitIntervalSec=3600
@@ -16,12 +18,18 @@ Type=simple
 User=ubuntu
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
+# #23 : fichier d'état des rôles /var/lib/btmux/adapters.yaml (propriétaire = User=, 0750 ; chown suivi du drop-in d'utilisateur)
+StateDirectory=btmux
+StateDirectoryMode=0750
 # Quel que soit l'arrêt (SIGKILL, OOM, crash) : refermer appairage et découverte (root, hors bac à sable)
-ExecStopPost=-+/usr/lib/btmux/btmux-adapters.sh --config /etc/btmux/config.yaml --reset --wait 0
+ExecStopPost=-+/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --reset --wait 0
 Restart=on-failure
 # Code 2 (configuration invalide ou API impossible à démarrer) : inutile de boucler (cf. contrat config-schema).
 # Code 3 (adaptateur introuvable après BTMUX_ADAPTER_WAIT, 30 s) : on réessaie (dongle USB lent à énumérer).
 RestartPreventExitStatus=2
+# Code 4 (#23 D3, repli) : nouvelle affectation écrite mais aucun SIGTERM reçu 20 s après (btmux-adapters.path inactive) ;
+# le daemon sort de lui-même et est relancé (RestartSec ci-dessous) avec la nouvelle liste effective.
+RestartForceExitStatus=4
 RestartSec=30
 # Durcissement : lecture seule partout, sauf le socket PipeWire de l'utilisateur (drop-in : ReadWritePaths=-/run/user/<uid>)
 NoNewPrivileges=yes

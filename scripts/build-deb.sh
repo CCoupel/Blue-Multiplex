@@ -37,7 +37,8 @@ install -d -m 755 "$STAGE/DEBIAN" "$STAGE/usr/share/btmux/wireplumber" "$STAGE/u
   "$STAGE/lib/systemd/system" "$STAGE/etc/btmux" "$STAGE/etc/dbus-1/system.d"
 install -m 644 "$WHEEL" "$STAGE/usr/share/btmux/"
 install -m 644 "$LOCK" "$STAGE/usr/share/btmux/requirements.lock.txt"
-install -m 644 systemd/btmuxd.service systemd/btmux-adapters.service "$STAGE/lib/systemd/system/"
+install -m 644 systemd/btmuxd.service systemd/btmux-adapters.service systemd/btmux-adapters.path \
+  systemd/btmux-adapters-reload.service "$STAGE/lib/systemd/system/"
 install -m 644 config/config.example.yaml "$STAGE/usr/share/btmux/config.example.yaml"
 install -m 644 config/config.example.yaml "$STAGE/etc/btmux/config.example.yaml"
 install -m 644 config/dbus/btmux.conf.in "$STAGE/usr/share/btmux/btmux.conf.in"
@@ -94,9 +95,11 @@ cat > "$STAGE/DEBIAN/prerm" <<'PRERM'
 set -e
 case "$1" in
 remove|upgrade|deconfigure)
-  # Arrêt propre (SIGTERM, code 0) ; config.yaml et jeton sont conservés.
-  systemctl stop btmuxd.service btmux-adapters.service >/dev/null 2>&1 || true
-  [ "$1" = remove ] && systemctl disable btmuxd.service btmux-adapters.service >/dev/null 2>&1 || true
+  # Surveillance du fichier d'état arrêtée d'abord (aucun redémarrage piloté pendant la mise à jour, #23),
+  # puis arrêt propre (SIGTERM, code 0) ; config.yaml, jeton et fichier d'état sont conservés.
+  systemctl stop btmux-adapters.path >/dev/null 2>&1 || true
+  systemctl stop btmuxd.service btmux-adapters.service btmux-adapters-reload.service >/dev/null 2>&1 || true
+  [ "$1" = remove ] && systemctl disable btmuxd.service btmux-adapters.service btmux-adapters.path >/dev/null 2>&1 || true
   ;;
 esac
 exit 0
@@ -112,8 +115,9 @@ remove|purge|upgrade|disappear)
 esac
 case "$1" in
 purge)
-  # Retire l'environnement Python et l'état généré ; /etc/btmux/config.yaml (configuration de l'utilisateur) est CONSERVÉ.
-  rm -rf /opt/btmux /etc/systemd/system/btmuxd.service.d /etc/dbus-1/system.d/btmux.conf /etc/btmux/token
+  # Retire l'environnement Python et l'état généré (dont l'affectation des rôles /var/lib/btmux, #23) ;
+  # /etc/btmux/config.yaml (configuration de l'utilisateur) est CONSERVÉ.
+  rm -rf /opt/btmux /etc/systemd/system/btmuxd.service.d /etc/dbus-1/system.d/btmux.conf /etc/btmux/token /var/lib/btmux
   rm -f /etc/btmux/config.example.yaml
   systemctl reload dbus.service >/dev/null 2>&1 || true
   ;;
