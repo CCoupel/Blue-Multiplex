@@ -14,6 +14,11 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
 - `btmuxctl` : `state`, `pairing open|close`, `device pair|connect|disconnect|forget` (`--url`/`--token`, `BTMUX_URL`/`BTMUX_TOKEN`, `/etc/btmux/token`).
 - Dépendance : `aiohttp`.
 
+### Added (T2.2 #16)
+- Web UI d'appairages servie par l'API (`/`, `/static/*`, HTML/CSS/JS sans framework) : fenêtre d'appairage par rôle,
+  appareils découverts et connus, actions pair/connect/disconnect/forget, mise à jour par SSE avec repli. Maquette validée au GATE 2
+  (`docs/mockup/v0.2.0/ui/webui_pairing__appairages.html`).
+
 ### Security (LOT-2 revue/audit)
 - API : arrêt < 5 s avec flux SSE ouverts ; `Authorization`/`Last-Event-ID` invalides sans trace ; évènement `state` à l'ouverture du flux ; jeton lisible par groupe/autres → API verrouillée ; CSP, `nosniff`, `X-Frame-Options`, `Referrer-Policy` ; statiques limités à html/js/css ; avertissement `api_listening_cleartext` hors loopback.
 - BlueZ : `PairableTimeout`, rollback de `open()`, `pair()` découplé de la requête HTTP (409 `operation_in_progress`), `ExecStopPost` de btmuxd (`btmux-adapters.sh --reset`) ; regex MAC/alias en `fullmatch`.
@@ -46,7 +51,14 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
   jamais de `ssh`/`scp` vers un Pi en service) (#18).
 
 ### Reporté
-- Policy D-Bus de l'utilisateur de service : resserrement des droits à faire avant la mise en production (#20).
+- Policy D-Bus de l'utilisateur de service : resserrement des droits à faire avant la mise en production (#20, M3).
+- Plafond du nombre de flux SSE simultanés (F6).
+- Durcissements systemd supplémentaires de `btmuxd.service` (I4, I5).
+- HTTPS pour l'API et la Web UI (#22, v0.3.0).
+
+### Connu
+- Un adaptateur mono-rôle à deux rôles (configuration mono) est listé deux fois dans l'état de l'API : comportement accepté en v0.2.0.
+- HTTP clair sur le LAN, jeton Bearer statique : l'API est utilisable sur un LAN de confiance uniquement (`api.listen: "127.0.0.1:8088"` pour le local).
 
 ## [0.1.0] — 2026-10-23 (non publié : exploration mono-adaptateur, clôturée sans release)
 

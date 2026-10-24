@@ -19,10 +19,38 @@ via le daemon `btmuxd`. Aucun logiciel n'est requis côté sources.
 - **v0.1.0** — exploration mono-adaptateur, clôturée sans release (socle, spikes #5 et #7 provisoires).
 - **v0.2.0** — exploration technique bi-adaptateur (2 × TP-Link UB500) : préparation des dongles, campagne de
   revalidation (T3.2b), agent d'appairage BlueZ (#20), API HTTP (#21), Web UI de suivi et gestion des appairages (#16).
+- **v0.3.0** — daemon `btmuxd` : routage, reconnexion, politique de connexions ; MQTT prévu en v0.4.0. HTTPS (#22).
+
 > **Sécurité de l'API (v0.2.0)** : HTTP **en clair** sur le LAN (jeton Bearer statique) ; HTTPS prévu en #22 (v0.3.0). Pour une
 > utilisation locale seulement : `api.listen: "127.0.0.1:8088"`. Le jeton `/etc/btmux/token` doit être en mode 0600, sinon l'API
 > reste verrouillée (401).
-- **v0.3.0** — daemon `btmuxd` : routage, reconnexion, politique de connexions ; MQTT prévu en v0.4.0.
+
+## Web UI et API
+
+L'API HTTP et la Web UI d'appairages tournent sur le Pi, port **8088** : `http://<Pi>:8088/` (LAN uniquement).
+
+> ⚠️ **HTTP clair** : le jeton et les commandes circulent sans chiffrement sur le réseau local. Ne l'exposez pas hors d'un
+> LAN de confiance (HTTPS prévu en #22, v0.3.0). Pour un usage local seulement, `api.listen: "127.0.0.1:8088"` ;
+> à distance, passez par un tunnel SSH.
+
+- **Jeton** : `/etc/btmux/token` (mode 0600), à lire sur le Pi : `sudo cat /etc/btmux/token`. Tout `/api/*` l'exige en
+  `Authorization: Bearer <jeton>` ; sans jeton lisible, l'API reste verrouillée.
+- **Fenêtre d'appairage** : elle accepte les appairages entrants pendant sa durée. **Ne l'ouvrez pas dans un lieu public**
+  et refermez-la après usage.
+
+Client en ligne de commande `btmuxctl` (sur le Pi, le jeton est lu par défaut dans `/etc/btmux/token`) :
+
+```bash
+export BTMUX_URL=http://<Pi>:8088 BTMUX_TOKEN="$(sudo cat /etc/btmux/token)"
+btmuxctl state                          # état : adaptateurs, appareils (JSON)
+btmuxctl pairing open sources 60        # fenêtre d'appairage 60 s sur l'adaptateur « sources »
+btmuxctl pairing close                  # fermer la fenêtre
+btmuxctl device pair AA:BB:CC:DD:EE:FF  # appairer un casque découvert (initié par le Pi)
+btmuxctl device forget AA:BB:CC:DD:EE:FF
+```
+
+Rôles des adaptateurs : `sources` (vu comme casque par les PC et téléphones), `headsets` (vu comme source par les casques).
+
 
 ## État des spikes
 

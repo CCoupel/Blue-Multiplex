@@ -74,6 +74,18 @@ Vérifier (après reboot, sans session ouverte) : `loginctl show-user <utilisate
 `api_listening_cleartext` (avertissement). HTTPS est prévu en #22 (v0.3.0) ; en attendant, réserver l'API à un LAN de confiance
 ou la limiter au local avec `api.listen: "127.0.0.1:8088"` (accès distant par tunnel SSH).
 
+**Port 8088** : si un pare-feu est actif (`sudo ufw status`), n'autoriser `8088/tcp` que depuis le LAN de confiance. Le
+changement de `api.listen` se fait dans `/etc/btmux/config.yaml`, puis `sudo systemctl restart btmuxd`.
+
+**Smoke de l'API** (sans jeton : la route de vivacité est publique) :
+
+```bash
+curl -s http://127.0.0.1:8088/api/health        # 200 : {"version": "0.2.0.x", "adapters": N}
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8088/   # 200 : Web UI
+```
+
+Un `401` sur `/api/state` sans jeton est attendu ; avec `Authorization: Bearer $(sudo cat /etc/btmux/token)`, il doit répondre 200.
+
 ### 5 bis. WirePlumber en mode headless : désactiver `seat-monitoring` (obligatoire)
 
 Sur un serveur sans session graphique (aucun *seat* logind, cas de `btmuxd` sous un utilisateur avec linger),

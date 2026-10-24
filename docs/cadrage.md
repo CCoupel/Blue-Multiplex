@@ -102,7 +102,8 @@ Changement de profil côté casque : A2DP quand aucun appel n'est en cours, HFP 
 
 > **Note (v0.2.0, LOT-1 — 2026-10-23)** : le jeton n'est plus « statique dans la config » : `api.token_file` (défaut
 > `/etc/btmux/token`, 0600) est généré à l'installation et jamais régénéré. La configuration accepte **1 ou 2 adaptateurs**
-> (`contracts/config-schema.md`). Aiohttp est retenu pour l'API.
+> (`contracts/config-schema.md`). Aiohttp est retenu pour l'API. L'API et la Web UI d'appairages sont livrées en v0.2.0
+> (HTTP clair sur le LAN) ; HTTPS est reporté à #22 (v0.3.0).
 
 API HTTP (FastAPI ou aiohttp), écoute LAN uniquement, jeton statique dans la config :
 

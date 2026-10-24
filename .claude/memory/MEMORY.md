@@ -4,11 +4,12 @@
 
 ## Etat courant
 
-- **Version** : 0.2.0.0 (`pyproject.toml`) — milestone v0.2.0 en cours ; v0.1.0 (0.1.0.3) clôturée sans release, jamais publiée
-- **Branche** : `milestone/v0.2.0` (LOT-1 livré, tête de code `726478e`) ; `milestone/v0.1.0` close (historique réécrit 3 fois
-  le 2026-10-23 : les clones doivent se réaligner). `main` reçoit v0.1.0 par `deployer`.
+- **Version** : 0.2.0.1 (`pyproject.toml`) — milestone v0.2.0 en cours ; v0.1.0 (0.1.0.3) clôturée sans release, jamais publiée
+- **Branche** : `milestone/v0.2.0` (LOT-1 et LOT-2 livrés, tête de code `8cf91ff`) ; `milestone/v0.1.0` close (historique réécrit
+  3 fois le 2026-10-23 : les clones doivent se réaligner). `main` reçoit v0.1.0 par `deployer`.
 - **Travail en cours** : **v0.2.0 LOT-1 livré** (#14 #18 #17 : config bi-adaptateur V4 max 2 / V11 / V12, packaging déterministe,
-  jeton d'API, unité durcie), sans matériel. Prochain : DEPLOY QUALIF, puis GATE 4 LOT-1, puis LOT-2 (#20 #21 #16).
+  jeton d'API, unité durcie), sans matériel. **LOT-2 validé QA** (#20 agent BlueZ, #21 API HTTP aiohttp + SSE + `btmuxctl`,
+  #16 Web UI d'appairages ; sécurité GO score 82). HTTP clair sur le LAN en v0.2.0 (HTTPS = #22, v0.3.0).
   Dongles UB500 : à réceptionner (`docs/install-pi.md` §6). Maquette Web UI appairages validée GATE 2 (`docs/mockup/v0.2.0/ui/`).
 - **Milestones GitHub** :
   - `v0.1.0 — Phase 0 : exploration technique (mono-adaptateur)` : clôturé sans release ; #1 à #5 et #7 traités, #6 reporté
@@ -18,7 +19,7 @@
   - `v0.3.0 — Daemon btmuxd : routage, reconnexion, politique de connexions` : issues daemon créées après #11 ;
     sans agent, API ni Web UI (déjà en v0.2.0)
 - **Issues actives** : aucune en cours sur v0.1.0
-- **Prochaine étape** : DEPLOY QUALIF du LOT-1 (`deployer`), puis GATE 4 LOT-1, puis LOT-2 (#20 agent BlueZ, #21 API HTTP, #16 Web UI).
+- **Prochaine étape** : BUILD 0.2.0.2 + DEPLOY QUALIF (`deployer`), puis GATE 4 LOT-2 (séance Web UI avec l'utilisateur).
 
 ## Decisions techniques
 
