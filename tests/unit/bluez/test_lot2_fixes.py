@@ -291,6 +291,7 @@ async def test_security_headers_and_filtered_statics(service: BluezService, tmp_
     (static / "sub").mkdir(parents=True)
     for name, body in (
         ("index.html", "<p>x</p>"),
+        ("favicon.svg", "<svg/>"),
         ("app.js", "1"),
         ("style.css", "a{}"),
         ("README.md", "doc"),
@@ -309,6 +310,7 @@ async def test_security_headers_and_filtered_statics(service: BluezService, tmp_
             "/static/style.css",
             "/static/index.html",
             "/static/sub/ok.js",
+            "/static/favicon.svg",
         ):
             resp = await client.get(path)
             assert resp.status == 200, path
@@ -332,5 +334,7 @@ async def test_security_headers_and_filtered_statics(service: BluezService, tmp_
             assert (await client.get(path)).status == 404, path
         for path in ("/static/../secret.js", "/static/%2e%2e/secret.js"):
             assert (await client.get(path)).status in (401, 404), path
+        fav = await client.get("/favicon.ico")
+        assert fav.status == 204
         resp = await client.get("/api/state", headers=AUTH)
         assert resp.headers["X-Frame-Options"] == "DENY"

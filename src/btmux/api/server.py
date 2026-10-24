@@ -25,7 +25,7 @@ log = logging.getLogger("btmux.api")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_BODY = 16 * 1024
 SHUTDOWN_TIMEOUT_S = 2.0
-STATIC_SUFFIXES = {".html", ".js", ".css"}
+STATIC_SUFFIXES = {".html", ".js", ".css", ".svg"}
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
 
@@ -92,6 +92,11 @@ def create_app(
             return web.FileResponse(resolved)
 
         app.router.add_get("/static/{name:.+}", static_file)
+
+    async def favicon(request: web.Request) -> web.Response:
+        return web.Response(status=204)  # public : pas de bruit 401 dans la console du navigateur
+
+    app.router.add_get("/favicon.ico", favicon)
     return app
 
 

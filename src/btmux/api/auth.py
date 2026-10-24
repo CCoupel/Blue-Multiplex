@@ -16,7 +16,7 @@ from btmux.log import kv
 log = logging.getLogger("btmux.api")
 
 # Routes publiques : Web UI statique et sonde de vivacité.
-PUBLIC_EXACT = {"/", "/api/health"}
+PUBLIC_EXACT = {"/", "/api/health", "/favicon.ico"}
 PUBLIC_PREFIX = ("/static/",)
 SECURITY_HEADERS = {
     "Cache-Control": "no-store",
