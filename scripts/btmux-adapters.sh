@@ -15,7 +15,8 @@
 #   --wait N  : attend jusqu'à N s (défaut 20) que tous les adaptateurs de la config soient énumérés (USB).
 # Idempotent. Sans adaptateur présent : avertissement et code 0 (ne bloque jamais le démarrage). Config invalide : code 2.
 # Variables : BTMUX_PYTHON (défaut /opt/btmux/bin/python, repli python3), BTMUX_BTMGMT, BTMUX_BUSCTL,
-#   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »).
+#   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »), BTMUX_ALIAS_WAIT (« 5 » : attente max., en s, que
+#   BlueZ expose /org/bluez/hciN avant de poser l'alias), BTMUX_TRIGGER (unité appelante, journalisée : boot, btmuxd, hotplug).
 set -euo pipefail
 
 CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0
@@ -26,7 +27,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1; shift ;;
     --reset) RESET=1; shift ;;
     --wait) WAIT="${2:?secondes}"; shift 2 ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "btmux-adapters: option inconnue: $1" >&2; exit 2 ;;
   esac
 done
@@ -38,10 +39,15 @@ BTMGMT="${BTMUX_BTMGMT:-btmgmt}"
 BUSCTL="${BTMUX_BUSCTL:-busctl}"
 CLASS_SOURCES="${BTMUX_CLASS_SOURCES:-4 4}"
 CLASS_HEADSETS="${BTMUX_CLASS_HEADSETS:-1 12}"
+ALIAS_WAIT="${BTMUX_ALIAS_WAIT:-5}"
+[[ "$ALIAS_WAIT" =~ ^[0-9]+$ ]] || { echo "btmux-adapters: BTMUX_ALIAS_WAIT attend un entier" >&2; exit 2; }
+TRIGGER="${BTMUX_TRIGGER:-manuel}"
 SUDO=""
 [ "$(id -u)" -eq 0 ] || SUDO="sudo -n"
 
 log() { echo "btmux-adapters: $*"; }
+# Une ligne par passe : preuve QA du déclencheur (btmux-adapters.service, ExecStartPre/ExecStopPost de btmuxd, hotplug #23).
+if [ "$RESET" = 1 ]; then log "passe fermeture (déclencheur : $TRIGGER)"; else log "passe identité (déclencheur : $TRIGGER)"; fi
 FAILED=0
 run() {
   if [ "$DRY" = 1 ]; then echo "DRY-RUN: $*"; elif ! "$@"; then FAILED=1; echo "btmux-adapters: AVERTISSEMENT commande en échec: $*" >&2; fi
@@ -78,6 +84,23 @@ all_indices() {   # tous les contrôleurs présents : une ligne « index<TAB>MAC
   printf '%s\n' "$out" | awk '
     /^hci[0-9]+:/ { idx = substr($1, 4); sub(/:$/, "", idx) }
     tolower($1) == "addr" && idx != "" { print idx "\t" toupper($2); idx = "" }'
+}
+
+# Alias : l'objet D-Bus /org/bluez/hciN peut apparaître après l'index mgmt (hotplug, redémarrage de bluetoothd) ; on attend
+# jusqu'à ALIAS_WAIT s (pas de 0,5 s) qu'il réponde. Lecture seule : pas de sudo (propriété lisible par tous sur le bus système).
+alias_of() {   # index -> alias courant ; code 1 si l'objet ne répond pas
+  local out
+  out="$($BUSCTL get-property org.bluez "/org/bluez/hci$1" org.bluez.Adapter1 Alias 2>/dev/null)" || return 1
+  printf '%s\n' "$out" | sed -n 's/^s "\(.*\)"$/\1/p'
+}
+wait_alias() {   # index -> alias courant (code 1 après ALIAS_WAIT s sans réponse)
+  local tries=$((ALIAS_WAIT * 2))
+  while :; do
+    alias_of "$1" && return 0
+    [ "$tries" -gt 0 ] || return 1
+    tries=$((tries - 1))
+    sleep 0.5
+  done
 }
 
 # btmgmt inutilisable (absent, sudo refusé, socket mgmt) : message explicite, code 0 (contrat : ne bloque pas le démarrage)
@@ -122,8 +145,12 @@ while IFS=$'\t' read -r mac name roles; do
   # shellcheck disable=SC2086
   {
     run mgmt -i "$idx" power on
-    current="$($BUSCTL get-property org.bluez "/org/bluez/hci$idx" org.bluez.Adapter1 Alias 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p' || true)"
-    if [ "$current" != "$name" ]; then
+    if [ "$DRY" = 1 ]; then
+      run $SUDO $BUSCTL set-property org.bluez "/org/bluez/hci$idx" org.bluez.Adapter1 Alias s "$name"
+    elif ! current="$(wait_alias "$idx")"; then
+      # Classe et fermeture (btmgmt) restent appliquées ; l'alias le sera à la prochaine passe.
+      echo "btmux-adapters: AVERTISSEMENT /org/bluez/hci$idx absent du bus après ${ALIAS_WAIT} s — alias '$name' non appliqué" >&2
+    elif [ "$current" != "$name" ]; then
       run $SUDO $BUSCTL set-property org.bluez "/org/bluez/hci$idx" org.bluez.Adapter1 Alias s "$name"
     fi
     run mgmt -i "$idx" class $class

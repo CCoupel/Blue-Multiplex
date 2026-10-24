@@ -38,7 +38,8 @@ install -d -m 755 "$STAGE/DEBIAN" "$STAGE/usr/share/btmux/wireplumber" "$STAGE/u
 install -m 644 "$WHEEL" "$STAGE/usr/share/btmux/"
 install -m 644 "$LOCK" "$STAGE/usr/share/btmux/requirements.lock.txt"
 install -m 644 systemd/btmuxd.service systemd/btmux-adapters.service systemd/btmux-adapters.path \
-  systemd/btmux-adapters-reload.service "$STAGE/lib/systemd/system/"
+  systemd/btmux-adapters-reload.service systemd/btmux-adapters-identity.path systemd/btmux-adapters-identity.service \
+  "$STAGE/lib/systemd/system/"
 install -m 644 config/config.example.yaml "$STAGE/usr/share/btmux/config.example.yaml"
 install -m 644 config/config.example.yaml "$STAGE/etc/btmux/config.example.yaml"
 install -m 644 config/dbus/btmux.conf.in "$STAGE/usr/share/btmux/btmux.conf.in"
@@ -97,9 +98,11 @@ case "$1" in
 remove|upgrade|deconfigure)
   # Surveillance du fichier d'état arrêtée d'abord (aucun redémarrage piloté pendant la mise à jour, #23),
   # puis arrêt propre (SIGTERM, code 0) ; config.yaml, jeton et fichier d'état sont conservés.
-  systemctl stop btmux-adapters.path >/dev/null 2>&1 || true
-  systemctl stop btmuxd.service btmux-adapters.service btmux-adapters-reload.service >/dev/null 2>&1 || true
-  [ "$1" = remove ] && systemctl disable btmuxd.service btmux-adapters.service btmux-adapters.path >/dev/null 2>&1 || true
+  systemctl stop btmux-adapters.path btmux-adapters-identity.path >/dev/null 2>&1 || true
+  systemctl stop btmuxd.service btmux-adapters.service btmux-adapters-reload.service \
+    btmux-adapters-identity.service >/dev/null 2>&1 || true
+  [ "$1" = remove ] && systemctl disable btmuxd.service btmux-adapters.service btmux-adapters.path \
+    btmux-adapters-identity.path >/dev/null 2>&1 || true
   ;;
 esac
 exit 0

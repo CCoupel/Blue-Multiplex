@@ -5,6 +5,8 @@ After=bluetooth.service btmux-adapters.service user@1000.service dbus.service
 Wants=bluetooth.service btmux-adapters.service user@1000.service
 # #23 D3 : surveillance du fichier d'état (redémarrage piloté après changement de rôles)
 Wants=btmux-adapters.path
+# #23 : réapplication de l'identité d'un contrôleur affecté rebranché (sans redémarrage de btmuxd)
+Wants=btmux-adapters-identity.path
 Requires=dbus.service
 # ~1 tentative par minute en cas d'adaptateur absent ; abandon après 30 échecs en 1 h
 StartLimitIntervalSec=3600
@@ -22,6 +24,8 @@ Environment=XDG_RUNTIME_DIR=/run/user/1000
 # repli code 4 (relance par Restart=, btmux-adapters.service oneshot déjà active n'est pas rejouée). Idempotent (≈ 4 s ;
 # au boot, redondant avec btmux-adapters.service). '+' : root hors bac à sable ; '-' : un échec ne bloque jamais le démarrage
 # (config invalide : btmuxd sort lui-même en code 2).
+# Journal « passe identité (déclencheur : btmuxd) » (ExecStartPre) / « passe fermeture » (ExecStopPost).
+Environment=BTMUX_TRIGGER=btmuxd
 ExecStartPre=-+/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 0
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
 # Couvre ExecStartPre (btmgmt plafonné à 10 s par appel) ; dépassement = échec de démarrage, relancé par Restart=.

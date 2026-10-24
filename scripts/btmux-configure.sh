@@ -5,8 +5,9 @@
 # Usage : btmux-configure.sh --user UTILISATEUR --share DIR [--units DIR] [--no-restart]
 #   --share : dossier des fichiers de données (config.example.yaml, btmux.conf.in, 51-btmux-no-seat.conf, roles.conf),
 #             à plat ou avec un sous-dossier wireplumber/ ;
-#   --units : copie btmuxd.service, btmux-adapters.service, btmux-adapters.path et btmux-adapters-reload.service dans
-#             /etc/systemd/system (déploiement ; le .deb les installe lui-même).
+#   --units : copie btmuxd.service, btmux-adapters.service, btmux-adapters.path, btmux-adapters-reload.service,
+#             btmux-adapters-identity.path et btmux-adapters-identity.service dans /etc/systemd/system
+#             (déploiement ; le .deb les installe lui-même).
 # Variables (tests) : BTMUX_ROOT (préfixe de tous les chemins système ; désactive chown et systemctl), BTMUX_UID, BTMUX_HOME.
 set -eu
 
@@ -50,7 +51,8 @@ fi
 # --- unités (déploiement) --------------------------------------------------------------------------------
 if [ -n "$UNITS" ]; then
   mkdir -p "$ROOT/etc/systemd/system"
-  for u in btmuxd.service btmux-adapters.service btmux-adapters.path btmux-adapters-reload.service; do
+  for u in btmuxd.service btmux-adapters.service btmux-adapters.path btmux-adapters-reload.service \
+    btmux-adapters-identity.path btmux-adapters-identity.service; do
     install -m 644 "$UNITS/$u" "$ROOT/etc/systemd/system/$u"
   done
 fi
@@ -60,6 +62,14 @@ fi
 # StateDirectory=btmux (btmuxd.service) en maintient ensuite propriétaire et mode. Contenu jamais touché.
 install -d -m 750 "$ROOT/var/lib/btmux"
 [ -n "$ROOT" ] || chown "$USER_NAME:$(id -gn "$USER_NAME")" "$ROOT/var/lib/btmux"
+# Requête d'identité (#23 hotplug) : fichier vide créé s'il manque, pour que btmux-adapters-identity.path surveille un
+# fichier existant (même raison que adapters.yaml) ; btmuxd le remplace ensuite atomiquement. Contenu jamais touché.
+REQ="$ROOT/var/lib/btmux/identity.request"
+if [ ! -e "$REQ" ]; then
+  (umask 027; : > "$REQ")
+fi
+chmod 640 "$REQ"
+[ -n "$ROOT" ] || chown "$USER_NAME:$(id -gn "$USER_NAME")" "$REQ"
 
 # --- policy D-Bus de l'utilisateur de service -------------------------------------------------------------
 mkdir -p "$ROOT/etc/dbus-1/system.d"
@@ -98,11 +108,13 @@ mkdir -p "$ROOT/usr/share/btmux/wireplumber"
 # --- systemd -----------------------------------------------------------------------------------------------
 if [ -z "$ROOT" ]; then
   systemctl daemon-reload
-  systemctl enable btmux-adapters.service btmux-adapters.path btmuxd.service >/dev/null 2>&1 || true
+  systemctl enable btmux-adapters.service btmux-adapters.path btmux-adapters-identity.path btmuxd.service \
+    >/dev/null 2>&1 || true
   systemctl reload dbus.service >/dev/null 2>&1 || true
   if [ "$RESTART" = 1 ]; then
     systemctl restart btmux-adapters.service || true
     systemctl restart btmux-adapters.path || true
+    systemctl restart btmux-adapters-identity.path || true
     systemctl restart btmuxd.service || true
   fi
 fi

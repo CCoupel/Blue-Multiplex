@@ -1,0 +1,15 @@
+[Unit]
+Description=btmux — surveillance des requêtes d'identité (contrôleur affecté rebranché, #23)
+Documentation=https://github.com/CCoupel/Blue-Multiplex
+# Quand un contrôleur affecté réapparaît sur le bus (InterfacesAdded org.bluez.Adapter1 : rebranchement, reset USB,
+# énumération tardive au boot), btmuxd (non root) écrit /var/lib/btmux/identity.request de façon atomique
+# (temporaire voisin + rename) ; ce changement déclenche btmux-adapters-identity.service (root), qui réapplique alias et
+# classe du rôle SANS redémarrer btmuxd. Pas de règle udev. Sans cette unité, l'identité n'est rétablie qu'au prochain
+# démarrage de btmuxd (ExecStartPre). Le fichier est créé vide à l'installation (btmux-configure.sh).
+
+[Path]
+PathChanged=/var/lib/btmux/identity.request
+Unit=btmux-adapters-identity.service
+
+[Install]
+WantedBy=multi-user.target

@@ -220,6 +220,8 @@ D3_UNITS = (
     "btmux-adapters.service",
     "btmux-adapters.path",
     "btmux-adapters-reload.service",
+    "btmux-adapters-identity.path",
+    "btmux-adapters-identity.service",
 )
 
 
@@ -332,8 +334,12 @@ def test_configure_keeps_an_existing_state_file(tmp_path: Path) -> None:
 
 def test_configure_enables_the_path_unit() -> None:
     text = CONFIGURE.read_text()
-    assert "systemctl enable btmux-adapters.service btmux-adapters.path btmuxd.service" in text
+    assert (
+        "systemctl enable btmux-adapters.service btmux-adapters.path btmux-adapters-identity.path "
+        "btmuxd.service" in text
+    )
     assert "systemctl restart btmux-adapters.path" in text
+    assert "systemctl restart btmux-adapters-identity.path" in text
 
 
 def test_deploy_ships_all_units() -> None:
@@ -357,4 +363,58 @@ def test_build_deb_ships_d3_units_and_maintainer_scripts_handle_them(tmp_path: P
     prerm = (ctrl / "prerm").read_text()
     assert prerm.index("systemctl stop btmux-adapters.path") < prerm.index("btmuxd.service")
     assert "disable btmuxd.service btmux-adapters.service btmux-adapters.path" in prerm
+    assert prerm.index("btmux-adapters-identity.path") < prerm.index("btmuxd.service")
+    assert "btmux-adapters-identity.service" in prerm
+    assert prerm.count("btmux-adapters-identity.path") == 2  # stop puis disable (remove)
     assert "/var/lib/btmux" in (ctrl / "postrm").read_text().split("purge)", 1)[1]
+
+
+# --- #23 hotplug : requête d'identité (identity.request -> .path -> service root, sans restart) ---
+REQUEST = "/var/lib/btmux/identity.request"
+
+
+def test_identity_path_unit_watches_the_request_file() -> None:
+    unit = _unit("btmux-adapters-identity.path")
+    assert f"PathChanged={REQUEST}\n" in unit
+    assert "Unit=btmux-adapters-identity.service\n" in unit
+    assert "WantedBy=multi-user.target" in unit
+    assert "udev" in unit  # « pas de règle udev » reste documenté
+
+
+def test_identity_service_replays_the_identity_pass_without_restarting_btmuxd() -> None:
+    unit = _unit("btmux-adapters-identity.service")
+    assert "Type=oneshot\n" in unit and "User=" not in unit  # root : btmgmt, busctl set-property
+    assert (
+        f"ExecStart=/usr/lib/btmux/btmux-adapters.sh --state {STATE} "
+        "--config /etc/btmux/config.yaml --wait 5\n" in unit
+    )
+    assert unit.count("ExecStart=") == 1 and "--reset" not in unit
+    assert "systemctl restart" not in unit  # ni redémarrage de btmuxd, ni coupure de l'API
+    assert "After=bluetooth.service" in unit
+    assert "ConditionPathExists=/etc/btmux/config.yaml\n" in unit
+    assert "TimeoutStartSec=60\n" in unit
+    assert "Environment=BTMUX_TRIGGER=hotplug\n" in unit
+    assert "\n[Install]" not in unit  # déclenchée uniquement par le .path
+    assert "RemainAfterExit" not in unit  # chaque requête doit pouvoir la relancer
+
+
+def test_btmuxd_wants_the_identity_path_and_units_name_their_trigger() -> None:
+    unit = _unit("btmuxd.service")
+    assert "Wants=btmux-adapters-identity.path\n" in unit
+    assert "Environment=BTMUX_TRIGGER=btmuxd\n" in unit
+    assert "Environment=BTMUX_TRIGGER=boot\n" in _unit("btmux-adapters.service")
+
+
+def test_configure_creates_an_empty_identity_request_and_keeps_it(tmp_path: Path) -> None:
+    assert _configure(tmp_path).returncode == 0
+    req = tmp_path / "root/var/lib/btmux/identity.request"
+    assert req.is_file() and req.read_text() == ""
+    assert oct(req.stat().st_mode & 0o777) == "0o640"
+    req.write_text("2026-10-24T21:00:00+02:00\thci1\tAA:BB:CC:00:00:02\n")
+    assert _configure(tmp_path).returncode == 0
+    assert req.read_text().startswith("2026-10-24T21:00:00")
+
+
+def test_deploy_warns_when_the_identity_path_is_inactive() -> None:
+    text = (ROOT / "scripts" / "deploy.sh").read_text()
+    assert "systemctl is-active --quiet btmux-adapters-identity.path" in text

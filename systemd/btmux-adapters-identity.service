@@ -1,0 +1,16 @@
+[Unit]
+Description=btmux — réapplication de l'identité des contrôleurs après hotplug (alias, classe, découverte fermée, #23)
+Documentation=https://github.com/CCoupel/Blue-Multiplex
+# Déclenchée uniquement par btmux-adapters-identity.path (aucune section d'installation). btmuxd n'est PAS redémarré :
+# API et SSE restent disponibles. Passe idempotente (≈ 4 s) ; une salve de requêtes est coalescée par systemd
+# (unité singleton, le .path re-déclenche une fois si le fichier a changé pendant la passe).
+After=bluetooth.service btmux-adapters.service
+ConditionPathExists=/etc/btmux/config.yaml
+
+[Service]
+Type=oneshot
+# Journal « passe identité (déclencheur : hotplug) » : distingue cette passe de celles du boot et de l'ExecStartPre.
+Environment=BTMUX_TRIGGER=hotplug
+# --wait 5 : BlueZ a exposé Adapter1 mais btmgmt peut ne pas lister l'index aussitôt (rare).
+ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5
+TimeoutStartSec=60
