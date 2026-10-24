@@ -25,4 +25,6 @@
 | tests/integration/packaging/lockfile/ | integration | packaging | Export lockfile deterministe --no-dev --frozen --hashes (#17) | feature | |
 | tests/integration/packaging/scripts/ | integration | packaging | Syntaxe des scripts shell et btmux-adapters.sh --dry-run (#18) | feature | |
 | tests/procedures/spikes/revalidation-ub500/ | procedure | bluez | Campagne UB500 bi (S1/S2 : 05, 06, 07, 08, 12, 13) | feature | hardware |
-| tests/integration/api/mock/ | integration | api | Conformite du mock API (tests/fixtures/api-mock) au contrat HTTP/modeles (#21 #16) | feature | |
+| tests/integration/api/mock/ | integration | api | Fonctions propres au mock API (pilotage, statique, scenarios) (#16) | feature | |
+| tests/integration/api/auth/ | integration | api | Authentification Bearer, routes protegees, jeton (#21) | feature | critical |
+| tests/integration/api/pairing/ | integration | api | API appairages : fenetre, decouverte, pair/connect/forget, erreurs, SSE (#20 #21) | feature | |
