@@ -192,13 +192,13 @@ function renderPanel(role) {
   const r = ROLES[role];
   const a = S.adapters.find((x) => x.role === role);
   const el = $(r.id);
-  el.replaceChildren(
+  el.replaceChildren(...[
     h("h2", { id: r.h }, r.title, " ", tag(r.hci, "on"),
       a ? [tag(`alias ${a.alias}`), tag(a.powered ? "powered" : "éteint", a.powered ? "on" : "off")] : tag("absent", "off")),
     h("p", { class: "sub" }, a ? `${a.mac} · ${a.hci} · classe ${a.class} · ${r.sub}` : r.sub),
     pairBox(role),
     devicesTable(S.devices.filter((d) => d.adapter === role)),
-    role === "headsets" ? discoveredBlock() : null);
+    role === "headsets" ? discoveredBlock() : null].flat().filter(Boolean));
 }
 
 function render() {

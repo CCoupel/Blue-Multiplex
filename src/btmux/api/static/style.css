@@ -40,3 +40,7 @@ dialog { border:1px solid var(--line); border-radius:10px; background:var(--card
 dialog::backdrop { background:rgba(0,0,0,.45); }
 dialog menu { display:flex; gap:8px; justify-content:flex-end; padding:0; margin:0; }
 #errors { display:contents; }
+main > * { min-width:0; }
+section { overflow-x:auto; }
+.log { white-space:pre-wrap; word-break:break-word; }
+@media (max-width: 600px) { header { position:static; } .actions button { padding:8px 10px; } }

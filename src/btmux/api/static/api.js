@@ -48,11 +48,11 @@ export const api = {
   discovered: () => request("GET", "/api/discovered"),
   openPairing: (adapter, duration) => request("POST", "/api/pairing", { adapter, duration }),
   closePairing: () => request("DELETE", "/api/pairing"),
-  pair: (mac) => request("POST", `/api/devices/${encodeURIComponent(mac)}/pair`),
-  connect: (mac) => request("POST", `/api/devices/${encodeURIComponent(mac)}/connect`),
-  disconnect: (mac) => request("POST", `/api/devices/${encodeURIComponent(mac)}/disconnect`),
-  forget: (mac) => request("POST", `/api/devices/${encodeURIComponent(mac)}/forget`),
-  patch: (mac, fields) => request("PATCH", `/api/devices/${encodeURIComponent(mac)}`, fields),
+  pair: (mac) => request("POST", `/api/devices/${mac}/pair`),
+  connect: (mac) => request("POST", `/api/devices/${mac}/connect`),
+  disconnect: (mac) => request("POST", `/api/devices/${mac}/disconnect`),
+  forget: (mac) => request("POST", `/api/devices/${mac}/forget`),
+  patch: (mac, fields) => request("PATCH", `/api/devices/${mac}`, fields),
 };
 
 // SSE via fetch : EventSource ne sait pas envoyer l'en-tête Authorization (exigé sur /api/events).
