@@ -1,7 +1,7 @@
 // Tests headless du client SSE (node --test api.test.mjs) — aucune dépendance.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { openEvents, request, ApiError } from "./api.js";
+import { openEvents, request, ApiError } from "../../src/btmux/api/static/api.js";
 
 const enc = new TextEncoder();
 function streamOf(chunks, { hang = false } = {}) {

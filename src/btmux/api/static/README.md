@@ -17,4 +17,4 @@ L'API simulée (`tests/fixtures/api-mock/`, fournie par test-writer) sert ces fi
 
 ## Tests
 
-    node --test src/btmux/api/static/api.test.mjs   # client SSE/HTTP, sans dépendance (hors CI pytest)
+    node --test tests/webui/api.test.mjs   # client SSE/HTTP, sans dépendance (hors CI pytest)
