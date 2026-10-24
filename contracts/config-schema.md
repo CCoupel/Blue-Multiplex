@@ -125,13 +125,16 @@ Règles :
   1. `PUT` validé (no-op → 200 sans suite) → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, rien n'est
      déconnecté, `pending` reste faux) → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → réponse 202 + événement
      `roles {pending:true, restart_expected:true}` ; toute écriture ultérieure répond 409 `change_pending`.
-  2. `btmux-adapters.path` (`PathChanged=/var/lib/btmux/adapters.yaml`) déclenche **`btmux-adapters-reload.service`** (root, oneshot) :
-     `btmux-adapters.sh --state … --config …` (alias, classe, fermeture de **tous** les contrôleurs sans rôle, ≈ 4 s) puis
-     `ExecStartPost=systemctl restart --no-block btmuxd.service` → arrêt propre (SIGTERM, code 0) et relance immédiate (pas de `RestartSec`,
-     ce n'est pas un échec ; `StartLimitBurst` inchangé).
+  2. `btmux-adapters.path` (`PathChanged=/var/lib/btmux/adapters.yaml`) déclenche **`btmux-adapters-reload.service`** (root, oneshot), qui ne
+     fait que `systemctl restart --no-block btmuxd.service` → arrêt propre (SIGTERM, code 0 ; `ExecStopPost` referme appairage et découverte)
+     et relance immédiate (pas de `RestartSec`, ce n'est pas un échec ; `StartLimitBurst` inchangé). L'**identité des contrôleurs** (alias,
+     classe, fermeture de **tous** les contrôleurs sans rôle, ≈ 4 s) est appliquée par l'`ExecStartPre` (root) de `btmuxd.service` :
+     `btmux-adapters.sh --state … --config … --wait 0`, **à chaque démarrage du daemon** — redémarrage piloté comme repli code 4 (étape 3) ou
+     boot. Elle n'est donc appliquée qu'une fois par cycle, et le SIGTERM arrive < 1 s après l'écriture : pas de course avec le repli.
   3. **Repli** : si le daemon n'a pas reçu SIGTERM **30 s** après l'écriture (unité path absente/inactive), il sort en code **4**
      (`RestartForceExitStatus=4` ; `RestartSec=30` s'applique alors — journal `restart_fallback`).
-  Coupure attendue de l'API : ≈ 10–15 s (arrêt ≤ 2 s + démarrage ≈ 5–10 s, mesuré 9,5 s en QUALIF 0.2.0.4) ; les clients SSE
+  Coupure attendue de l'API : ≈ 15–20 s (arrêt ≤ 2 s + `ExecStartPre` ≈ 4 s + démarrage ≈ 5–10 s, mesuré 9,5 s hors `ExecStartPre` en
+  QUALIF 0.2.0.4) ; les clients SSE
   reconnectent et reçoivent un `state` complet (`roles.pending:false`, `source:"state"`). `btmux-adapters.service` (démarrage) est inchangé.
 - Un contrôleur configuré mais absent (`present:false`) n'empêche plus le démarrage : le code de sortie 3 (« adaptateur introuvable ») est
   **remplacé** par l'état `role_unassigned` + journal `adapter_missing` (CHANGED — permet de réaffecter via l'API/Web UI).

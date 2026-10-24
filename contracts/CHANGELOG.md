@@ -54,3 +54,7 @@
 
 - **[CHANGED]** `contracts/http-endpoints.md` — `PUT /api/controllers/roles` : le no-op (200) est évalué avant tout 409 d'état (prioritaire sur `pairing_open`) ; ordre de contrôle 400 → no-op → `change_pending` → `pairing_open` → `devices_connected` ; **[NEW]** code 500 `state_write_failed` (écriture du fichier d'état impossible : aucune déconnexion, `pending:false`, `Roles` inchangé).
 - **[CHANGED]** `contracts/config-schema.md` — séquence D3 : l'écriture de l'état précède la fermeture de la fenêtre et les déconnexions (échec → 500 sans effet) ; délai de repli code 4 porté de **20 s à 30 s**.
+
+## [20261024-g] — alignement D3 sur l'infra livrée (`c24ffba`, rapport `infra-20261024-194500` écart 1) — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § Affectation étape 2 : `btmux-adapters-reload.service` ne fait que redémarrer `btmuxd` ; l'identité des contrôleurs (`btmux-adapters.sh --state …`) est appliquée par l'`ExecStartPre` de `btmuxd.service` à chaque démarrage (redémarrage piloté, repli code 4, boot) ; coupure attendue de l'API ≈ **15–20 s** (au lieu de 10–15 s). Le libellé de la Web UI (« environ 15 s ») et la procédure R-16 suivent.
