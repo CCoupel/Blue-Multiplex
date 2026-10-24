@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>btmux — Appairages</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>btmux · Appairages</h1>
+  <span class="status" id="status" role="status"><span class="dot err"></span>non connecté</span>
+  <span class="spacer"></span>
+  <form id="token-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label class="status">Jeton <input id="token" type="password" size="14" autocomplete="off" aria-label="Jeton API"></label>
+    <button type="submit">Enregistrer</button>
+  </form>
+</header>
+
+<main>
+  <div id="errors" aria-live="assertive"></div>
+  <section aria-labelledby="h-src" id="panel-sources"></section>
+  <section aria-labelledby="h-hp" id="panel-headsets"></section>
+  <section class="full" aria-labelledby="h-log">
+    <h2 id="h-log">Événements <span class="tag" id="mode-tag">—</span></h2>
+    <pre class="log" id="log" aria-live="off"></pre>
+  </section>
+</main>
+
+<dialog id="confirm" aria-labelledby="confirm-title">
+  <p id="confirm-text"></p>
+  <menu><button type="button" id="confirm-cancel">Annuler</button><button type="button" class="danger" id="confirm-ok">Oublier</button></menu>
+</dialog>
+<script type="module" src="app.js"></script>
+</body>
+</html>
