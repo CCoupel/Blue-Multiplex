@@ -60,7 +60,7 @@ def test_config_cli_adapters_tsv(tmp_path: Path, capsys: pytest.CaptureFixture[s
 
 def test_config_cli_invalid_returns_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     cfg = tmp_path / "c.yaml"
-    cfg.write_text("adapters: []\n")
+    cfg.write_text("adapters: 3\n")
     assert config_main(["adapters", "--config", str(cfg)]) == 2
     assert capsys.readouterr().err
 

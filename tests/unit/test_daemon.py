@@ -11,6 +11,6 @@ def test_invalid_config_does_not_start_daemon(
 ) -> None:
     monkeypatch.setattr(daemon, "run", lambda *a: pytest.fail("daemon démarré"))
     cfg = tmp_path / "bad.yaml"
-    cfg.write_text("adapters: []\n")
+    cfg.write_text("adapters: 3\n")
     assert btmuxd.main(["--config", str(cfg)]) == 2
     assert "config:" in capsys.readouterr().err

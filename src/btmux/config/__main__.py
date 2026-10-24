@@ -10,7 +10,8 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from btmux.config import ConfigError, load_config
+from btmux.config import ConfigError, load_effective
+from btmux.config.models import DEFAULT_STATE_PATH
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -18,9 +19,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     adapters = sub.add_parser("adapters", help="liste les adaptateurs (MAC, nom, rôles)")
     adapters.add_argument("--config", default="/etc/btmux/config.yaml")
+    adapters.add_argument(
+        "--state", default=str(DEFAULT_STATE_PATH), help="fichier d'état (prime sur la config)"
+    )
     args = parser.parse_args(argv)
     try:
-        cfg = load_config(args.config)
+        cfg = load_effective(args.config, args.state)
     except ConfigError as exc:
         for line in exc.errors:
             print(line, file=sys.stderr)

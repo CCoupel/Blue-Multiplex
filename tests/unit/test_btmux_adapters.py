@@ -118,7 +118,7 @@ def test_one_of_two_adapters_present(tmp_path: Path) -> None:
 
 
 def test_invalid_config_exits_2(tmp_path: Path) -> None:
-    proc, _ = _run(tmp_path, "adapters: []\n", BTMGMT_INFO_BI)
+    proc, _ = _run(tmp_path, "adapters: 3\n", BTMGMT_INFO_BI)
     assert proc.returncode == 2
     assert "configuration invalide" in proc.stderr
 

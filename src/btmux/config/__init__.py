@@ -1,6 +1,6 @@
 """Configuration de btmuxd (`/etc/btmux/config.yaml`) — contrat `contracts/config-schema.md`."""
 
-from btmux.config.loader import load_config, parse_config
+from btmux.config.loader import load_config, parse_adapter_list, parse_config
 from btmux.config.models import (
     Adapter,
     ApiConfig,
@@ -10,6 +10,7 @@ from btmux.config.models import (
     MqttConfig,
     PairingConfig,
 )
+from btmux.config.state import load_effective, load_state, write_state_atomic
 
 __all__ = [
     "Adapter",
@@ -20,5 +21,9 @@ __all__ = [
     "MqttConfig",
     "PairingConfig",
     "load_config",
+    "load_effective",
+    "load_state",
+    "parse_adapter_list",
     "parse_config",
+    "write_state_atomic",
 ]

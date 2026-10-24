@@ -39,20 +39,20 @@ def test_bi_adapter_mac_normalized_to_uppercase(load, valid_config):
 def test_v3_duplicated_roles_across_two_adapters_rejected(errors_of, valid_config):
     valid_config["adapters"] = [BOTH_A, BOTH_B]
     errs = errors_of(valid_config)
-    assert_has_error(errs, "role 'sources' must be provided by exactly one adapter (found 2)")
-    assert_has_error(errs, "role 'headsets' must be provided by exactly one adapter (found 2)")
+    assert_has_error(errs, "role 'sources' must be provided by at most one adapter (found 2)")
+    assert_has_error(errs, "role 'headsets' must be provided by at most one adapter (found 2)")
 
 
 def test_v3_same_role_on_both_adapters_rejected(errors_of, valid_config):
     valid_config["adapters"] = [SRC, dict(HP, roles=["sources"])]
     errs = errors_of(valid_config)
-    assert_has_error(errs, "role 'sources' must be provided by exactly one adapter (found 2)")
-    assert_has_error(errs, "role 'headsets' must be provided by exactly one adapter (found 0)")
+    assert_has_error(errs, "role 'sources' must be provided by at most one adapter (found 2)")
 
 
-def test_v2_zero_adapters_rejected(errors_of, valid_config):
+def test_v2_zero_adapters_accepted_since_23(load, valid_config):
+    """#23 : `adapters` peut être vide (rôles affectés ensuite par l'API)."""
     valid_config["adapters"] = []
-    assert_has_error(errors_of(valid_config), "adapters")
+    assert load(valid_config).adapters == ()
 
 
 @pytest.mark.parametrize("extra_count", [1, 2])

@@ -13,6 +13,7 @@ Kind = Literal["source", "headset"]
 DEFAULT_LISTEN = "0.0.0.0:8088"
 DEFAULT_TOKEN_FILE = Path("/etc/btmux/token")
 DEFAULT_PRIORITY = 100
+DEFAULT_STATE_PATH = Path("/var/lib/btmux/adapters.yaml")
 
 
 class ConfigError(Exception):
@@ -63,6 +64,9 @@ class Config(_Model):
     api: ApiConfig = Field(default_factory=ApiConfig)
     mqtt: MqttConfig = Field(default_factory=MqttConfig)
     pairing: PairingConfig = Field(default_factory=PairingConfig)
+    # Hors YAML : provenance de la liste `adapters` (#23) et chemin du fichier d'état
+    adapters_source: Literal["state", "config"] = "config"
+    state_path: Path = DEFAULT_STATE_PATH
 
     def adapter_for_role(self, role: Role) -> Adapter:
         for adapter in self.adapters:

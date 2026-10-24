@@ -67,8 +67,8 @@ def _adapters(raw: Any, err: _Errors) -> tuple[list[Adapter], list[list[str]], i
     Les règles croisées (V3, V4) portent sur toutes les entrées, même si l'une a une erreur de champ
     (« toutes les erreurs sont collectées »).
     """
-    if not isinstance(raw, list) or not raw:
-        err.add("adapters: expected a non-empty list")
+    if not isinstance(raw, list):
+        err.add("adapters: expected a list")
         return [], [], 0
     result: list[Adapter] = []
     all_roles: list[list[str]] = []
@@ -267,12 +267,11 @@ def _pairing(raw: Any, err: _Errors) -> PairingConfig:
 
 
 def _role_policy(all_roles: list[list[str]], count: int, err: _Errors) -> None:
-    """V3 (rôle porté par exactement un adaptateur) et V4 (au plus 2 adaptateurs)."""
-    if count:
-        for role in ROLES:
-            found = sum(1 for roles in all_roles if role in roles)
-            if found != 1:
-                err.add(f"role '{role}' must be provided by exactly one adapter (found {found})")
+    """V3 (rôle porté par au plus un adaptateur, #23) et V4 (au plus 2 adaptateurs)."""
+    for role in ROLES:
+        found = sum(1 for roles in all_roles if role in roles)
+        if found > 1:
+            err.add(f"role '{role}' must be provided by at most one adapter (found {found})")
     if count > MAX_ADAPTERS:
         err.add(f"at most {MAX_ADAPTERS} adapters are supported (found {count})")
 
@@ -300,6 +299,16 @@ def parse_config(data: Any) -> Config:
         mqtt=mqtt,
         pairing=pairing,
     )
+
+
+def parse_adapter_list(data: Any) -> tuple[Adapter, ...]:
+    """Valide une liste `adapters` seule (fichier d'état #23) : règles V1–V4 et V12."""
+    err = _Errors()
+    adapters, all_roles, count = _adapters(data, err)
+    _role_policy(all_roles, count, err)
+    if err.items:
+        raise ConfigError(err.items)
+    return tuple(adapters)
 
 
 def load_config(path: str | Path) -> Config:

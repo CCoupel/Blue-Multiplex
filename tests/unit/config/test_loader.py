@@ -50,7 +50,7 @@ def test_top_level_not_mapping() -> None:
 @pytest.mark.parametrize(
     ("mutate", "fragment"),
     [
-        (lambda d: d.update(adapters={"a": 1}), "adapters: expected a non-empty list"),
+        (lambda d: d.update(adapters={"a": 1}), "adapters: expected a list"),
         (lambda d: d["adapters"].__setitem__(0, 3), "adapters[0]: expected a mapping"),
         (lambda d: d["adapters"][0].pop("mac"), "adapters[0].mac: required"),
         (lambda d: d["adapters"][0].update(roles=["x"]), "unknown role 'x'"),
@@ -135,10 +135,7 @@ def test_two_adapters_same_role_is_a_v3_error() -> None:
     data["adapters"][1]["roles"] = ["sources"]
     errors = _errors(data)
     assert any(
-        "role 'headsets' must be provided by exactly one adapter (found 0)" in e for e in errors
-    )
-    assert any(
-        "role 'sources' must be provided by exactly one adapter (found 2)" in e for e in errors
+        "role 'sources' must be provided by at most one adapter (found 2)" in e for e in errors
     )
 
 
@@ -195,5 +192,5 @@ def test_v4_and_v3_are_collected_even_with_a_field_error() -> None:
     assert any("adapters[2].mac" in e for e in errors)
     # le rôle `sources` est porté par deux entrées (dont celle au MAC invalide) : V3 le voit aussi
     assert any(
-        "role 'sources' must be provided by exactly one adapter (found 2)" in e for e in errors
+        "role 'sources' must be provided by at most one adapter (found 2)" in e for e in errors
     )

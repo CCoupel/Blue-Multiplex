@@ -67,9 +67,9 @@ def test_v1_missing_adapter_mac_rejected(errors_of, valid_config):
 
 
 # --- V2 : adaptateurs et roles ----------------------------------------------------------------
-def test_v2_empty_adapters_rejected(errors_of, valid_config):
+def test_v2_empty_adapters_accepted_since_23(load, valid_config):
     valid_config["adapters"] = []
-    assert_has_error(errors_of(valid_config), "adapters")
+    assert load(valid_config).adapters == ()
 
 
 def test_v2_missing_adapters_rejected(errors_of, valid_config):
@@ -119,13 +119,13 @@ def test_v2_name_over_248_bytes_rejected(errors_of, valid_config):
 
 # --- V3 : chaque role porte par exactement un adaptateur --------------------------------------
 @pytest.mark.parametrize("missing", ["headsets", "sources"])
-def test_v3_role_provided_by_no_adapter_rejected(errors_of, valid_config, missing):
+def test_v3_role_provided_by_no_adapter_accepted_since_23(load, valid_config, missing):
+    """#23 : un rôle non couvert est admis (daemon en état `role_unassigned`)."""
     present = "sources" if missing == "headsets" else "headsets"
     valid_config["adapters"][0]["roles"] = [present]
-    assert_has_error(
-        errors_of(valid_config),
-        f"role '{missing}' must be provided by exactly one adapter (found 0)",
-    )
+    cfg = load(valid_config)
+    with pytest.raises(LookupError):
+        cfg.adapter_for_role(missing)
 
 
 def test_v3_role_provided_by_two_adapters_rejected(errors_of, valid_config):
@@ -133,7 +133,7 @@ def test_v3_role_provided_by_two_adapters_rejected(errors_of, valid_config):
         {"mac": "AA:BB:CC:00:00:02", "name": "btmux2", "roles": ["headsets"]}
     )
     errs = errors_of(valid_config)
-    assert_has_error(errs, "role 'headsets' must be provided by exactly one adapter (found 2)")
+    assert_has_error(errs, "role 'headsets' must be provided by at most one adapter (found 2)")
 
 
 # --- V10 : fichier absent / YAML invalide -----------------------------------------------------
