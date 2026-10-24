@@ -94,14 +94,15 @@ class RoleManager:
 
     async def set_roles(self, body: Any) -> tuple[int, RolesModel]:
         """Retourne `(200, Roles)` si rien ne change, `(202, Roles)` si l'état est écrit (redémarrage imminent)."""
-        self.check_writable()
         async with self._lock:
-            self.check_writable()
-            wanted, confirm = self._parse(body)
-            current = self._inventory.roles().to_dict()
+            wanted, confirm = self._parse(body)  # 400
+            current = (
+                self._inventory.roles().to_dict()
+            )  # pendant un changement : l'affectation écrite
             affected = [r for r in ROLES if wanted[r] != current[r]]
-            if not affected:  # no-op prioritaire sur pairing_open : rien à appliquer
+            if not affected:  # no-op 200, avant change_pending et pairing_open
                 return 200, self._inventory.roles()
+            self.check_writable()  # 409 change_pending
             if self._pairing.window_open:
                 raise WindowOpen("close the pairing window before changing roles")
             connected = [

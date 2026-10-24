@@ -276,3 +276,15 @@ async def test_noop_wins_over_open_pairing_window(api: _AsyncCtx, state_file: Pa
 
 def test_default_restart_fallback_delay_is_30s(config: Config, bus: FakeBus) -> None:
     assert BluezService(config, bus).restart_timeout == 30.0
+
+
+async def test_put_roles_check_order_while_pending(api: _AsyncCtx) -> None:
+    """Contrat [20261024-f] : 400 → no-op 200 → 409 change_pending."""
+    async with api as a:
+        assert (await _put(a, {"sources": EXTRA, "headsets": SRC}))[0] == 202
+        status, body = await _put(a, {"sources": "zz", "headsets": None})
+        assert (status, body["error"]) == (400, "invalid_mac")  # 400 avant change_pending
+        status, roles = await _put(a, {"sources": EXTRA, "headsets": SRC})
+        assert status == 200 and roles["pending"] is True  # identique à l'écrit : no-op
+        status, body = await _put(a, {"sources": SRC, "headsets": HP})
+        assert (status, body["error"]) == (409, "change_pending")

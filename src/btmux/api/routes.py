@@ -160,7 +160,7 @@ async def controllers(request: web.Request) -> web.Response:
 
 @routes.put("/api/controllers/roles")
 async def put_roles(request: web.Request) -> web.Response:
-    service = _service(request, write=True)
+    service = _service(request)  # change_pending géré par RoleManager (après 400 et no-op)
     try:
         body: Any = json.loads(await request.read() or b"null")
     except ValueError as exc:
