@@ -23,7 +23,7 @@
 | Projet | `Blue-Multiplex` |
 | Team | `blue-multiplex-team` |
 | Backend | `Python 3.12 (asyncio, dbus-fast, PipeWire)` |
-| Frontend | `HTML/CSS/JS vanilla (Web UI minimale, ultérieure)` |
+| Frontend | `HTML/CSS/JS vanilla (Web UI minimale)` |
 | Base de données | `Aucune (config YAML /etc/btmux/config.yaml)` |
 | Build | `uv build` |
 | Tests | `uv run pytest` |
@@ -75,7 +75,7 @@ et exécutés sur le Pi de qualif, jamais en CI.
 |-----|------|---------|-------|
 | `planner` | Plan d'implémentation + contrats API | `.claude/agents/implementation-planner.template.md` | permanent |
 | `dev-backend` | Backend (Python 3.12 (asyncio, dbus-fast, PipeWire)) | `.claude/agents/dev-backend.template.md` | permanent |
-| `dev-frontend` | Frontend (HTML/CSS/JS vanilla (Web UI minimale, ultérieure)) | `.claude/agents/dev-frontend.template.md` | permanent |
+| `dev-frontend` | Frontend (HTML/CSS/JS vanilla (Web UI minimale)) | `.claude/agents/dev-frontend.template.md` | permanent |
 | `test-writer` | Scripts de tests + procédures QA | `.claude/agents/test-writer.template.md` | permanent |
 | `code-reviewer` | Revue de code | `.claude/agents/code-reviewer.template.md` | permanent |
 | `qa` | Exécution des tests et validation | `.claude/agents/qa.template.md` | permanent |

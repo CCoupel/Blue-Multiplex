@@ -13,8 +13,8 @@ ls dist/btmux-*.whl && uv run --isolated --with dist/btmux-*.whl python -c "impo
 ## 3. Contrôle du Serveur
 
 `btmuxd` tourne sous systemd sur le Pi (qualif ou prod), jamais sur le poste de développement
-(BlueZ/PipeWire réels requis). Les commandes s'exécutent sur le Pi (`ssh pi@btmux-qualif.local` /
-`ssh pi@btmux.local`).
+(BlueZ/PipeWire réels requis). Les commandes s'exécutent sur le Pi (`ssh ubuntu@btmux-qualif.local` /
+`ssh ubuntu@btmux.local`).
 
 ### 3.1 Arrêt gracieux
 

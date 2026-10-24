@@ -8,12 +8,12 @@
 
 | Couche | Technologie |
 |--------|-------------|
-| Daemon `btmuxd` | Python ≥ 3.12, asyncio, `dbus-fast` (BlueZ D-Bus), PipeWire piloté via `pw-dump`/`pw-link`/`pw-metadata` ou script Lua WirePlumber (choix phase 0) |
-| API HTTP | FastAPI ou aiohttp (choix phase 0), LAN uniquement, jeton statique (`/etc/btmux/token`) |
+| Daemon `btmuxd` | Python ≥ 3.12, asyncio, `dbus-fast` (BlueZ D-Bus), PipeWire piloté par `pw-dump -m` (événements) + session `pw-cli` persistante (liens reconstruits si la session meurt ; Lua WirePlumber non retenu — spike #7) |
+| API HTTP | aiohttp (+ flux SSE), LAN uniquement, jeton statique (`/etc/btmux/token`) |
 | CLI `btmuxctl` | Python, consomme l'API |
-| Web UI (ultérieure) | HTML/CSS/JS vanilla, statique, servie par l'API — `src/btmux/api/static/` |
+| Web UI | HTML/CSS/JS vanilla, statique, servie par l'API — `src/btmux/api/static/` |
 | Config | YAML `/etc/btmux/config.yaml` — aucune base de données |
-| Cible | Raspberry Pi 4/5, Raspberry Pi OS / Debian Trixie 64 bits, BlueZ, PipeWire ≥ 1.2, WirePlumber 0.5, systemd |
+| Cible | Raspberry Pi (qualif : Pi 3 B), Ubuntu Server 26.04 LTS arm64, BlueZ, PipeWire ≥ 1.2, WirePlumber 0.5, systemd |
 | Outillage | `uv`, `ruff`, `mypy`, `pytest` |
 
 ## Structure cible
@@ -67,10 +67,11 @@ Marqueurs pytest : `slow`, `smoke`, `critical`, `hardware` (nécessite BlueZ/Pip
 
 | Env | Machine | Publish | Deploy |
 |-----|---------|---------|--------|
-| QUALIF | Pi de qualification (`pi@btmux-qualif.local`) | promote (wheel dans `build/qualif_v<X.Y.Z>/`) | SSH + `scripts/deploy.sh` |
-| PROD | Pi de production (`pi@btmux.local`) | rebuild-ci (tag `vX.Y.Z` → `.github/workflows/release.yml` → `.deb`) | SSH + `dpkg -i` |
+| QUALIF | Pi de qualification (`ubuntu@btmux-qualif.local`) | promote (wheel dans `build/qualif_v<X.Y.Z>/`) | SSH + `scripts/deploy.sh` |
+| PROD | Pi de production (`ubuntu@btmux.local`) | rebuild-ci (tag `vX.Y.Z` → `.github/workflows/release.yml` → `.deb`) | SSH + `dpkg -i` |
 
-Procédures détaillées : `.claude/agents/environments/{publish,deploy}.{qualif,prod}.template.md`.
+Procédures détaillées : `.claude/agents/environments/{publish,deploy}.{qualif,prod}.template.md`, complétées par les compagnons
+`publish.qualif.md` et `deploy.qualif.md`, qui priment sur le template (aucun compagnon PROD pour l'instant).
 
 ## Contraintes permanentes
 
@@ -78,3 +79,14 @@ Procédures détaillées : `.claude/agents/environments/{publish,deploy}.{qualif
 - Adaptateurs identifiés par adresse MAC, jamais par `hci0`/`hci1`.
 - Appairage refusé hors fenêtre explicite (60 s) ; appareils appairés marqués Trusted.
 - Un casque = une source active au plus ; priorité appel HFP > sélection manuelle > dernier flux actif.
+- Tests `hardware` (BlueZ/PipeWire réels) : sur le Pi de qualif uniquement, jamais en CI.
+- Les branches `milestone/*` peuvent être réécrites (purges d'historique) : toujours `git fetch` et vérifier la tête avant d'agir.
+
+## Spikes (exploration technique)
+
+- Label GitHub `spike` ; livrable = rapport `docs/spikes/NN-<sujet>.md` + décision ; code jetable sous `spikes/`
+  (hors `src/`, hors couverture).
+- Preuves de spikes : jamais commitées brutes ; elles passent par `spikes/common/mask_evidence.py --check` (code 0)
+  avant tout commit sous `docs/spikes/`.
+- Les spikes radio exigent des étapes manuelles de l'utilisateur (appairages, appels) : chaque ordre DEV de spike
+  s'accompagne d'une procédure manuelle en `_work/handoff/`.

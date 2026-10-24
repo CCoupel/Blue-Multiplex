@@ -38,23 +38,17 @@
   par `spikes/common/mask_evidence.py` avant tout commit sous `docs/spikes/`.
 - Alias `btmux` non persistant après reboot (`btmgmt name`) : correctif `bluetoothctl system-alias` ou `Name=` dans `main.conf`
   prévu en v0.2.0 (#18).
-- Label GitHub `spike` cree : exploration technique, livrable = rapport `docs/spikes/NN-<sujet>.md` + decision, code jetable sous `spikes/` (hors `src/`, hors couverture).
 - Schema config `adapters` en liste `{mac, name, roles}` (une entree en v0.1.0, deux en v0.2.0, contrat V4 à lever) — diverge du cadrage §4.6, à aligner en #11.
 - Daemon fonctionnel, routage, MQTT, GPIO : hors v0.1.0 ; daemon en v0.3.0, MQTT/GPIO en v0.4.0. Agent BlueZ (#20), API HTTP (#21) et Web UI (#16) en v0.2.0.
-- Les spikes radio exigent des etapes manuelles utilisateur (appairages, appels) : prevoir une procedure manuelle en `_work/handoff/` a chaque ordre DEV de spike.
 
 ## Points de contexte pour la prochaine session
 
-- `CLAUDE.md` § Contexte mentionne encore « mono-adaptateur v0.1.0 » : à corriger (`/init-project` ou `doc-updater`).
-- Les teammates signalent que `TEAMMATES_PROTOCOL.md` et les `<agent>.md` compagnons n'existent pas (seuls les `.template.md`) et que l'adresse `main` est refusee par SendMessage (ils repondent a `team-lead`) — sans impact.
-- Les branches `milestone/*` peuvent être réécrites (purges) : toujours `git fetch` et vérifier la tête avant d'agir.
+- L'adresse `main` est refusee par SendMessage : les teammates repondent a `team-lead` — sans impact.
 
 ## Regles critiques
 
-- Aucun logiciel ni configuration cote sources (PC pro verrouille) — le Pi doit etre un casque Bluetooth generique.
-- Les adaptateurs sont identifies par adresse MAC, jamais par hci0/hci1.
-- Tests `hardware` (BlueZ/PipeWire reels) : sur le Pi de qualif uniquement, jamais en CI.
-- Preuves de spikes : jamais commitées brutes ; passent par `mask_evidence.py --check` (code 0) avant `docs/spikes/`.
+- Règles permanentes, conventions de spike et branches réécrites : voir `.claude/agents/context/PROJECT_CONTEXT.md`
+  (« Contraintes permanentes », « Spikes ») et `CLAUDE.md` (contrainte non négociable côté sources).
 
 ## Corrections de comportement
 

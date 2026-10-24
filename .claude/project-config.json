@@ -18,12 +18,12 @@
       "language": "python",
       "framework": "asyncio",
       "runtime": ">=3.12",
-      "notes": "dbus-fast (BlueZ), PipeWire via pw-dump/pw-link/pw-metadata ou script Lua WirePlumber (choix phase 0), API HTTP FastAPI ou aiohttp, CLI btmuxctl"
+      "notes": "dbus-fast (BlueZ), PipeWire via pw-dump -m + session pw-cli persistante (Lua WirePlumber non retenu, spike #7), API HTTP aiohttp + SSE, CLI btmuxctl"
     },
     "frontend": {
       "language": "javascript",
       "framework": null,
-      "notes": "Web UI minimale, HTML/CSS/JS vanilla servie par l'API — prevue plus tard, pas en v1"
+      "notes": "Web UI minimale, HTML/CSS/JS vanilla servie par l'API — Web UI d'appairages livree en v0.2.0 (#16)"
     },
     "mobile": null,
     "firmware": null,
@@ -34,8 +34,8 @@
       "notes": "Configuration YAML /etc/btmux/config.yaml, aucune base de donnees"
     },
     "target": {
-      "hardware": "Raspberry Pi 4/5, 2 dongles USB BT 5.x (RTL8761B)",
-      "os": "Raspberry Pi OS / Debian Trixie 64 bits",
+      "hardware": "Raspberry Pi (qualif : Pi 3 B), 2 dongles USB BT 5.x TP-Link UB500 (RTL8761BU)",
+      "os": "Ubuntu Server 26.04 LTS arm64",
       "system": "BlueZ, PipeWire >= 1.2, WirePlumber 0.5, systemd"
     }
   },

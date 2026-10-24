@@ -8,7 +8,7 @@
 HTML5 semantique, CSS moderne (variables, grid/flex, `prefers-color-scheme`), JavaScript ES2022+ natif
 (modules ES, `fetch`, `EventSource`/WebSocket si l'API l'expose). Aucun framework, aucun bundler, aucun CDN :
 fichiers statiques servis par le daemon Python `btmuxd` (`src/btmux/api/static/`). Cible : navigateur, usage
-telephone comme PC. UI prevue plus tard, pas en v1.
+telephone comme PC. Web UI d'appairages livree en v0.2.0 (#16).
 
 ## Toolchain et commandes
 
