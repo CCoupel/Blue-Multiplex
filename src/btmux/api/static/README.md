@@ -14,3 +14,7 @@ L'API simulée (`tests/fixtures/api-mock/`, fournie par test-writer) sert ces fi
     # puis ouvrir http://127.0.0.1:8088/ et saisir le jeton affiché par le mock
 
 À défaut du mock : `python -m http.server -d src/btmux/api/static 8000` n'affiche que l'interface (les appels `/api/*` échouent).
+
+## Tests
+
+    node --test src/btmux/api/static/api.test.mjs   # client SSE/HTTP, sans dépendance (hors CI pytest)
