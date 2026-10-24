@@ -24,6 +24,13 @@ from btmux.log import kv
 log = logging.getLogger("btmux.api")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_BODY = 16 * 1024
+SHUTDOWN_TIMEOUT_S = 2.0
+STATIC_SUFFIXES = {".html", ".js", ".css"}
+LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+
+
+async def _close_streams(app: web.Application) -> None:
+    app[HUB].close_streams()
 
 
 class ApiStartError(Exception):
@@ -54,6 +61,7 @@ def create_app(
     if token is not None:
         app[TOKEN_KEY] = token
     app.add_routes(routes)
+    app.on_shutdown.append(_close_streams)
     directory = STATIC_DIR if static is None else static
     if directory.is_dir():
         index = directory / "index.html"
@@ -64,7 +72,26 @@ def create_app(
             return web.FileResponse(index)
 
         app.router.add_get("/", root)
-        app.router.add_static("/static/", directory, follow_symlinks=False)
+
+        root_dir = directory.resolve()
+
+        async def static_file(request: web.Request) -> web.StreamResponse:
+            # Seulement html/js/css, sans sortie du dossier ni lien symbolique (pas de README, pas de .mjs de test).
+            candidate = root_dir / request.match_info["name"]
+            try:
+                resolved = candidate.resolve(strict=True)
+            except (OSError, RuntimeError, ValueError):
+                raise web.HTTPNotFound() from None
+            if (
+                resolved != candidate.absolute()
+                or root_dir not in resolved.parents
+                or resolved.suffix.lower() not in STATIC_SUFFIXES
+                or not resolved.is_file()
+            ):
+                raise web.HTTPNotFound()
+            return web.FileResponse(resolved)
+
+        app.router.add_get("/static/{name:.+}", static_file)
     return app
 
 
@@ -85,7 +112,9 @@ class ApiServer:
         self._hub = EventHub(self.service.inventory)
         app = create_app(self.service, token, hub=self._hub, static=self._static)
         self._hub.start()
-        self._runner = web.AppRunner(app, access_log=None, handler_cancellation=True)
+        self._runner = web.AppRunner(
+            app, access_log=None, handler_cancellation=True, shutdown_timeout=SHUTDOWN_TIMEOUT_S
+        )
         await self._runner.setup()
         try:
             site = web.TCPSite(self._runner, host, port)
@@ -96,6 +125,14 @@ class ApiServer:
         sockets = getattr(site._server, "sockets", None) or []
         self.port = sockets[0].getsockname()[1] if sockets else port
         log.info(kv("api_listening", listen=f"{host}:{self.port}", locked=token is None))
+        if host not in LOOPBACK:
+            log.warning(
+                kv(
+                    "api_listening_cleartext",
+                    listen=f"{host}:{self.port}",
+                    note="HTTP en clair sur le LAN (HTTPS prevu en #22)",
+                )
+            )
         return self
 
     async def _cleanup(self) -> None:

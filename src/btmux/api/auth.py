@@ -18,6 +18,13 @@ log = logging.getLogger("btmux.api")
 # Routes publiques : Web UI statique et sonde de vivacité.
 PUBLIC_EXACT = {"/", "/api/health"}
 PUBLIC_PREFIX = ("/static/",)
+SECURITY_HEADERS = {
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+}
 Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
 TOKEN_KEY = web.AppKey("token", str)
 
@@ -34,7 +41,10 @@ def load_token(path: Path) -> str | None:
         log.error(kv("token_empty", file=path))
         return None
     if mode & 0o077 and os.name == "posix":
-        log.warning(kv("token_file_permissive", file=path, mode=oct(mode)))
+        log.error(kv("token_file_permissive_locked", file=path, mode=oct(mode)))
+        return (
+            None  # fail-closed : jeton lisible par le groupe/autres → API verrouillée (chmod 600)
+        )
     return token
 
 
@@ -53,7 +63,9 @@ def check_bearer(header: str | None, token: str | None) -> bool:
     scheme, _, value = header.partition(" ")
     if scheme.lower() != "bearer" or not value:
         return False
-    return hmac.compare_digest(value.strip().encode(), token.encode())
+    return hmac.compare_digest(
+        value.strip().encode("utf-8", "surrogateescape"), token.encode("utf-8")
+    )
 
 
 @web.middleware
@@ -88,5 +100,7 @@ async def error_middleware(request: web.Request, handler: Handler) -> web.Stream
 @web.middleware
 async def no_store_middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
     response: web.StreamResponse = await handler(request)
-    response.headers["Cache-Control"] = "no-store"
+    if not response.prepared:  # les flux SSE posent leurs en-têtes avant l'envoi
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
     return response

@@ -221,8 +221,10 @@ class Inventory:
         if props is None or not self._managed(path):
             return
         mac = str(props.get("Address", "")).upper()
-        self._discovered.pop(mac, None)
-        if self._is_known(props):
+        was_discovered = self._discovered.pop(mac, None) is not None
+        if was_discovered and not self._is_known(props):
+            self.emit("device.removed", DeviceRemovedModel(mac, "headsets").to_dict())
+        elif self._is_known(props):
             kind = self._device_model(path, props).kind
             role = self._role_of(path, props, kind)
             self.emit("device.removed", DeviceRemovedModel(mac, role).to_dict())

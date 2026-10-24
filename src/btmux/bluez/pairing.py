@@ -19,6 +19,7 @@ from btmux.bluez.errors import (
     BondStale,
     InvalidRequest,
     NotDiscovered,
+    OperationInProgress,
     UnknownDevice,
     WindowClosed,
     WindowOpen,
@@ -72,6 +73,7 @@ class PairingManager:
         self._last_closed: tuple[str, str, str] | None = None  # (adapter, closed_at ISO, raison)
         self._outgoing: set[str] = set()
         self._bg: set[asyncio.Future[None]] = set()
+        self._pair_tasks: dict[str, asyncio.Future[None]] = {}
         self._lock = asyncio.Lock()
         inventory.set_window_provider(self.view)
 
@@ -129,25 +131,29 @@ class PairingManager:
             if self._window is not None:
                 raise WindowOpen("a pairing window is already open")
             path = self._adapter_path(role)
-            await self._set(path, "Pairable", "b", True)
-            await self._set(path, "DiscoverableTimeout", "u", seconds)
-            await self._set(path, "Discoverable", "b", True)
-            if role == "headsets":
-                self._inventory.set_discovery_collection(True)
-                try:
-                    await self._bus.call(
-                        path,
-                        "org.bluez.Adapter1",
-                        "SetDiscoveryFilter",
-                        "a{sv}",
-                        [{"Transport": Variant("s", "bredr")}],
-                    )
-                    await self._bus.call(path, "org.bluez.Adapter1", "StartDiscovery")
-                except DBusCallError as exc:
-                    if exc.name != "org.bluez.Error.InProgress":
-                        await self._reset_adapter(path)
-                        self._inventory.set_discovery_collection(False)
-                        raise _wrap(exc, "StartDiscovery") from exc
+            try:
+                await self._set(path, "Pairable", "b", True)
+                await self._set(path, "PairableTimeout", "u", seconds)
+                await self._set(path, "DiscoverableTimeout", "u", seconds)
+                await self._set(path, "Discoverable", "b", True)
+                if role == "headsets":
+                    self._inventory.set_discovery_collection(True)
+                    try:
+                        await self._bus.call(
+                            path,
+                            "org.bluez.Adapter1",
+                            "SetDiscoveryFilter",
+                            "a{sv}",
+                            [{"Transport": Variant("s", "bredr")}],
+                        )
+                        await self._bus.call(path, "org.bluez.Adapter1", "StartDiscovery")
+                    except DBusCallError as exc:
+                        if exc.name != "org.bluez.Error.InProgress":
+                            raise _wrap(exc, "StartDiscovery") from exc
+            except BaseException:
+                await self._reset_adapter(path)  # jamais de Pairable=true sans fenêtre
+                self._inventory.set_discovery_collection(False)
+                raise
             loop = asyncio.get_running_loop()
             opened = self._now()
             self._window = _Window(
@@ -225,7 +231,11 @@ class PairingManager:
         return path
 
     async def pair(self, mac: str) -> None:
-        """Appairage initié par le Pi (casques) : Pair + Trusted + Connect sur l'adaptateur `headsets`."""
+        """Appairage initié par le Pi (casques) : Pair + Trusted + Connect sur l'adaptateur `headsets`.
+
+        L'opération tourne dans une tâche de fond protégée : si le client HTTP se déconnecte, BlueZ
+        termine l'appairage et l'agent reste autorisé jusqu'à la fin (pas d'état incohérent).
+        """
         if self._window is None or self._window.role != "headsets":
             raise WindowClosed("a 'headsets' pairing window must be open")
         path = self._inventory.device_path(mac, "headsets")
@@ -233,6 +243,21 @@ class PairingManager:
             "headsets"
         ):
             raise NotDiscovered(f"device {mac.upper()} not seen on the headsets adapter")
+        if path in self._pair_tasks:
+            raise OperationInProgress(f"pairing of {mac.upper()} already in progress")
+        task = asyncio.ensure_future(self._pair(mac, path))
+        self._pair_tasks[path] = task
+        task.add_done_callback(lambda t: self._pair_done(path, t))
+        await asyncio.shield(task)
+
+    def _pair_done(self, path: str, task: asyncio.Future[None]) -> None:
+        self._pair_tasks.pop(path, None)
+        if not task.cancelled() and (exc := task.exception()) is not None:
+            log.info(
+                kv("pair_failed", device=path, error=exc)
+            )  # consommée ; le client l'a (peut-être) reçue
+
+    async def _pair(self, mac: str, path: str) -> None:
         props = self._inventory.device_props(path) or {}
         self._outgoing.add(path)
         try:
@@ -242,7 +267,10 @@ class PairingManager:
                 except DBusCallError as exc:
                     if exc.name != "org.bluez.Error.AlreadyExists":
                         raise _wrap(exc, "Pair") from exc
-            await self._bus.set_property(path, DEVICE_IFACE, "Trusted", "b", True)
+            try:
+                await self._bus.set_property(path, DEVICE_IFACE, "Trusted", "b", True)
+            except DBusCallError as exc:
+                raise _wrap(exc, "set Trusted") from exc
             await self._do_connect(path)
             log.info(kv("pair_ok", mac=mac.upper()))
         finally:

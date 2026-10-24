@@ -45,6 +45,13 @@ class NotDiscovered(NotFound):
     code = "not_discovered"
 
 
+class OperationInProgress(BluezError):
+    """Une opération est déjà en cours sur cet appareil — HTTP 409."""
+
+    code = "operation_in_progress"
+    status = 409
+
+
 class WindowClosed(BluezError):
     """Opération qui exige une fenêtre d'appairage ouverte — HTTP 409."""
 

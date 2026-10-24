@@ -17,7 +17,7 @@ from btmux.config.loader import ALIAS_RE
 
 SERVICE = web.AppKey("service", BluezService)
 HUB = web.AppKey("hub", EventHub)
-MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+MAC_RE = re.compile(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}")
 
 routes = web.RouteTableDef()
 
@@ -31,7 +31,7 @@ def _service(request: web.Request) -> BluezService:
 
 def _mac(request: web.Request) -> str:
     mac = request.match_info["mac"]
-    if not MAC_RE.match(mac):
+    if not MAC_RE.fullmatch(mac):
         raise InvalidMac(f"invalid MAC address '{mac}'")
     return mac.upper()
 
@@ -129,7 +129,7 @@ async def patch_device(request: web.Request) -> web.Response:
     if "trusted" in body and not isinstance(body["trusted"], bool):
         raise InvalidRequest("'trusted' must be a boolean")
     alias = body.get("alias")
-    if "alias" in body and not (isinstance(alias, str) and ALIAS_RE.match(alias)):
+    if "alias" in body and not (isinstance(alias, str) and ALIAS_RE.fullmatch(alias)):
         raise InvalidRequest("'alias' must match [a-z0-9][a-z0-9-]{0,31}")
     _device_json(service, mac)  # 404 si inconnu, avant toute modification
     if "trusted" in body:

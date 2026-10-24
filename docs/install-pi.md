@@ -67,6 +67,13 @@ sudo apt install -y bluez pipewire pipewire-audio wireplumber libspa-0.2-bluetoo
 Vérifier (après reboot, sans session ouverte) : `loginctl show-user <utilisateur> -p Linger` → `Linger=yes` et
 `ls /run/user/$(id -u <utilisateur>)/pipewire-0`.
 
+### 5 ter. API HTTP : HTTP clair sur le LAN
+
+`btmuxd` écoute par défaut sur `0.0.0.0:8088` en **HTTP non chiffré** (jeton Bearer statique dans `/etc/btmux/token`, mode
+0600 obligatoire : un jeton lisible par le groupe ou les autres verrouille l'API). Le journal porte alors
+`api_listening_cleartext` (avertissement). HTTPS est prévu en #22 (v0.3.0) ; en attendant, réserver l'API à un LAN de confiance
+ou la limiter au local avec `api.listen: "127.0.0.1:8088"` (accès distant par tunnel SSH).
+
 ### 5 bis. WirePlumber en mode headless : désactiver `seat-monitoring` (obligatoire)
 
 Sur un serveur sans session graphique (aucun *seat* logind, cas de `btmuxd` sous un utilisateur avec linger),

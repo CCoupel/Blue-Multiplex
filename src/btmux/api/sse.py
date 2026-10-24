@@ -9,10 +9,12 @@ from typing import Any
 
 from aiohttp import web
 
+from btmux.api.auth import SECURITY_HEADERS
 from btmux.bluez.inventory import Event, Inventory
 
 BUFFER_SIZE = 100
 KEEPALIVE_S = 15.0
+WRITE_TIMEOUT_S = 10.0
 RETRY_MS = 3000
 
 
@@ -29,6 +31,7 @@ class EventHub:
         self._buffer: deque[Event] = deque(maxlen=BUFFER_SIZE)
         self._changed = asyncio.Condition()
         self._base = inventory.last_event_id
+        self._closing = False
         self._sub = inventory.subscribe()
         self._task: asyncio.Task[None] | None = None
 
@@ -36,6 +39,7 @@ class EventHub:
         self._task = asyncio.create_task(self._pump())
 
     async def stop(self) -> None:
+        self._closing = True
         if self._task is not None:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
@@ -66,41 +70,57 @@ class EventHub:
         async with self._changed:
             try:
                 await asyncio.wait_for(
-                    self._changed.wait_for(lambda: self.latest_id > last_id), self.keepalive
+                    self._changed.wait_for(lambda: self._closing or self.latest_id > last_id),
+                    self.keepalive,
                 )
             except TimeoutError:
                 return False
         return True
 
+    def close_streams(self) -> None:
+        """Termine tous les flux SSE (arrêt du serveur) : réveille les clients en attente."""
+        self._closing = True
+        asyncio.ensure_future(self._wake())
+
+    async def _wake(self) -> None:
+        async with self._changed:
+            self._changed.notify_all()
+
+    async def _send(self, response: web.StreamResponse, payload: bytes) -> None:
+        await asyncio.wait_for(response.write(payload), WRITE_TIMEOUT_S)
+
     async def stream(self, request: web.Request) -> web.StreamResponse:
         response = web.StreamResponse(
             headers={
+                **SECURITY_HEADERS,
                 "Content-Type": "text/event-stream; charset=utf-8",
-                "Cache-Control": "no-store",
                 "X-Accel-Buffering": "no",
             }
         )
         await response.prepare(request)
-        await response.write(f"retry: {RETRY_MS}\n\n".encode())
-        raw = request.headers.get("Last-Event-ID", "")
-        last = int(raw) if raw.isdigit() else self.latest_id
-        if raw.isdigit():
-            missed = self.missed_since(last)
-            if missed is None:
-                state = self._inventory.state()
-                last = self.latest_id
-                await response.write(format_event(last, "state", state))
+        await self._send(response, f"retry: {RETRY_MS}\n\n".encode())
+        raw = request.headers.get("Last-Event-ID")
+        valid = raw is not None and raw.isascii() and raw.isdigit() and len(raw) <= 15
+        last = self.latest_id
+        # Sans (ou avec un) Last-Event-ID inutilisable : `state` complet ; valide et couvert : rejeu.
+        if raw is None or not valid or self.missed_since(int(raw)) is None:
+            await self._send(response, format_event(last, "state", self._inventory.state()))
+        else:
+            last = int(raw)
         try:
-            while True:
+            while not self._closing:
                 if not await self.wait_for_more(last):
-                    await response.write(b": ping\n\n")
+                    if not self._closing:
+                        await self._send(response, b": ping\n\n")
                     continue
+                if self._closing:
+                    break
                 for event in self.missed_since(last) or []:
-                    await response.write(format_event(event.id, event.kind, event.data))
+                    await self._send(response, format_event(event.id, event.kind, event.data))
                     last = event.id
                 if self.missed_since(last) is None:  # tampon dépassé pendant l'envoi
                     last = self.latest_id
-                    await response.write(format_event(last, "state", self._inventory.state()))
-        except ConnectionResetError:
+                    await self._send(response, format_event(last, "state", self._inventory.state()))
+        except (ConnectionResetError, TimeoutError):
             pass
         return response

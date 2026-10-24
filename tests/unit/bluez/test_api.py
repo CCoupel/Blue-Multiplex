@@ -260,7 +260,7 @@ def test_check_bearer_and_listen_and_token(tmp_path: Path) -> None:
     assert load_token(f) is None  # vide
     f.write_text(TOKEN + "\n")
     f.chmod(0o644)
-    assert load_token(f) == TOKEN  # permissif : avertit mais lit
+    assert load_token(f) is None  # lisible par les autres : API verrouillée
     f.chmod(0o600)
     assert load_token(f) == TOKEN
 

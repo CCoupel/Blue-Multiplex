@@ -13,6 +13,8 @@ Type=simple
 User=ubuntu
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
+# Quel que soit l'arrêt (SIGKILL, OOM, crash) : refermer appairage et découverte (root, hors bac à sable)
+ExecStopPost=-+/usr/lib/btmux/btmux-adapters.sh --config /etc/btmux/config.yaml --reset --wait 0
 Restart=on-failure
 # Codes 2 (configuration invalide) et 3 (adaptateur introuvable) : inutile de boucler (cf. contrat config-schema)
 RestartPreventExitStatus=2 3

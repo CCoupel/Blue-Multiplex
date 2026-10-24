@@ -68,6 +68,13 @@ class BluezService:
             self.bus.on_disconnect(self._lost.set)
             self._handlers_installed = True
         await self.bus.connect()
+        try:
+            return await self._start_connected()
+        except BaseException:
+            await self.bus.close()  # pas de connexion D-Bus laissée ouverte entre deux tentatives
+            raise
+
+    async def _start_connected(self) -> list[str]:
         objects = await self.bus.get_managed_objects()
         missing = self.registry.update(objects)
         if missing:

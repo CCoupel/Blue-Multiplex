@@ -14,6 +14,10 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
 - `btmuxctl` : `state`, `pairing open|close`, `device pair|connect|disconnect|forget` (`--url`/`--token`, `BTMUX_URL`/`BTMUX_TOKEN`, `/etc/btmux/token`).
 - Dépendance : `aiohttp`.
 
+### Security (LOT-2 revue/audit)
+- API : arrêt < 5 s avec flux SSE ouverts ; `Authorization`/`Last-Event-ID` invalides sans trace ; évènement `state` à l'ouverture du flux ; jeton lisible par groupe/autres → API verrouillée ; CSP, `nosniff`, `X-Frame-Options`, `Referrer-Policy` ; statiques limités à html/js/css ; avertissement `api_listening_cleartext` hors loopback.
+- BlueZ : `PairableTimeout`, rollback de `open()`, `pair()` découplé de la requête HTTP (409 `operation_in_progress`), `ExecStopPost` de btmuxd (`btmux-adapters.sh --reset`) ; regex MAC/alias en `fullmatch`.
+
 ### Changed
 - Config : `adapters[].mac` dupliquée refusée ; `adapters[].name` sans caractère de contrôle (sortie TSV de `btmux.config adapters` non forgeable) ; `btmux-adapters.sh` : `python -I -P`, `btmgmt` en échec = avertissement + code 0 ; installation pip `--only-binary=:all:` ; agent de spike fail-closed.
 - `btmuxd.service` durci (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp`, `RestartPreventExitStatus=2 3`) ;

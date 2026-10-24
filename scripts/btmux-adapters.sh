@@ -4,21 +4,23 @@
 # d'appareil selon le rôle, et ferme découverte et appairage (c'est btmuxd qui ouvre les fenêtres, #20).
 #   - rôle `sources`  -> classe « casque audio » (majeur 4 / mineur 4 ; la classe finale 0x240404 dépend des UUIDs) ;
 #   - rôle `headsets` seul -> classe « ordinateur » (majeur 1 / mineur 12 = portable).
-# Usage : btmux-adapters.sh [--config /etc/btmux/config.yaml] [--dry-run] [--wait SECONDES]
+# Usage : btmux-adapters.sh [--config /etc/btmux/config.yaml] [--dry-run] [--wait SECONDES] [--reset]
 #   --dry-run : affiche les commandes sans rien modifier (utilisable sans droits root).
+#   --reset   : ne fait que refermer appairage et découverte (bondable off, discov no) — ExecStopPost de btmuxd.
 #   --wait N  : attend jusqu'à N s (défaut 20) que tous les adaptateurs de la config soient énumérés (USB).
 # Idempotent. Sans adaptateur présent : avertissement et code 0 (ne bloque jamais le démarrage). Config invalide : code 2.
 # Variables : BTMUX_PYTHON (défaut /opt/btmux/bin/python, repli python3), BTMUX_BTMGMT, BTMUX_BUSCTL,
 #   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »).
 set -euo pipefail
 
-CONFIG=/etc/btmux/config.yaml DRY=0 WAIT=20
+CONFIG=/etc/btmux/config.yaml DRY=0 WAIT=20 RESET=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --config) CONFIG="${2:?chemin}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
+    --reset) RESET=1; shift ;;
     --wait) WAIT="${2:?secondes}"; shift 2 ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "btmux-adapters: option inconnue: $1" >&2; exit 2 ;;
   esac
 done
@@ -86,6 +88,12 @@ while IFS=$'\t' read -r mac name roles; do
   if [ -z "$idx" ]; then
     echo "btmux-adapters: AVERTISSEMENT adaptateur $mac ($name, rôles $roles) introuvable — ignoré" >&2
     [ "$DRY" = 1 ] && echo "DRY-RUN: (adaptateur $mac absent : aucune commande n'est planifiée)"
+    continue
+  fi
+  if [ "$RESET" = 1 ]; then
+    log "$mac -> hci$idx fermeture de l'appairage et de la découverte"
+    run mgmt -i "$idx" bondable off
+    run mgmt -i "$idx" discov no
     continue
   fi
   case ",$roles," in

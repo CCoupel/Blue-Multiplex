@@ -55,7 +55,7 @@ class _Errors:
 
 
 def _mac(value: Any, where: str, err: _Errors) -> str | None:
-    if isinstance(value, str) and MAC_RE.match(value):
+    if isinstance(value, str) and MAC_RE.fullmatch(value):
         return value.upper()
     err.add(f"{where}.mac: invalid MAC address '{value}'")
     return None
@@ -152,7 +152,7 @@ def _devices(raw: Any, err: _Errors) -> list[Device]:
         err.unknown_keys(item, DEVICE_KEYS, where)
         mac = _mac(item.get("mac"), where, err)
         alias = item.get("alias")
-        alias_ok = isinstance(alias, str) and bool(ALIAS_RE.match(alias))
+        alias_ok = isinstance(alias, str) and bool(ALIAS_RE.fullmatch(alias))
         if not alias_ok:
             err.add(f"{where}.alias: expected {ALIAS_RE.pattern}")
         kind = item.get("kind")
