@@ -112,7 +112,7 @@ Colonnes « A » / « B » : ✔ = jouable dans ce mode, — = sans objet. Coche
 | 9.2 | Contraintes de `docs/mockup/DECISIONS.md` respectées (aucune ajoutée sans validation) | | |
 | 9.3 | Les valeurs dynamiques (noms d'appareils) sont échappées : un nom `<img src=x onerror=alert(1)>` (via `/__mock__/incoming`) s'affiche en texte, sans exécution | | |
 | 9.4 | `GET /` et `/static/*` publics ; `/api/*` sans jeton → 401 (testé en S1) ; en-têtes de sécurité raisonnables (`X-Content-Type-Options`) | | |
-| 9.5 | Ressources : `curl -s -o /dev/null -w '%{http_code}' http://<IP-du-Pi>:8088/app.js` → **404** (hors `/static/`) et `.../static/app.js` → **200** ; `.../static/README.md` → 404 (seuls html/js/css) ; la page ne référence aucune ressource sans préfixe `/static/` (`grep -nE 'src=|href=' src/btmux/api/static/index.html`) | | |
+| 9.5 | Ressources : `curl -s -o /dev/null -w '%{http_code}' http://<IP-du-Pi>:8088/app.js` → **401 ou 404, jamais 200** (hors `/static/` : route non publique, auth requise sur l'app réelle ; 404 sur le mock) et `.../static/app.js` → **200** ; `.../static/README.md` → 404 (seuls html/js/css) ; la page ne référence aucune ressource sans préfixe `/static/` (`grep -nE 'src=|href=' src/btmux/api/static/index.html`) | | |
 
 ## Critères de validation
 
