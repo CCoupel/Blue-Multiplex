@@ -42,7 +42,7 @@ def test_valid_token_is_accepted(api):
 @pytest.mark.critical
 def test_unauthorized_request_does_not_change_state(api):
     api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60}, token=None)
-    assert api.call("GET", "/api/state")[1]["pairing"] is None
+    assert api.call("GET", "/api/state")[1]["pairing"]["open"] is False
 
 
 @pytest.mark.critical

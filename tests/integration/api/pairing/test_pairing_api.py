@@ -56,7 +56,7 @@ def test_state_matches_models_contract(api):
             "in_config",
         }
         assert d["kind"] in {"source", "headset", "unknown"} and MAC_RE.match(d["mac"])
-    assert st["pairing"] is None
+    assert st["pairing"]["open"] is False  # fermee : objet explicite, jamais null
 
 
 def test_empty_scenario_lists_no_device(api_factory):
@@ -67,7 +67,8 @@ def test_empty_scenario_lists_no_device(api_factory):
 def test_open_window_returns_202_and_model(api):
     status, w = api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
     assert status == 202
-    assert set(w) == {"adapter", "opened_at", "expires_at", "remaining_s"}
+    assert set(w) == {"open", "adapter", "opened_at", "expires_at", "remaining_s"}
+    assert w["open"] is True
     assert 0 < w["remaining_s"] <= 60
     _, st = api.call("GET", "/api/state")
     assert st["pairing"]["adapter"] == "sources"
@@ -107,14 +108,27 @@ def test_close_window_204_and_adapter_no_longer_discoverable(api):
     api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
     assert api.call("DELETE", "/api/pairing")[0] == 204
     _, st = api.call("GET", "/api/state")
-    assert st["pairing"] is None
+    assert st["pairing"]["open"] is False
+    assert st["pairing"]["reason"] == "closed" and st["pairing"]["adapter"] == "sources"
     assert all(a["discoverable"] is False for a in st["adapters"])
+
+
+def test_close_without_open_window_is_idempotent_204(api):
+    assert api.call("DELETE", "/api/pairing")[0] == 204
+    assert api.call("DELETE", "/api/pairing")[0] == 204
+    assert api.call("GET", "/api/state")[1]["pairing"] == {
+        "open": False,
+        "adapter": None,
+        "closed_at": None,
+        "reason": None,
+    }
 
 
 def test_window_expires_by_itself(api_factory):
     c = api_factory("default", time_scale=50.0)
     c.call("POST", "/api/pairing", {"adapter": "sources", "duration": 5})
-    assert wait_for(lambda: c.call("GET", "/api/state")[1]["pairing"] is None)
+    assert wait_for(lambda: c.call("GET", "/api/state")[1]["pairing"]["open"] is False)
+    assert c.call("GET", "/api/state")[1]["pairing"]["reason"] == "expired"
 
 
 # --- casques : decouverte et appairage initie par le Pi -------------------------------------
@@ -197,10 +211,26 @@ def test_connect_then_disconnect(api):
     assert wait_for(lambda: not _dev(api, mac)["connected"])
 
 
-def test_forget_known_in_config_device_keeps_it_listed_unpaired(api):
+def test_forget_known_in_config_device_keeps_a_placeholder(api):
     mac = "11:22:33:44:55:02"
     assert api.call("POST", f"/api/devices/{mac}/forget")[0] == 204
-    assert _dev(api, mac)["paired"] is False
+    d = _dev(api, mac)
+    assert (d["in_config"], d["paired"], d["trusted"], d["connected"]) == (
+        True,
+        False,
+        False,
+        False,
+    )
+    assert d["name"] is None and d["uuids"] == []
+
+
+def test_forget_unknown_to_config_device_disappears(api):
+    api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
+    api.call("POST", "/__mock__/incoming", {"mac": "BB:00:00:00:00:01", "name": "x"}, token=None)
+    assert api.call("POST", "/api/devices/BB:00:00:00:00:01/forget")[0] == 204
+    assert "BB:00:00:00:00:01" not in [
+        d["mac"] for d in api.call("GET", "/api/state")[1]["devices"]
+    ]
 
 
 @pytest.mark.parametrize("action", ["connect", "disconnect", "forget"])

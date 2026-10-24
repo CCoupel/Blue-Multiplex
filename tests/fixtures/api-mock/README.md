@@ -36,7 +36,7 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
   502 ; sinon 202 puis, après `pair_delay_s`, l'appareil est appairé/approuvé/connecté (événement `device`).
 - `connect`/`disconnect` : 202 puis événement `device` après `connect_delay_s` ; `forget` : 204 (appareil retiré, ou `paired:false`
   s'il est dans la config) ; `PATCH` : `{trusted}` et/ou `{alias}` (400 sinon).
-- `GET /api/events` : SSE, `retry: 3000`, `event:`/`id:`/`data:` ; ping `: ping` toutes les 15 s.
+- `GET /api/events` : SSE, `retry: 3000`, `event:`/`id:`/`data:` ; ping `: ping` toutes les 15 s ; `Last-Event-ID` honoré.
 
 ## Pilotage hors contrat (`/__mock__/*`, sans jeton)
 
@@ -49,10 +49,16 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
 | `POST /__mock__/fail {bluez_unavailable,stale_bond_macs,bluez_error_macs}` | change les pannes à chaud |
 | `POST /__mock__/close-streams` | ferme les flux SSE (test du repli/reconnexion) |
 
-## Hypothèses du mock à confirmer au contrat (questions posées à dev-backend)
+## Contrat SSE (arbitrage planner, contrats 3db8c3c) rejoué par le mock
 
-1. Événement SSE `pairing` à la **fermeture** de la fenêtre : le mock envoie `data: null`.
-2. Auth du flux SSE : en-tête `Authorization` uniquement (comme l'application réelle ; le front lit le SSE par `fetch`). Le mock n'émet pas l'événement `state` (resynchronisation) que l'application réelle envoie quand le tampon ne couvre plus `Last-Event-ID` : à simuler via `POST /__mock__/event {"event":"state","data":<State>}`.
-3. `forget` : événement `device` avec `paired:false` (le mock retire l'appareil de `/api/state` s'il n'est pas dans la config).
-4. Codes d'erreur applicatifs (`error`) : `unauthorized`, `invalid_*`, `pairing_open`, `pairing_closed`, `stale_bond`, `not_discovered`,
-   `unknown_device`, `bluez_error`, `bluez_unavailable`, `not_found` — non fixés par le contrat (seuls les statuts le sont).
+- `State.pairing` et l'événement `pairing` : **objet** `{open:true, adapter, opened_at, expires_at, remaining_s}` ouvert ;
+  fermé = `{open:false, adapter, closed_at, reason: "closed"|"expired"}` (`{open:false, adapter:null, closed_at:null, reason:null}`
+  tant qu'aucune fenêtre n'a existé) — **jamais `null`**.
+- `DELETE /api/pairing` idempotent (204 même sans fenêtre).
+- `forget` : événement `device.removed {mac, adapter}`, puis `device` placeholder (`in_config:true`, `paired/trusted/connected:false`,
+  `name:null`, `uuids:[]`) si l'appareil est dans la config ; sinon l'appareil disparaît de `State.devices`.
+- `Last-Event-ID` : le mock garde un tampon de 100 événements ; un id couvert rejoue les manqués, un id hors tampon envoie un
+  événement `state` (State complet).
+- Auth du flux : en-tête `Authorization` uniquement (pas de `?token=`) ; le front lit le SSE par `fetch` streaming.
+- Codes d'erreur applicatifs (`error`) non fixés par le contrat (seuls les statuts le sont) : `unauthorized`, `invalid_*`,
+  `pairing_open`, `pairing_closed`, `stale_bond`, `not_discovered`, `unknown_device`, `bluez_error`, `bluez_unavailable`, `not_found`.

@@ -63,6 +63,7 @@ class MockState:
         self.lock = threading.RLock()
         self.subscribers: list[queue.Queue] = []
         self.event_id = 0
+        self.buffer: list[tuple[int, str, str]] = []  # (id, event, message) — tampon de 100
         self.tasks: list[tuple[datetime, str, dict]] = []
         self.load(scenario)
 
@@ -80,6 +81,7 @@ class MockState:
             self.discovered: dict[str, dict] = {}
             self.pending_discovered = copy.deepcopy(sc.get("discoverable_headsets", []))
             self.pairing: dict | None = None
+            self.last_closed: dict = {"adapter": None, "closed_at": None, "reason": None}
             self.tasks = []
             self.unavailable = bool(sc.get("bluez_unavailable", False))
             self.stale_bond = {m.upper() for m in sc.get("stale_bond_macs", [])}
@@ -89,6 +91,8 @@ class MockState:
             w = sc.get("pairing")
             if w:
                 self._open_window(w["adapter"], float(w.get("remaining_s", 60)), emit=False)
+            self.buffer = []
+            self.event_id = 0
 
     @staticmethod
     def _full_device(d: dict) -> dict:
@@ -116,12 +120,27 @@ class MockState:
         with self.lock:
             self.event_id += 1
             msg = f"event: {event}\nid: {self.event_id}\ndata: {json.dumps(data)}\n\n"
+            self.buffer.append((self.event_id, event, msg))
+            del self.buffer[:-100]
             for q in list(self.subscribers):
                 q.put(msg)
 
-    def subscribe(self) -> queue.Queue:
+    def subscribe(self, last_event_id: str = "") -> queue.Queue:
+        """Abonne un client ; `Last-Event-ID` rejoue le tampon, sinon evenement `state` complet."""
         q: queue.Queue = queue.Queue()
         with self.lock:
+            if last_event_id.isdigit():
+                last = int(last_event_id)
+                ids = [i for i, _, _ in self.buffer]
+                covered = (last == 0) if not ids else (min(ids) - 1 <= last <= max(ids))
+                if covered:
+                    for i, _, msg in self.buffer:
+                        if i > last:
+                            q.put(msg)
+                else:
+                    self.event_id += 1
+                    data = json.dumps(self.state())
+                    q.put(f"event: state\nid: {self.event_id}\ndata: {data}\n\n")
             self.subscribers.append(q)
         return q
 
@@ -139,7 +158,7 @@ class MockState:
         with self.lock:
             now = self.clock.now()
             if self.pairing and now >= self._expires(self.pairing):
-                self._close_window()
+                self._close_window("expired")
             due = [t for t in self.tasks if t[0] <= now]
             self.tasks = [t for t in self.tasks if t[0] > now]
             for _, action, kw in due:
@@ -195,7 +214,11 @@ class MockState:
         if not w:
             return None
         remaining = max(0, int((self._expires(w) - self.clock.now()).total_seconds() + 0.999))
-        return {**w, "remaining_s": remaining}
+        return {"open": True, **w, "remaining_s": remaining}
+
+    def pairing_view(self) -> dict:
+        """PairingWindow ouverte, ou objet explicite `open:false` (jamais null)."""
+        return self.window_model() or {"open": False, **self.last_closed}
 
     def _open_window(self, adapter: str, duration: float, emit: bool = True) -> dict:
         now = self.clock.now()
@@ -218,18 +241,21 @@ class MockState:
             self.emit("pairing", model)
         return model
 
-    def _close_window(self) -> None:
+    def _close_window(self, reason: str = "closed") -> None:
         w, self.pairing = self.pairing, None
         if not w:
             return
+        self.last_closed = {
+            "adapter": w["adapter"],
+            "closed_at": _iso(self.clock.now()),
+            "reason": reason,
+        }
         for a in self.adapters:
             if a["role"] == w["adapter"]:
                 a["discoverable"] = a["pairable"] = False
                 self.emit("adapter", a)
         self.discovered.clear()
-        self.emit(
-            "pairing", None
-        )  # hypothese mock : data null a la fermeture (a confirmer au contrat)
+        self.emit("pairing", self.pairing_view())
 
     # --- vues -----------------------------------------------------------------------------
     def state(self) -> dict:
@@ -237,7 +263,7 @@ class MockState:
             "version": self.version,
             "adapters": self.adapters,
             "devices": list(self.devices.values()),
-            "pairing": self.window_model(),
+            "pairing": self.pairing_view(),
         }
 
     def check_bluez(self) -> None:
@@ -298,12 +324,20 @@ class MockState:
         dev = self._known(mac)
         mac = dev["mac"]
         self.stale_bond.discard(mac)
-        if dev["in_config"]:
-            dev.update(paired=False, trusted=False, connected=False)
+        self.emit("device.removed", {"mac": mac, "adapter": dev["adapter"]})
+        if dev["in_config"]:  # placeholder : connu de la config, non appaire
+            dev.update(
+                paired=False,
+                trusted=False,
+                connected=False,
+                name=None,
+                uuids=[],
+                profiles=[],
+                last_seen=None,
+            )
             self.emit("device", dev)
         else:
             del self.devices[mac]
-            self.emit("device", {**dev, "paired": False, "trusted": False, "connected": False})
 
     def patch(self, mac: str, body: dict) -> dict:
         dev = self._known(mac)
@@ -445,7 +479,7 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
             raise ApiError(404, "not_found", f"route inconnue : {m} {path}")
 
         def _sse(self) -> None:
-            q = state.subscribe()
+            q = state.subscribe(self.headers.get("Last-Event-ID", ""))
             try:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")

@@ -48,7 +48,7 @@ def test_01_sources_window_accepts_incoming_phone_pairing(hw):
 def test_02_outside_window_incoming_pairing_is_refused(hw):
     before = set(hw.devices())
     st = hw.state()
-    assert st["pairing"] is None and all(not a["pairable"] for a in st["adapters"])
+    assert not st["pairing"]["open"] and all(not a["pairable"] for a in st["adapters"])
     operator("Sur un TELEPHONE (ou un autre appareil) : essayer d'appairer 'btmux' maintenant.")
     assert set(hw.devices()) == before, "un appairage a abouti hors fenetre"
     assert operator_confirms("L'appareil a-t-il bien ete REFUSE (ou 'btmux' invisible) ?")

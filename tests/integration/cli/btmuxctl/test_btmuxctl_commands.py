@@ -60,7 +60,7 @@ def test_pairing_open_then_close(ctl, api):
     assert ctl("pairing", "open", "sources", "60").returncode == 0
     assert api.call("GET", "/api/state")[1]["pairing"]["adapter"] == "sources"
     assert ctl("pairing", "close").returncode == 0
-    assert api.call("GET", "/api/state")[1]["pairing"] is None
+    assert api.call("GET", "/api/state")[1]["pairing"]["open"] is False
 
 
 def test_pairing_open_twice_fails_with_message(ctl):
@@ -101,5 +101,10 @@ def test_wrong_token_exits_nonzero_without_leaking_it(ctl):
 
 
 def test_unreachable_server_exits_nonzero_with_message(ctl):
-    proc = ctl("state", url_="http://127.0.0.1:9")
+    import socket
+
+    with socket.socket() as s:  # port libre puis ferme : connexion refusee immediatement
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    proc = ctl("state", url_=f"http://127.0.0.1:{port}")
     assert proc.returncode != 0 and proc.stderr.strip()

@@ -72,3 +72,41 @@ def test_sse_authenticates_with_header(api):
     r.read()
     conn.close()
     assert r.status == 401
+
+
+def test_sse_pairing_closed_event_is_an_explicit_object_never_null(api):
+    api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
+    _, lines = api.sse(2, trigger=lambda: api.call("DELETE", "/api/pairing"))
+    data = next(json.loads(x[6:]) for x in lines if x.startswith("data:") and '"reason"' in x)
+    assert data["open"] is False and data["reason"] == "closed" and data["adapter"] == "sources"
+
+
+def test_sse_forget_emits_device_removed_then_placeholder_for_config_devices(api):
+    _, lines = api.sse(2, trigger=lambda: api.call("POST", "/api/devices/11:22:33:44:55:02/forget"))
+    text = "".join(lines)
+    assert text.index("event: device.removed") < text.index("event: device\n")
+    removed = next(json.loads(x[6:]) for x in lines if x.startswith("data:") and '"adapter"' in x)
+    assert removed == {"mac": "11:22:33:44:55:02", "adapter": "sources"}
+    assert '"paired": false' in text and '"in_config": true' in text
+
+
+def test_sse_forget_of_non_config_device_emits_only_device_removed(api):
+    api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
+    api.call("POST", "/__mock__/incoming", {"mac": "BB:00:00:00:00:01", "name": "x"}, token=None)
+    _, lines = api.sse(1, trigger=lambda: api.call("POST", "/api/devices/BB:00:00:00:00:01/forget"))
+    assert "event: device.removed" in "".join(lines)
+
+
+def test_sse_last_event_id_replays_missed_events(api):
+    api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})  # ids 1 (adapter), 2
+    _, lines = api.sse(1, headers={"Authorization": "Bearer t0k3n", "Last-Event-ID": "1"})
+    text = "".join(lines)
+    assert "event: pairing" in text and "event: state" not in text
+
+
+def test_sse_unknown_last_event_id_sends_a_full_state_event(api):
+    _, lines = api.sse(1, headers={"Authorization": "Bearer t0k3n", "Last-Event-ID": "9999"})
+    text = "".join(lines)
+    assert "event: state" in text
+    data = next(json.loads(x[6:]) for x in lines if x.startswith("data:"))
+    assert set(data) == {"version", "adapters", "devices", "pairing"}

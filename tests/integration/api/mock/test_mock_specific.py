@@ -24,14 +24,14 @@ def test_incoming_pairing_with_headsets_window_is_refused(api):
 
 def test_window_open_scenario_has_remaining_seconds(api_factory):
     w = api_factory("window-open", time_scale=1.0).call("GET", "/api/state")[1]["pairing"]
-    assert w["adapter"] == "sources" and 0 < w["remaining_s"] <= 42
+    assert w["open"] is True and w["adapter"] == "sources" and 0 < w["remaining_s"] <= 42
 
 
 def test_reset_reloads_a_scenario(api):
     api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
     assert api.call("POST", "/__mock__/reset?scenario=empty", token=None)[0] == 200
     st = api.call("GET", "/api/state")[1]
-    assert st["devices"] == [] and st["pairing"] is None
+    assert st["devices"] == [] and st["pairing"]["open"] is False
 
 
 def test_fail_endpoint_switches_bluez_down_on_the_fly(api):
@@ -45,10 +45,13 @@ def test_event_injection_reaches_sse_clients(api):
     _, lines = api.sse(
         1,
         trigger=lambda: api.call(
-            "POST", "/__mock__/event", {"event": "pairing", "data": None}, token=None
+            "POST",
+            "/__mock__/event",
+            {"event": "pairing", "data": {"open": False, "reason": "closed"}},
+            token=None,
         ),
     )
-    assert "event: pairing" in "".join(lines) and "data: null" in "".join(lines)
+    assert "event: pairing" in "".join(lines) and '"open": false' in "".join(lines)
 
 
 def test_static_dir_is_public_and_confined(tmp_path: Path):
