@@ -29,8 +29,9 @@ async def started(service: BluezService) -> BluezService:
 
 def test_deduce_kind_and_profiles() -> None:
     assert deduce_kind(0x240404, [A2DP_SINK]) == "headset"
-    assert deduce_kind(0x240404, []) == "unknown"
-    assert deduce_kind(None, [A2DP_SINK]) == "unknown"
+    assert deduce_kind(0x240404, []) == "headset"  # classe audio, UUID pas encore connus
+    assert deduce_kind(0x000000, []) == "unknown"
+    assert deduce_kind(None, [A2DP_SINK]) == "headset"  # sans classe : UUID
     assert deduce_kind(0x5A020C, [A2DP_SOURCE]) == "source"
     assert deduce_kind(0, [HFP_AG]) == "source"
     assert profiles_from_uuids([A2DP_SINK.upper(), "zzz", HFP_AG]) == ["a2dp_sink", "hfp_ag"]

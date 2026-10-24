@@ -364,3 +364,93 @@ async def test_adapter_stuck_open_is_reported(
     )
     await started(service)
     assert "event=adapter_not_closed" in caplog.text
+
+
+# ----- séance GATE 4 : confiance entrante sans agent, rôle des casques
+async def test_just_works_incoming_pairing_is_trusted_in_sources_window(
+    service: BluezService, bus: FakeBus
+) -> None:
+    await started(service)
+    path = bus.add_device(SRC_PATH, "BC:93:07:3B:03:52", name="S24", Class=0x5A020C)
+    await service.pairing.open("sources", 30)
+    bus.change(path, "org.bluez.Device1", Paired=True)  # BlueZ n'appelle PAS l'agent (Just Works)
+    await asyncio.sleep(0.05)
+    assert (path, "org.bluez.Device1", "Trusted", True) in bus.sets
+    state = {d["mac"]: d for d in service.inventory.state()["devices"]}
+    assert (
+        state["BC:93:07:3B:03:52"]["trusted"] is True
+        and state["BC:93:07:3B:03:52"]["kind"] == "source"
+    )
+
+
+async def test_incoming_pairing_outside_window_is_not_trusted(
+    service: BluezService, bus: FakeBus, caplog: pytest.LogCaptureFixture
+) -> None:
+    await started(service)
+    path = bus.add_device(SRC_PATH, "BC:93:07:3B:03:52", name="S24")
+    bus.change(path, "org.bluez.Device1", Paired=True)
+    await asyncio.sleep(0.05)
+    assert not [s for s in bus.sets if s[2] == "Trusted"]
+    assert "event=unexpected_incoming_pairing" in caplog.text
+    # fenêtre `headsets` : un entrant n'est pas non plus approuvé
+    caplog.clear()
+    await service.pairing.open("headsets", 30)
+    other = bus.add_device(HP_PATH, "BB:BB:BB:BB:BB:09", name="x")
+    bus.change(other, "org.bluez.Device1", Paired=True)
+    await asyncio.sleep(0.05)
+    assert not [s for s in bus.sets if s[2] == "Trusted"]
+
+
+async def test_preexisting_bonds_are_not_retrusted_at_load(
+    service: BluezService, bus: FakeBus
+) -> None:
+    bus.objects["/org/bluez/hci1/dev_BC_93_07_3B_03_52"] = {
+        "org.bluez.Device1": {"Address": "BC:93:07:3B:03:52", "Paired": True, "Trusted": False}
+    }
+    await started(service)
+    await service.pairing.open("sources", 30)
+    await asyncio.sleep(0.05)
+    assert not [s for s in bus.sets if s[2] == "Trusted"]
+
+
+def test_deduce_kind_headphones_with_both_a2dp_roles_and_origin() -> None:
+    from fakes import A2DP_SINK, A2DP_SOURCE
+
+    from btmux.bluez.models import deduce_kind
+
+    both = [A2DP_SOURCE, A2DP_SINK, "0000111e-0000-1000-8000-00805f9b34fb"]
+    assert deduce_kind(0x240418, both) == "headset"  # Cache-oreilles
+    assert deduce_kind(0x5A020C, []) == "source"  # S24 : téléphone, UUID inconnus
+    assert deduce_kind(0x5A020C, both) == "source"
+    assert deduce_kind(0x02010C, []) == "source"  # ordinateur
+    assert deduce_kind(0x000000, both) == "unknown"
+    assert deduce_kind(0x000000, both, "headset") == "headset"  # arbitre : origine
+    assert deduce_kind(0x000000, [], "source") == "source"
+
+
+async def test_pair_marks_origin_so_unclassified_headset_goes_to_headsets(
+    config: Config, bus: FakeBus
+) -> None:
+    from fakes import A2DP_SINK, A2DP_SOURCE, adapter_obj
+
+    mono = parse_config(
+        {
+            "adapters": [
+                {"mac": "AA:BB:CC:00:00:01", "name": "btmux", "roles": ["sources", "headsets"]}
+            ]
+        }
+    )
+    mono_bus = FakeBus({SRC_PATH: adapter_obj("AA:BB:CC:00:00:01")})
+    svc = BluezService(mono, mono_bus, adapter_wait=0.3, retry_interval=0.02)
+    await started(svc)
+    path = mono_bus.add_device(
+        SRC_PATH, "28:11:A5:32:3B:22", name="Cache-oreilles", UUIDs=[A2DP_SOURCE, A2DP_SINK]
+    )
+    mono_bus.handlers[("org.bluez.Device1", "Pair")] = lambda p, b: mono_bus.change(
+        p, "org.bluez.Device1", Paired=True
+    )
+    await svc.pairing.open("headsets", 30)
+    await svc.pairing.pair("28:11:A5:32:3B:22")
+    dev = next(d for d in svc.inventory.state()["devices"] if d["mac"] == "28:11:A5:32:3B:22")
+    assert dev["kind"] == "headset" and dev["adapter"] == "headsets" and dev["trusted"] is True
+    assert path in mono_bus.objects

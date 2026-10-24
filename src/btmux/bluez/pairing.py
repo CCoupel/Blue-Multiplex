@@ -76,6 +76,7 @@ class PairingManager:
         self._pair_tasks: dict[str, asyncio.Future[None]] = {}
         self._lock = asyncio.Lock()
         inventory.set_window_provider(self.view)
+        inventory.on_paired(self._on_paired)
 
     # ----- fenêtre ---------------------------------------------------------------------------
     def window(self) -> PairingWindowModel | None:
@@ -213,6 +214,20 @@ class PairingManager:
             and AdapterRegistry.adapter_of_device(device_path) == self._registry.path_for("sources")
         )
 
+    def _on_paired(self, device_path: str) -> None:
+        """Un appareil vient d'être appairé. BlueZ n'appelle pas l'agent pour un appairage entrant « Just
+        Works » : la confiance est donc posée ici, et seulement pour un entrant accepté (fenêtre `sources`)."""
+        if device_path in self._outgoing or device_path in self._pair_tasks:
+            return  # appairage initié par le Pi : `_pair` pose Trusted lui-même
+        if self.allows(device_path):
+            props = self._inventory.device_props(device_path) or {}
+            self._inventory.set_origin(str(props.get("Address", "")), "source")
+            task = asyncio.ensure_future(self.trust_incoming(device_path))
+            self._bg.add(task)
+            task.add_done_callback(self._bg.discard)
+        else:
+            log.warning(kv("unexpected_incoming_pairing", device=device_path))
+
     def is_outgoing(self, device_path: str) -> bool:
         return device_path in self._outgoing
 
@@ -259,6 +274,7 @@ class PairingManager:
 
     async def _pair(self, mac: str, path: str) -> None:
         props = self._inventory.device_props(path) or {}
+        self._inventory.set_origin(mac, "headset")
         self._outgoing.add(path)
         try:
             if not props.get("Paired"):

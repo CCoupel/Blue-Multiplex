@@ -26,6 +26,10 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
 ### Fixed (QUALIF 0.2.0.2)
 - `btmuxd` : BlueZ rend l'adaptateur `Pairable` dès qu'un agent est enregistré (constaté sur pi-qualif) ; l'état sûr (Pairable/Discoverable faux) est maintenant posé APRÈS l'enregistrement de l'agent, vérifié (3 essais, `adapter_not_closed` en ERROR sinon) ; journal `agent_registered`.
 
+### Fixed (séance GATE 4 LOT-2)
+- Appairage entrant « Just Works » : BlueZ n'appelle pas l'agent ; `Trusted` est posé sur le signal `Paired` pendant une fenêtre `sources` (WARN `unexpected_incoming_pairing`, sans confiance, hors fenêtre).
+- `kind`/rôle hors config : la classe majeure (audio 0x04 → casque, ordinateur/téléphone → source) prime sur les UUID (un casque expose A2DP source ET sink) ; l'origine de l'appairage arbitre les cas ambigus.
+
 ### Changed (LOT-2)
 - `btmuxd.service` : `RestartPreventExitStatus=2` seul (le code 3, adaptateur absent, est relancé), `RestartSec=30`, `StartLimitBurst=30` / 1 h — dongles USB lents à énumérer.
 

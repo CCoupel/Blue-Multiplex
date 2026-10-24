@@ -78,6 +78,8 @@ class Inventory:
         self._collect_discovered = False
         self._aliases: dict[str, str] = {}
         self._last_seen: dict[str, str] = {}
+        self._origin: dict[str, KindName] = {}
+        self._paired_listeners: list[Callable[[str], None]] = []
         self._subs: set[Subscription] = set()
         self._counter = 0
         self._window: Callable[[], PairingWindowModel] = lambda: PairingWindowModel(
@@ -88,6 +90,14 @@ class Inventory:
     # ----- chargement et signaux -------------------------------------------------------------
     def set_window_provider(self, provider: Callable[[], PairingWindowModel]) -> None:
         self._window = provider
+
+    def on_paired(self, listener: Callable[[str], None]) -> None:
+        """Rappel `listener(chemin)` quand un appareil devient `Paired` (nouvel appairage, pas au chargement)."""
+        self._paired_listeners.append(listener)
+
+    def set_origin(self, mac: str, kind: KindName) -> None:
+        """Origine de l'appairage (arbitre de `kind` hors config) : `headset` (pair du Pi) ou `source`."""
+        self._origin[mac.upper()] = kind
 
     def load(self, objects: ManagedObjects) -> None:
         """Recharge tout l'état (démarrage, reconnexion BlueZ) ; aucun évènement n'est émis."""
@@ -106,6 +116,8 @@ class Inventory:
                 elif iface == DEVICE_IFACE:
                     self._devices[signal.path] = dict(props)
                     self._device_changed(signal.path, new=True)
+                    if props.get("Paired"):
+                        self._notify_paired(signal.path)
         elif signal.kind == "interfaces_removed":
             for iface in signal.data:
                 if iface == ADAPTER_IFACE:
@@ -119,10 +131,17 @@ class Inventory:
             elif signal.interface == DEVICE_IFACE and signal.path in self._devices:
                 props = self._devices[signal.path]
                 was_connected = bool(props.get("Connected"))
+                was_paired = bool(props.get("Paired"))
                 props.update(signal.data)
                 if "Connected" in signal.data and bool(props.get("Connected")) != was_connected:
                     self._last_seen[str(props.get("Address", "")).upper()] = _utc_iso(self._now())
                 self._device_changed(signal.path, changed=set(signal.data))
+                if props.get("Paired") and not was_paired:
+                    self._notify_paired(signal.path)
+
+    def _notify_paired(self, path: str) -> None:
+        for listener in list(self._paired_listeners):
+            listener(path)
 
     # ----- évènements ------------------------------------------------------------------------
     def subscribe(self) -> Subscription:
@@ -260,7 +279,9 @@ class Inventory:
         mac = str(props.get("Address", "")).upper()
         uuids = [str(u) for u in props.get("UUIDs", [])]
         cfg = self._cfg_devices.get(mac)
-        kind: KindName = cfg.kind if cfg else deduce_kind(props.get("Class"), uuids)
+        kind: KindName = (
+            cfg.kind if cfg else deduce_kind(props.get("Class"), uuids, self._origin.get(mac))
+        )
         return DeviceModel(
             mac=mac,
             adapter=self._role_of(path, props, kind),

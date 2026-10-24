@@ -37,15 +37,27 @@ def profiles_from_uuids(uuids: list[str]) -> list[str]:
     return [PROFILE_NAMES[u.lower()] for u in uuids if u.lower() in PROFILE_NAMES]
 
 
-def deduce_kind(cls: int | None, uuids: list[str]) -> KindName:
-    """Déduction hors config (models.md) : classe majeure 0x04 audio + A2DP sink → headset ;
-    A2DP source / HFP AG → source."""
+def deduce_kind(cls: int | None, uuids: list[str], origin: KindName | None = None) -> KindName:
+    """Déduction hors config (models.md).
+
+    Classe majeure 0x04 (audio) avec A2DP sink (ou UUID pas encore connus) → headset ; ordinateur 0x01 /
+    téléphone 0x02 → source ; à défaut les UUID (sink seul → headset, source/AG seul → source). Un casque
+    annonce souvent A2DP source ET sink : la classe prime. `origin` (appairé par `pair` du Pi → headset,
+    par la fenêtre `sources` → source) arbitre les cas restants.
+    """
     lowered = {u.lower() for u in uuids}
-    if lowered & {UUID_A2DP_SOURCE, UUID_HFP_AG, UUID_HSP_AG}:
-        return "source"
-    if cls is not None and (cls >> 8) & 0x1F == 0x04 and UUID_A2DP_SINK in lowered:
+    has_sink = UUID_A2DP_SINK in lowered
+    has_source = bool(lowered & {UUID_A2DP_SOURCE, UUID_HFP_AG, UUID_HSP_AG})
+    major = (cls >> 8) & 0x1F if cls is not None else None
+    if major == 0x04 and (has_sink or not lowered):
         return "headset"
-    return "unknown"
+    if major in (0x01, 0x02):
+        return "source"
+    if has_sink and not has_source:
+        return "headset"
+    if has_source and not has_sink:
+        return "source"
+    return origin or "unknown"
 
 
 @dataclass(frozen=True)
