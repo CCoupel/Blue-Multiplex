@@ -21,6 +21,11 @@
 | GET | `/api/events` | flux **SSE** (`text/event-stream`) : `adapter`, `device`, `pairing`, `discovered` avec le modèle complet en `data` ; `retry: 3000` | 200 |
 | | | **Client** : `/api/events` exige le Bearer comme tout `/api/*` ; `EventSource` ne pouvant pas envoyer d'en-tête, la Web UI lit le flux par `fetch` streaming (`ReadableStream`) avec l'en-tête `Authorization`, gère elle-même `retry` et renvoie `Last-Event-ID` à la reconnexion ; le serveur honore `Last-Event-ID` (rejoue les événements manqués dans la limite d'un tampon de 100, sinon envoie un événement `state` complet). Ajouté le 2026-10-24 (#16/#21). | |
 
-Codes : 400 (validation), 401 (jeton), 404, 409 (état), 502 (erreur BlueZ, message D-Bus en `message`), 503 (BlueZ indisponible).
+| GET | `/api/controllers` | **#23 (DRAFT)** — tous les contrôleurs BlueZ détectés (configurés ou non) + `Roles` : `{ "controllers": Controller[], "roles": Roles }` | 200 |
+| PUT | `/api/controllers/roles` | **#23 (DRAFT)** — affectation **atomique** des deux rôles `RoleChange` (`null` = rôle libéré ; permutation en un appel) ; refus 400 si même MAC pour les deux rôles, MAC inconnue/absente, ou `bus:uart` sans `force:true` ; 409 `pairing_open` (fermer la fenêtre d'abord), 409 `devices_connected` (liste en `details`) sauf `confirm:true` → le daemon déconnecte d'abord, 409 `change_pending` ; succès : persistance atomique puis application sans reboot (voir config-schema § Affectation) | 202 `Roles` (`pending:true`) puis événements `roles`/`controllers`/`state` |
+| | | **Contrôleurs sans rôle** : à chaque démarrage, hotplug et changement de rôle, le daemon force `Pairable=false`, `Discoverable=false` sur **tous** les contrôleurs sans rôle (y compris le Bluetooth interne) ; `btmux-adapters.sh` fait de même en root (classe/alias non touchés). | |
+
+Codes : 400 (validation), 401 (jeton), 404, 409 (état : `pairing_open`, `devices_connected`, `change_pending`, `role_unassigned`), 502 (erreur BlueZ, message D-Bus en `message`), 503 (BlueZ indisponible).
+`role_unassigned` (#23) : `POST /api/pairing` et `/api/devices/{mac}/pair|connect` répondent 409 quand le rôle visé n'a pas de contrôleur affecté/présent.
 Limites v0.2.0 : pas de routage, pas de volume, pas d'appel ; une seule fenêtre d'appairage à la fois ; les appairages
 **entrants** (sources) sont acceptés automatiquement pendant la fenêtre `sources` (agent NoInputNoOutput), refusés hors fenêtre.

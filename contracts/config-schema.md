@@ -31,8 +31,8 @@ mqtt:                                  # optionnel ; défaut { enabled: false }
 | # | Règle | Message attendu (préfixe, journald-friendly, une ligne) |
 |---|-------|----------------------------------------------------------|
 | V1 | `mac` (adaptateurs et appareils) : `^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`, normalisée en majuscules | `config: adapters[0].mac: invalid MAC address '...'` |
-| V2 | `adapters` non vide ; `roles` sous-ensemble non vide de `{sources, headsets}`, sans doublon | `config: adapters[i].roles: unknown role '...'` |
-| V3 | Chaque rôle `sources` et `headsets` porté par **exactement un** adaptateur | `config: role 'headsets' must be provided by exactly one adapter (found N)` |
+| V2 | `adapters` liste (**peut être vide depuis #23** — rôles affectés ensuite par l'API) ; `roles` sous-ensemble non vide de `{sources, headsets}`, sans doublon | `config: adapters[i].roles: unknown role '...'` |
+| V3 | Chaque rôle `sources` et `headsets` porté par **au plus un** adaptateur (**#23** : « exactement un » devient « au plus un » ; un rôle non couvert = daemon en état `role_unassigned`, appairage de ce rôle refusé 409) | `config: role 'headsets' must be provided by at most one adapter (found N)` |
 | V4 | ~~v0.1.0 : `len(adapters) > 1` refusé~~ **Levée le 2026-10-23 (validée au GATE 2 v0.2.0)** : 1 **ou** 2 adaptateurs acceptés ; `len(adapters) > 2` refusé | `config: at most 2 adapters are supported (found N)` |
 | V5 | `devices[].alias` uniques ; `devices[].mac` uniques ; alias `^[a-z0-9][a-z0-9-]{0,31}$` | `config: devices: duplicate alias 'xm5'` |
 | V6 | `kind ∈ {source, headset}` ; `priority` entier ≥ 0, optionnel, **autorisé seulement** pour `kind: source` (défaut 100) | `config: devices[2].priority: only allowed for kind 'source'` |
@@ -100,3 +100,29 @@ quelle que soit la valeur. Rétrocompatible : absence de la clé = défauts.
 À partir de #20, `btmuxd --config` ne sort plus immédiatement : il valide la config, se connecte à BlueZ (code 3 si un adaptateur
 de `adapters[]` est introuvable après 30 s), démarre l'API HTTP (#21) et reste en service jusqu'à SIGTERM/SIGINT (code 0).
 `--check-config` est inchangé.
+
+## Affectation des contrôleurs par l'API (#23 — DRAFT, GATE 2 avenant du 2026-10-24)
+
+**Fichier d'état** `/var/lib/btmux/adapters.yaml` (`StateDirectory=btmux`, propriétaire `BTMUX_USER`, mode 0640), **même schéma**
+que la clé `adapters` de `config.yaml` (liste `{mac, name, roles}`, règles V1–V4, V12) :
+
+```yaml
+# écrit par btmuxd (PUT /api/controllers/roles) — ne pas éditer à la main pendant que btmuxd tourne
+adapters:
+  - { mac: "18:69:45:42:9D:E2", name: "btmux",    roles: [sources]  }
+  - { mac: "18:69:45:42:B5:54", name: "btmux-hp", roles: [headsets] }
+```
+
+Règles :
+- **Précédence** : si le fichier d'état existe et est valide, sa liste `adapters` **remplace** celle de `config.yaml` (`Roles.source = "state"`) ;
+  sinon `config.yaml` s'applique (`"config"`). `btmuxd --check-config` valide les deux et affiche la liste effective.
+- **Écriture atomique** : fichier temporaire dans le même répertoire, `fsync`, `rename` ; jamais d'écriture dans `/etc/btmux/config.yaml`
+  (reste propriété de l'administrateur, lecture seule pour le daemon — `ProtectSystem=strict`).
+- `name` d'un contrôleur nouvellement affecté : repris de `config.yaml` si la MAC y figure, sinon défaut `btmux` (sources) / `btmux-hp` (headsets).
+- **Application sans reboot** : le daemon reconfigure en mémoire (registre d'adaptateurs, agent, inventaire, alias/pairable/discoverable via
+  D-Bus) ; la **classe** (`btmgmt`, root) est réappliquée par `btmux-adapters.service` déclenché par `btmux-adapters.path`
+  (`PathChanged=/var/lib/btmux/adapters.yaml`). Le daemon ne redémarre pas ; si la reconfiguration en mémoire échoue, il sort en code **4**
+  (`RestartForceExitStatus=4`, redémarrage immédiat par systemd) — voir D3 du plan.
+- Un contrôleur configuré mais absent (`present:false`) n'empêche plus le démarrage : le code de sortie 3 (« adaptateur introuvable ») est
+  **remplacé** par l'état `role_unassigned` + journal `adapter_missing` (CHANGED — permet de réaffecter via l'API/Web UI).
+- `btmux-adapters.sh` lit la liste effective (état puis config) et ferme (`pairable off`, `discoverable no`) **tous** les autres contrôleurs.
