@@ -169,7 +169,9 @@ def test_build_deb_requires_lockfile_with_hashes(tmp_path: Path) -> None:
 def test_btmuxd_unit_is_hardened() -> None:
     unit = (ROOT / "systemd" / "btmuxd.service").read_text()
     for line in (
-        "RestartPreventExitStatus=2 3",
+        "RestartPreventExitStatus=2\n",
+        "RestartSec=30",
+        "StartLimitBurst=30",
         "NoNewPrivileges=yes",
         "ProtectSystem=strict",
         "ProtectHome=read-only",
@@ -177,6 +179,7 @@ def test_btmuxd_unit_is_hardened() -> None:
         "ReadWritePaths=-/run/user/1000",
     ):
         assert line in unit, line
+    assert "RestartPreventExitStatus=2 3" not in unit  # code 3 (adaptateur absent) : on réessaie
 
 
 def test_ci_exports_hashed_runtime_lockfile() -> None:

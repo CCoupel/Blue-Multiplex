@@ -4,6 +4,9 @@ Documentation=https://github.com/CCoupel/Blue-Multiplex
 After=bluetooth.service btmux-adapters.service user@1000.service dbus.service
 Wants=bluetooth.service btmux-adapters.service user@1000.service
 Requires=dbus.service
+# ~1 tentative par minute en cas d'adaptateur absent ; abandon après 30 échecs en 1 h
+StartLimitIntervalSec=3600
+StartLimitBurst=30
 
 [Service]
 Type=simple
