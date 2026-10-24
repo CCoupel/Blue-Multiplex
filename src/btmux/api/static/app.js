@@ -214,7 +214,8 @@ function tick() {
 
 // ---------- données ----------
 function setPairing(w) {
-  S.pairing = w && w.adapter ? w : null;
+  // Contrat 3db8c3c : fenêtre fermée = objet {open:false, reason} (jamais null) ; null/sans adapter toléré.
+  S.pairing = w && w.open !== false && w.adapter ? w : null;
   S.deadline = S.pairing ? Date.now() + (S.pairing.remaining_s ?? 0) * 1000 : 0;
   if (!S.pairing) S.discovered = [];
 }
@@ -246,9 +247,13 @@ function onEvent(type, data) {
     }
     case "device": {
       const i = S.devices.findIndex((d) => d.mac === data.mac);
-      if (!data.paired && !data.in_config) { if (i >= 0) S.devices.splice(i, 1); }
-      else i >= 0 ? (S.devices[i] = data) : S.devices.push(data);
+      i >= 0 ? (S.devices[i] = data) : S.devices.push(data);
       log("device", `${ROLES[data.adapter]?.hci ?? data.adapter}  ${label(data)}  ${data.connected ? "connecté" : "déconnecté"}${data.paired ? ", appairé" : ""}`);
+      break;
+    }
+    case "device.removed": {
+      S.devices = S.devices.filter((d) => d.mac !== data.mac);
+      log("device", `${ROLES[data.adapter]?.hci ?? data.adapter}  ${data.mac}  retiré`);
       break;
     }
     case "state": // état complet (Last-Event-ID hors tampon serveur)
@@ -259,7 +264,8 @@ function onEvent(type, data) {
       break;
     case "pairing":
       setPairing(data);
-      log("pairing", data && data.adapter ? `${ROLES[data.adapter].hci} fenêtre ouverte (${data.remaining_s} s)` : "fenêtre fermée");
+      log("pairing", S.pairing ? `${ROLES[S.pairing.adapter].hci} fenêtre ouverte (${S.pairing.remaining_s} s)`
+        : `fenêtre fermée${data && data.reason ? ` (${data.reason})` : ""}`);
       break;
     case "discovered": {
       const i = S.discovered.findIndex((x) => x.mac === data.mac);

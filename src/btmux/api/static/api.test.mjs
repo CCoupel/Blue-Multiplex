@@ -14,25 +14,27 @@ function streamOf(chunks, { hang = false } = {}) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-test("parse SSE : chunks coupés, CRLF, commentaires, data null, retry", async () => {
+test("parse SSE : chunks coupés, CRLF, commentaires, pairing fermé, device.removed, retry", async () => {
   const calls = [];
   globalThis.fetch = async (url, opts) => {
     calls.push(opts.headers);
     return new Response(streamOf([
       "retry: 20\n: ping\n\nevent: dev", "ice\nid: 7\r\ndata: {\"mac\":\"AA\"}\r\n\r\n",
-      "event: pairing\nid: 8\ndata: null\n\n",
+      "event: pairing\nid: 8\ndata: {\"open\":false,\"adapter\":null,\"reason\":\"closed\"}\n\n",
+      "event: device.removed\nid: 9\ndata: {\"mac\":\"AA\",\"adapter\":\"sources\"}\n\n",
     ], { hang: calls.length > 1 }), { status: 200 });
   };
   const got = [], states = [];
   const h = openEvents({ onEvent: (t, d) => got.push([t, d]), onState: (u) => states.push(u), onAuth() {} });
   await sleep(120);
   h.close();
-  assert.deepEqual(got.slice(0, 2), [["device", { mac: "AA" }], ["pairing", null]]);
+  assert.deepEqual(got.slice(0, 2), [["device", { mac: "AA" }], ["pairing", { open: false, adapter: null, reason: "closed" }]]);
+  assert.deepEqual(got[2], ["device.removed", { mac: "AA", adapter: "sources" }]);
   assert.equal(states[0], true);
   assert.equal(states[1], false, "fin de flux → onState(false)");
   // reconnexion après retry (20 ms) avec Last-Event-ID
   assert.ok(calls.length >= 2);
-  assert.equal(calls[1]["Last-Event-ID"], "8");
+  assert.equal(calls[1]["Last-Event-ID"], "9");
   assert.equal(calls[0]["Last-Event-ID"], undefined);
   assert.equal(calls[0].Accept, "text/event-stream");
 });
