@@ -16,6 +16,7 @@ Colonnes « A » / « B » : ✔ = jouable dans ce mode, — = sans objet. Coche
 ## Prérequis
 
 - [ ] Navigateur de bureau (Chrome ou Firefox récents) **et** un téléphone (ou émulation mobile 375 px)
+- [ ] Mode B : au démarrage de `btmuxd` avec `api.listen` hors loopback, l'avertissement **`api_listening_cleartext`** (« HTTP en clair sur le LAN, HTTPS prévu en #22 ») est **attendu** : `journalctl -u btmuxd | grep api_listening_cleartext` — à noter, pas un défaut (LAN personnel)
 - [ ] Mode A : mock lancé ; Mode B : `systemctl is-active btmuxd`, `curl -s http://<IP-du-Pi>:8088/api/health` → `{"version": …}`
 - [ ] Preuves (captures, vidéo courte) dans `_work/tmp/ui-pairing/` — **masquer** MAC et noms personnels avant tout commit (dépôt public)
 - [ ] Mode B : `watch_hci.sh` + `link_guard.py` actifs, aucun audio lancé

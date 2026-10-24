@@ -507,6 +507,8 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
             if not static_dir or self.command != "GET":
                 raise ApiError(404, "not_found", "pas de Web UI servie par ce mock (--static-dir)")
             rel = "index.html" if path in ("/", "") else path.removeprefix("/static/").lstrip("/")
+            if Path(rel).suffix.lower() not in {".html", ".js", ".css"}:
+                raise ApiError(404, "not_found", "seuls html/js/css sont servis")
             target = (static_dir / rel).resolve()
             if static_dir.resolve() not in target.parents and target != static_dir.resolve():
                 raise ApiError(404, "not_found", "chemin hors du dossier statique")
@@ -527,6 +529,13 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
                 if path == "/__mock__/incoming":
                     status, out = c.incoming(body)
                     return self._send(status, out)
+                if path == "/__mock__/discovered-gone":
+                    mac = c.check_mac(body.get("mac", ""))
+                    if mac not in c.discovered:
+                        return self._send(404, {"error": "not_discovered", "message": mac})
+                    item = c.discovered.pop(mac)
+                    c.emit("device.removed", {"mac": mac, "adapter": item["adapter"]})
+                    return self._send(200, {"ok": True})
                 if path == "/__mock__/event":
                     c.emit(body["event"], body.get("data"))
                     return self._send(200, {"ok": True})

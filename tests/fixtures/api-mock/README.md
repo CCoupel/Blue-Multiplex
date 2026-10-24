@@ -45,6 +45,7 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
 | `GET /__mock__/state` | état complet (+ découverts) |
 | `POST /__mock__/reset?scenario=<nom>` | recharge un scénario |
 | `POST /__mock__/incoming {mac,name}` | appairage **entrant** (PC/téléphone) : accepté pendant une fenêtre `sources`, sinon 409 `pairing_refused` |
+| `POST /__mock__/discovered-gone {mac}` | un casque découvert disparaît : retiré de `/api/discovered` + événement `device.removed {mac, adapter}` |
 | `POST /__mock__/event {event,data}` | injecte un événement SSE arbitraire |
 | `POST /__mock__/fail {bluez_unavailable,stale_bond_macs,bluez_error_macs}` | change les pannes à chaud |
 | `POST /__mock__/close-streams` | ferme les flux SSE (test du repli/reconnexion) |
@@ -59,6 +60,7 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
   `name:null`, `uuids:[]`) si l'appareil est dans la config ; sinon l'appareil disparaît de `State.devices`.
 - Premier événement de toute connexion SSE : `state` (State complet, `id` = dernier id courant), puis les événements.
 - `pair` deux fois sur le même appareil pendant l'opération → 409 `operation_in_progress` ; en-têtes de sécurité (CSP, nosniff, DENY, no-referrer, no-store) sur toutes les réponses.
+- `/static/*` : uniquement `.html`/`.js`/`.css` (comme l'app réelle) ; le reste → 404.
 - `Last-Event-ID` : le mock garde un tampon de 100 événements ; un id couvert rejoue les manqués, un id hors tampon envoie un
   événement `state` (State complet).
 - Auth du flux : en-tête `Authorization` uniquement (pas de `?token=`) ; le front lit le SSE par `fetch` streaming.

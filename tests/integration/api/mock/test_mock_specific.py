@@ -78,3 +78,36 @@ def test_query_token_is_never_accepted(api):
     """Comme l'application reelle : seul l'en-tete Authorization (le front lit le SSE par fetch)."""
     assert api.call("GET", "/api/state?token=t0k3n", token=None)[0] == 401
     assert api.sse(0, headers={}, path="/api/events?token=t0k3n")[0] == 401
+
+
+def test_discovered_headset_disappearing_emits_device_removed(api):
+    api.call("POST", "/api/pairing", {"adapter": "headsets", "duration": 60})
+    from apisupport import wait_for
+
+    assert wait_for(lambda: len(api.call("GET", "/api/discovered")[1]) == 2)
+    mac = api.call("GET", "/api/discovered")[1][0]["mac"]
+    _, lines = api.sse(
+        1, trigger=lambda: api.call("POST", "/__mock__/discovered-gone", {"mac": mac}, token=None)
+    )
+    assert "event: device.removed" in "".join(lines) and mac in "".join(lines)
+    assert mac not in [d["mac"] for d in api.call("GET", "/api/discovered")[1]]
+
+
+def test_static_serves_only_html_js_css(tmp_path):
+    import http.client
+
+    for name in ("index.html", "app.js", "style.css", "README.md", "api.test.mjs"):
+        (tmp_path / name).write_text("x")
+    srv = mock_mod.MockApi("default", token="t", static_dir=tmp_path).start()
+    try:
+        conn = http.client.HTTPConnection(*srv.httpd.server_address[:2], timeout=5)
+        codes = {}
+        for name in ("app.js", "style.css", "README.md", "api.test.mjs"):
+            conn.request("GET", f"/static/{name}")
+            r = conn.getresponse()
+            r.read()
+            codes[name] = r.status
+        conn.close()
+    finally:
+        srv.stop()
+    assert codes == {"app.js": 200, "style.css": 200, "README.md": 404, "api.test.mjs": 404}
