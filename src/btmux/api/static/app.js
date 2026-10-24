@@ -156,8 +156,8 @@ function deviceRow(d) {
         ? h("button", { disabled: busy("disconnect"), onclick: () => act(key("disconnect"), () => api.disconnect(d.mac), { title: "Déconnexion impossible", mac: d.mac }) }, "Déconnecter")
         : h("button", { class: "primary", disabled: busy("connect") || isPending(d.mac), onclick: () => act(key("connect"), withPending(d.mac, () => api.connect(d.mac)), { title: "Connexion impossible", mac: d.mac }) }, "Connecter"),
       isPending(d.mac) ? pendingTag() : null,
-      h("button", { disabled: busy("trust"), onclick: () => act(key("trust"), () => api.patch(d.mac, { trusted: !d.trusted }), { title: "Modification refusée", mac: d.mac }) },
-        d.trusted ? "Retirer la confiance" : "Faire confiance"),
+      d.paired ? h("button", { disabled: busy("trust"), onclick: () => act(key("trust"), () => api.patch(d.mac, { trusted: !d.trusted }), { title: "Modification refusée", mac: d.mac }) },
+        d.trusted ? "Retirer la confiance" : "Faire confiance") : null,
       d.paired ? h("button", { class: "danger", disabled: busy("forget"), onclick: () => onForget(d) }, "Oublier") : null));
 }
 
