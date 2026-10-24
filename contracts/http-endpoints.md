@@ -19,6 +19,7 @@
 | POST | `/api/devices/{mac}/forget` | `Adapter1.RemoveDevice` (oubli des deux côtés à faire par l'utilisateur sur la source) | 204 |
 | PATCH | `/api/devices/{mac}` | `{ "trusted": bool }` et/ou `{ "alias": "pc-pro" }` (alias btmux, pas l'alias BlueZ) | 200 `Device` |
 | GET | `/api/events` | flux **SSE** (`text/event-stream`) : `adapter`, `device`, `pairing`, `discovered` avec le modèle complet en `data` ; `retry: 3000` | 200 |
+| | | **Client** : `/api/events` exige le Bearer comme tout `/api/*` ; `EventSource` ne pouvant pas envoyer d'en-tête, la Web UI lit le flux par `fetch` streaming (`ReadableStream`) avec l'en-tête `Authorization`, gère elle-même `retry` et renvoie `Last-Event-ID` à la reconnexion ; le serveur honore `Last-Event-ID` (rejoue les événements manqués dans la limite d'un tampon de 100, sinon envoie un événement `state` complet). Ajouté le 2026-10-24 (#16/#21). | |
 
 Codes : 400 (validation), 401 (jeton), 404, 409 (état), 502 (erreur BlueZ, message D-Bus en `message`), 503 (BlueZ indisponible).
 Limites v0.2.0 : pas de routage, pas de volume, pas d'appel ; une seule fenêtre d'appairage à la fois ; les appairages

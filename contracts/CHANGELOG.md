@@ -21,3 +21,7 @@
 ## [20261023-c] — v0.2.0 LOT-1 (#14)
 
 - **[CHANGED]** `contracts/config-schema.md` — règle V12 : `adapters[].mac` uniques, `adapters[].name` sans caractère de contrôle (248 octets UTF-8 conservés). Mineur, non BREAKING : toute configuration valide existante le reste.
+
+## [20261024] — v0.2.0 LOT-2 (#16 #21)
+
+- **[CHANGED]** `contracts/http-endpoints.md` — `/api/events` : client en `fetch` streaming avec Bearer (pas `EventSource`), `Last-Event-ID` géré côté client et serveur (tampon 100, sinon événement `state` complet). Mineur, non BREAKING.
