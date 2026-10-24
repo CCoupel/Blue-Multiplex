@@ -246,10 +246,17 @@ function onEvent(type, data) {
     }
     case "device": {
       const i = S.devices.findIndex((d) => d.mac === data.mac);
-      i >= 0 ? (S.devices[i] = data) : S.devices.push(data);
+      if (!data.paired && !data.in_config) { if (i >= 0) S.devices.splice(i, 1); }
+      else i >= 0 ? (S.devices[i] = data) : S.devices.push(data);
       log("device", `${ROLES[data.adapter]?.hci ?? data.adapter}  ${label(data)}  ${data.connected ? "connecté" : "déconnecté"}${data.paired ? ", appairé" : ""}`);
       break;
     }
+    case "state": // état complet (Last-Event-ID hors tampon serveur)
+      S.version = data.version; S.adapters = data.adapters; S.devices = data.devices;
+      setPairing(data.pairing);
+      log("state", "état complet resynchronisé");
+      if (S.pairing && S.pairing.adapter === "headsets") refresh();
+      break;
     case "pairing":
       setPairing(data);
       log("pairing", data && data.adapter ? `${ROLES[data.adapter].hci} fenêtre ouverte (${data.remaining_s} s)` : "fenêtre fermée");
