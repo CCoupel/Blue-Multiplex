@@ -156,7 +156,8 @@ async def test_put_roles_state_write_failure_does_not_go_pending(api: _AsyncCtx,
             update={"state_path": blocker / "adapters.yaml"}
         )
         status, body = await _put(a, {"sources": EXTRA, "headsets": None})
-        assert status == 500 and body["error"] == "internal_error"
+        assert status == 500 and body["error"] == "state_write_failed"
+        assert "adapters.yaml" in body["message"]
         assert a.service.inventory.roles_pending is False
         assert (await a.req("GET", "/api/controllers"))[1]["roles"]["pending"] is False
 
@@ -235,3 +236,43 @@ async def test_serve_returns_4_on_restart_fallback(
     await asyncio.wait_for(service.ready.wait(), 5)
     await service.roles.set_roles({"sources": None, "headsets": HP})
     assert await asyncio.wait_for(task, 5) == 4
+
+
+async def test_confirm_write_failure_disconnects_nothing(api: _AsyncCtx, tmp_path: Path) -> None:
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        blocker = tmp_path / "file"
+        blocker.write_text("x")
+        a.service.roles._config = a.service.roles._config.model_copy(
+            update={"state_path": blocker / "adapters.yaml"}
+        )
+        status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert (status, body["error"]) == (500, "state_write_failed")
+        assert not a.bus.calls_to("Disconnect") and not a.service.inventory.roles_pending
+
+
+async def test_confirm_writes_state_before_disconnecting(api: _AsyncCtx, state_file: Path):
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        seen: list[bool] = []
+
+        async def disconnect(path: str, body: list[Any]) -> list[Any]:
+            seen.append(state_file.exists())
+            return []
+
+        a.bus.handlers[("org.bluez.Device1", "Disconnect")] = disconnect
+        status, _ = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert status == 202 and seen == [True]
+
+
+async def test_noop_wins_over_open_pairing_window(api: _AsyncCtx, state_file: Path) -> None:
+    async with api as a:
+        assert (await a.req("POST", "/api/pairing", json={"adapter": "sources"}))[0] == 202
+        status, roles = await _put(a, {"sources": SRC, "headsets": HP})
+        assert status == 200 and roles["pending"] is False and not state_file.exists()
+        status, body = await _put(a, {"sources": HP, "headsets": SRC})
+        assert (status, body["error"]) == (409, "pairing_open")
+
+
+def test_default_restart_fallback_delay_is_30s(config: Config, bus: FakeBus) -> None:
+    assert BluezService(config, bus).restart_timeout == 30.0

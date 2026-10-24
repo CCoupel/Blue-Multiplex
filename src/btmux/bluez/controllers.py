@@ -9,9 +9,11 @@ from collections.abc import Callable
 from typing import Any
 
 from btmux.bluez.errors import (
+    BluezError,
     ChangePending,
     ControllerError,
     DevicesConnected,
+    StateWriteFailed,
     WindowOpen,
 )
 from btmux.bluez.inventory import Inventory
@@ -96,12 +98,12 @@ class RoleManager:
         async with self._lock:
             self.check_writable()
             wanted, confirm = self._parse(body)
-            if self._pairing.window_open:
-                raise WindowOpen("close the pairing window before changing roles")
             current = self._inventory.roles().to_dict()
             affected = [r for r in ROLES if wanted[r] != current[r]]
-            if not affected:
+            if not affected:  # no-op prioritaire sur pairing_open : rien à appliquer
                 return 200, self._inventory.roles()
+            if self._pairing.window_open:
+                raise WindowOpen("close the pairing window before changing roles")
             connected = [
                 d for d in self._inventory.devices() if d.connected and d.adapter in affected
             ]
@@ -113,13 +115,21 @@ class RoleManager:
                         for d in connected
                     ],
                 )
-            for device in connected:
-                await self._pairing.disconnect(device.mac)
-            await asyncio.to_thread(
-                write_state_atomic, self._config.state_path, self._adapters_for(wanted)
-            )
+            path = self._config.state_path
+            try:  # l'état d'abord : en cas d'échec, aucune déconnexion et pas de `pending`
+                await asyncio.to_thread(write_state_atomic, path, self._adapters_for(wanted))
+            except OSError as exc:
+                log.error(kv("state_write_failed", file=path, error=exc.strerror or exc))
+                raise StateWriteFailed(
+                    f"cannot write the state file {path}: {exc.strerror or exc}"
+                ) from exc
             self._inventory.mark_roles_pending(wanted["sources"], wanted["headsets"])
             log.info(kv("roles_written", sources=wanted["sources"], headsets=wanted["headsets"]))
             if self._on_written is not None:
                 self._on_written()
+            for device in connected:  # le redémarrage les coupera de toute façon : au mieux
+                try:
+                    await self._pairing.disconnect(device.mac)
+                except BluezError as exc:
+                    log.warning(kv("disconnect_failed", mac=device.mac, error=exc))
             return 202, self._inventory.roles()

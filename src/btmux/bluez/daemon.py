@@ -24,7 +24,7 @@ EXIT_ADAPTER_NOT_FOUND = 3
 EXIT_RESTART_FALLBACK = (
     4  # redémarrage piloté non reçu : systemd relance (RestartForceExitStatus=4)
 )
-RESTART_TIMEOUT_S = 20.0
+RESTART_TIMEOUT_S = 30.0
 DEFAULT_ADAPTER_WAIT = 30.0
 ENV_ADAPTER_WAIT = "BTMUX_ADAPTER_WAIT"
 

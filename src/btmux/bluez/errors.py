@@ -74,6 +74,13 @@ class DevicesConnected(ApiError):
     status = 409
 
 
+class StateWriteFailed(ApiError):
+    """Écriture du fichier d'état impossible (droits, disque) : rien n'est appliqué — HTTP 500."""
+
+    code = "state_write_failed"
+    status = 500
+
+
 class ControllerError(InvalidRequest):
     """Validation de `PUT /api/controllers/roles` — HTTP 400, `code` propre à chaque cas."""
 
