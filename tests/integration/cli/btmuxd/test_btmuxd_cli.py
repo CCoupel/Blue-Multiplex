@@ -1,11 +1,10 @@
-"""LOT-1 / cli — btmuxd --config et --check-config (codes 0/2), contrat config-schema."""
+"""LOT-1 / cli — btmuxd --config et --check-config (codes 0/2/3), contrat config-schema."""
 
 from __future__ import annotations
 
-import signal
+import os
 import subprocess
 import sys
-import time
 
 from specsupport import output_of
 
@@ -51,31 +50,30 @@ def test_check_config_unknown_key_exits_2(run_btmuxd_cfg, write_config, valid_co
     assert "config: unknown key 'bogus'" in output_of(proc)
 
 
-def test_without_check_config_valid_config_stays_alive_until_sigterm(
-    run_btmuxd_cfg, write_config, valid_config, tmp_path
-):
-    """Contrat (CHANGED 2026-10-22) : le daemon reste vivant, SIGTERM -> arret propre, code 0."""
-    path = write_config(valid_config)
+def test_without_check_config_without_bluez_exits_3(write_config, valid_config, tmp_path):
+    """Contrat (CHANGED v0.2.0, #20) : `btmuxd --config` se connecte a BlueZ.
+
+    Adaptateur introuvable apres BTMUX_ADAPTER_WAIT s (defaut 30) -> code 3, API non demarree.
+    Le maintien en vie (SIGTERM -> 0) avec un bus simule est couvert par tests/unit/ (FakeBus) et
+    par tests/hardware/bluez/pairing sur le Pi ; la CI n'a pas de BlueZ.
+    """
     code = "import sys; from btmux.cli.btmuxd import main; sys.exit(main())"
-    proc = subprocess.Popen(
-        [sys.executable, "-c", code, "--config", str(path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+    proc = subprocess.run(
+        [sys.executable, "-c", code, "--config", str(write_config(valid_config))],
+        capture_output=True,
         text=True,
         cwd=tmp_path,
+        env={
+            **os.environ,
+            "BTMUX_ADAPTER_WAIT": "1",
+            "DBUS_SYSTEM_BUS_ADDRESS": f"unix:path={tmp_path}/no-bus",  # jamais de vrai BlueZ
+        },
+        timeout=60,
+        check=False,
     )
-    try:
-        assert proc.stdout is not None
-        first = proc.stdout.readline()
-        assert "started — no daemon logic yet (v0.3.0)" in first
-        time.sleep(0.5)
-        assert proc.poll() is None, "le daemon ne doit pas sortir seul"
-        proc.send_signal(signal.SIGTERM)
-        assert proc.wait(timeout=10) == 0
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 3, out
+    assert "adapter_not_found" in out
 
 
 def test_without_check_config_invalid_config_exits_2(run_btmuxd_cfg, write_config, valid_config):
