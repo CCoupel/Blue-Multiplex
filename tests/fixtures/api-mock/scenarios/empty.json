@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0.0",
+  "adapters": [
+    {
+      "role": "sources",
+      "mac": "AA:BB:CC:00:00:01",
+      "alias": "btmux",
+      "hci": "hci1",
+      "powered": true,
+      "discoverable": false,
+      "pairable": false,
+      "class": "0x6c0404"
+    },
+    {
+      "role": "headsets",
+      "mac": "AA:BB:CC:00:00:02",
+      "alias": "btmux-hp",
+      "hci": "hci0",
+      "powered": true,
+      "discoverable": false,
+      "pairable": false,
+      "class": "0x6c0104"
+    }
+  ],
+  "devices": [],
+  "discoverable_headsets": [
+    {
+      "mac": "AA:11:22:33:44:55",
+      "name": "Bose QC45",
+      "rssi": -60,
+      "class": "0x240404",
+      "reveal_after_s": 1.0
+    },
+    {
+      "mac": "AA:11:22:33:44:66",
+      "name": "JBL Tune 760",
+      "rssi": -72,
+      "class": "0x240404",
+      "reveal_after_s": 2.5
+    }
+  ],
+  "pairing": null,
+  "stale_bond_macs": [],
+  "bluez_error_macs": [],
+  "pair_delay_s": 1.0,
+  "connect_delay_s": 0.5
+}

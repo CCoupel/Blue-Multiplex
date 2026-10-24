@@ -1,0 +1,109 @@
+{
+  "version": "0.2.0.0",
+  "adapters": [
+    {
+      "role": "sources",
+      "mac": "AA:BB:CC:00:00:01",
+      "alias": "btmux",
+      "hci": "hci1",
+      "powered": true,
+      "discoverable": false,
+      "pairable": false,
+      "class": "0x6c0404"
+    },
+    {
+      "role": "headsets",
+      "mac": "AA:BB:CC:00:00:02",
+      "alias": "btmux-hp",
+      "hci": "hci0",
+      "powered": true,
+      "discoverable": false,
+      "pairable": false,
+      "class": "0x6c0104"
+    }
+  ],
+  "devices": [
+    {
+      "mac": "11:22:33:44:55:01",
+      "adapter": "sources",
+      "alias": "pc-pro",
+      "name": "MSI-PC",
+      "kind": "source",
+      "paired": true,
+      "trusted": true,
+      "connected": true,
+      "blocked": false,
+      "uuids": [
+        "0000110b-0000-1000-8000-00805f9b34fb"
+      ],
+      "profiles": [
+        "a2dp_sink",
+        "hfp_hf"
+      ],
+      "last_seen": "2026-10-23T15:50:00Z",
+      "in_config": true
+    },
+    {
+      "mac": "11:22:33:44:55:02",
+      "adapter": "sources",
+      "alias": "tel-perso",
+      "name": "Galaxy S24",
+      "kind": "source",
+      "paired": true,
+      "trusted": true,
+      "connected": false,
+      "blocked": false,
+      "uuids": [
+        "0000110b-0000-1000-8000-00805f9b34fb"
+      ],
+      "profiles": [
+        "a2dp_sink",
+        "hfp_hf"
+      ],
+      "last_seen": null,
+      "in_config": true
+    },
+    {
+      "mac": "11:22:33:44:55:03",
+      "adapter": "headsets",
+      "alias": "xm5",
+      "name": "WH-1000XM5",
+      "kind": "headset",
+      "paired": true,
+      "trusted": true,
+      "connected": true,
+      "blocked": false,
+      "uuids": [
+        "0000110a-0000-1000-8000-00805f9b34fb"
+      ],
+      "profiles": [
+        "a2dp_source",
+        "hfp_ag"
+      ],
+      "last_seen": "2026-10-23T15:50:00Z",
+      "in_config": true
+    }
+  ],
+  "discoverable_headsets": [
+    {
+      "mac": "AA:11:22:33:44:55",
+      "name": "Bose QC45",
+      "rssi": -60,
+      "class": "0x240404",
+      "reveal_after_s": 1.0
+    },
+    {
+      "mac": "AA:11:22:33:44:66",
+      "name": "JBL Tune 760",
+      "rssi": -72,
+      "class": "0x240404",
+      "reveal_after_s": 2.5
+    }
+  ],
+  "pairing": null,
+  "stale_bond_macs": [],
+  "bluez_error_macs": [],
+  "pair_delay_s": 1.0,
+  "connect_delay_s": 0.5,
+  "bluez_unavailable": true
+}
