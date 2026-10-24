@@ -14,6 +14,8 @@ from __future__ import annotations
 import pytest
 from hwsupport import operator, operator_confirms, wait_for
 
+pytestmark = pytest.mark.hardware
+
 
 @pytest.fixture(autouse=True)
 def clean_window(hw):
