@@ -2,10 +2,11 @@
 const KEY = "btmux.token";
 
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, details) {
     super(message || code || `HTTP ${status}`);
     this.status = status;
     this.code = code || "";
+    this.details = details;
   }
 }
 
@@ -35,7 +36,7 @@ export async function request(method, path, body) {
   if (!res.ok) {
     let data = {};
     try { data = await res.json(); } catch { /* corps non JSON */ }
-    throw new ApiError(res.status, data.error, data.message);
+    throw new ApiError(res.status, data.error, data.message, data.details);
   }
   if (res.status === 204) return null;
   const text = await res.text();
@@ -52,6 +53,8 @@ export const api = {
   connect: (mac) => request("POST", `/api/devices/${mac}/connect`),
   disconnect: (mac) => request("POST", `/api/devices/${mac}/disconnect`),
   forget: (mac) => request("POST", `/api/devices/${mac}/forget`),
+  controllers: () => request("GET", "/api/controllers"),
+  putRoles: (body) => request("PUT", "/api/controllers/roles", body),
   patch: (mac, fields) => request("PATCH", `/api/devices/${mac}`, fields),
 };
 

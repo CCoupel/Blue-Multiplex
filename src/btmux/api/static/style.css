@@ -48,3 +48,5 @@ section { overflow-x:auto; }
 .sub-title { font-size:14px; margin:14px 0 4px; }
 .sub.inline { display:inline; }
 .pending { font-size:12px; color:var(--muted); font-style:italic; align-self:center; }
+#restart-banner { align-items:center; }
+.status.info { flex:1; min-width:200px; }

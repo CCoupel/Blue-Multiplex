@@ -20,6 +20,8 @@
 
 <main>
   <div id="errors" aria-live="assertive"></div>
+  <div id="restart-banner" class="full pair open" role="status" hidden></div>
+  <section class="full" aria-labelledby="h-ctl" id="panel-controllers"></section>
   <section aria-labelledby="h-src" id="panel-sources"></section>
   <section aria-labelledby="h-hp" id="panel-headsets"></section>
   <section class="full" aria-labelledby="h-log">
@@ -28,6 +30,10 @@
   </section>
 </main>
 
+<dialog id="confirm-roles" aria-labelledby="confirm-roles-title">
+  <p id="confirm-roles-text"></p>
+  <menu><button type="button" id="confirm-roles-cancel">Annuler</button><button type="button" class="primary" id="confirm-roles-ok">Déconnecter et appliquer</button></menu>
+</dialog>
 <dialog id="confirm" aria-labelledby="confirm-title">
   <p id="confirm-text"></p>
   <menu><button type="button" id="confirm-cancel">Annuler</button><button type="button" class="danger" id="confirm-ok">Oublier</button></menu>

@@ -68,3 +68,14 @@ test("request : ApiError avec status/code, 204 → null", async () => {
   globalThis.fetch = async () => { throw new TypeError("x"); };
   await assert.rejects(request("GET", "/api/state"), (e) => e.status === 0);
 });
+
+test("request : ApiError transporte details (409 devices_connected) ; absent → undefined", async () => {
+  const details = [{ mac: "AA:BB:CC:DD:EE:01", alias: "pc-pro" }, "casque"];
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "devices_connected", message: "appareils connectés", details }), { status: 409 });
+  await assert.rejects(request("PUT", "/api/controllers/roles", { sources: null, headsets: null, confirm: false }),
+    (e) => e instanceof ApiError && e.status === 409 && e.code === "devices_connected" && JSON.stringify(e.details) === JSON.stringify(details));
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "pairing_open", message: "fenêtre ouverte" }), { status: 409 });
+  await assert.rejects(request("PUT", "/api/controllers/roles", {}), (e) => e.code === "pairing_open" && e.details === undefined);
+  globalThis.fetch = async () => new Response("pas du json", { status: 502 });
+  await assert.rejects(request("PUT", "/api/controllers/roles", {}), (e) => e.status === 502 && e.details === undefined);
+});

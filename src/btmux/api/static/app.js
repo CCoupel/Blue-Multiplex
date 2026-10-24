@@ -10,6 +10,8 @@ const S = {
   version: "", adapters: [], devices: [], discovered: [],
   pairing: null, deadline: 0, // deadline = Date.now() + remaining_s*1000 à la réception
   pending: new Map(), // mac -> échéance (ms) : opération asynchrone pair/connect en cours
+  controllers: [], roles: null, draft: null, // draft : {sources, headsets} choisi dans les sélecteurs, non appliqué
+  restartUntil: 0, // échéance (ms) du bandeau de redémarrage
   live: false, durations: { headsets: 60, sources: 60 }, busy: new Set(), errors: [],
 };
 let events = null, pollTimer = null, tickTimer = null;
@@ -211,6 +213,12 @@ function renderPanel(role) {
   const r = ROLES[role];
   const a = S.adapters.find((x) => x.role === role);
   const el = $(r.id);
+  if (S.roles && S.roles[role] === null && !a) {
+    el.replaceChildren(
+      h("h2", { id: r.h }, r.title, " ", tag(r.hci, "off"), tag("rôle non affecté", "off")),
+      h("p", { class: "empty" }, `Aucun contrôleur n'est affecté au rôle « ${r.title} ». Choisissez-en un dans la section Contrôleurs.`));
+    return;
+  }
   el.replaceChildren(...[
     h("h2", { id: r.h }, r.title, " ", tag(r.hci, "on"),
       a ? [tag(`alias ${a.alias}`), tag(a.powered ? "powered" : "éteint", a.powered ? "on" : "off")] : tag("absent", "off")),
@@ -220,9 +228,114 @@ function renderPanel(role) {
     role === "headsets" ? discoveredBlock() : null].flat().filter(Boolean));
 }
 
+// ----- contrôleurs (#23) -----
+const ROLE_LABEL = { sources: "Sources (hci-src)", headsets: "Casques (hci-hp)", none: "Aucun" };
+const busLabel = (c) => (c.bus === "usb" ? `USB${c.usb_id ? " " + c.usb_id : ""}` : c.bus === "uart" ? "UART" : "inconnu");
+const shortMac = (m) => m.split(":").slice(-2).join(":");
+const ctlByMac = (mac) => S.controllers.find((c) => c.mac === mac);
+const ctlName = (mac) => { const c = ctlByMac(mac); return c ? `${c.name || c.hci} (${shortMac(mac)})` : (mac ? shortMac(mac) : "aucun"); };
+const current = () => ({ sources: S.roles ? S.roles.sources : null, headsets: S.roles ? S.roles.headsets : null });
+const draftOrCurrent = () => S.draft || current();
+const changed = () => { const d = draftOrCurrent(), c = current(); return d.sources !== c.sources || d.headsets !== c.headsets; };
+const restarting = () => !!(S.roles && S.roles.pending) || Date.now() < S.restartUntil;
+
+function roleOf(c) { const d = draftOrCurrent(); return d.sources === c.mac ? "sources" : d.headsets === c.mac ? "headsets" : "none"; }
+function chooseRole(c, role) {
+  const d = { ...draftOrCurrent() };
+  if (d.sources === c.mac) d.sources = null;
+  if (d.headsets === c.mac) d.headsets = null;
+  if (role !== "none") d[role] = c.mac; // l'ancien titulaire du rôle passe à « Aucun » : à réaffecter (permutation en deux choix)
+  S.draft = d;
+  render();
+}
+
+function draftSummary() {
+  const d = draftOrCurrent(), c = current(), out = [];
+  for (const role of ["sources", "headsets"]) {
+    if (d[role] !== c[role]) out.push(h("span", {}, h("strong", {}, ROLES[role].title), ` ${shortMac(c[role] || "—")} → ${d[role] ? shortMac(d[role]) : "aucun"} `));
+  }
+  return out;
+}
+
+function renderControllers() {
+  const el = $("panel-controllers");
+  const locked = restarting();
+  const rows = S.controllers.map((c) => h("tr", {},
+    h("td", {}, h("strong", {}, c.name || c.hci), h("br"), h("span", { class: "mac" }, c.hci)),
+    h("td", { class: "mac" }, c.mac), h("td", {}, busLabel(c)),
+    h("td", {}, c.present === false ? tag("absent", "off") : tag(c.powered ? "powered" : "éteint", c.powered ? "on" : "off"),
+      c.present === false ? null : (!c.pairable && !c.discoverable ? tag("fermé", "on") : tag("ouvert", "off")),
+      tag(c.connected_devices ? `${c.connected_devices} appareil${c.connected_devices > 1 ? "s" : ""} connecté${c.connected_devices > 1 ? "s" : ""}` : "0 appareil")),
+    h("td", {}, h("select", { "aria-label": `Rôle du contrôleur ${shortMac(c.mac)}`, disabled: locked || c.present === false,
+      onchange: (e) => chooseRole(c, e.target.value) },
+      ["sources", "headsets", "none"].map((r) => h("option", { value: r, selected: roleOf(c) === r }, ROLE_LABEL[r]))))));
+  el.replaceChildren(...[
+    h("h2", { id: "h-ctl" }, "Contrôleurs Bluetooth ", tag(`${S.controllers.length} détecté${S.controllers.length > 1 ? "s" : ""}`),
+      S.roles ? tag(`affectation : ${S.roles.source === "state" ? "état (API)" : "config"}`, S.roles.source === "state" ? "on" : "") : null),
+    h("p", { class: "sub" }, "Choisissez quel contrôleur joue chaque rôle (USB ou UART). Les contrôleurs sans rôle sont fermés (ni appairables ni visibles). L'affectation est mémorisée par adresse et appliquée par un redémarrage du service (~15 s)."),
+    S.controllers.length
+      ? h("table", {}, h("thead", {}, h("tr", {}, ["Contrôleur", "Adresse", "Bus", "État", "Rôle"].map((t) => h("th", {}, t)))), h("tbody", {}, rows))
+      : h("p", { class: "empty" }, "Aucun contrôleur détecté."),
+    changed() ? h("div", { class: "pair" },
+      h("span", { class: "status info" }, "Modification en attente : ", draftSummary()),
+      h("button", { disabled: locked, onclick: () => { S.draft = null; render(); } }, "Annuler"),
+      h("button", { class: "primary", disabled: locked || S.busy.has("roles"), onclick: () => applyRoles(false) }, "Appliquer")) : null,
+  ].filter(Boolean));
+}
+
+function renderBanner() {
+  const b = $("restart-banner");
+  if (!restarting()) { b.hidden = true; b.replaceChildren(); return; }
+  b.hidden = false;
+  b.replaceChildren(h("span", { class: "dot warn" }), h("strong", {}, "Application de l'affectation… "),
+    "le service btmux redémarre (environ 15 s). Les actions sont désactivées ; la page se reconnecte automatiquement. ",
+    h("span", { class: "spacer" }), h("span", { class: "count", "data-restart": "1" }, fmtTime(Math.max(0, Math.ceil((S.restartUntil - Date.now()) / 1000)))));
+}
+
+function startRestart() { S.restartUntil = Date.now() + 15000; }
+
+function confirmRoles(lines) {
+  $("confirm-roles-text").replaceChildren(h("strong", {}, "Appliquer la nouvelle affectation ?"), h("br"),
+    `${lines.length ? lines.length + " appareil(s) connecté(s) seront déconnectés : " + lines.join(", ") + ". " : ""}Les appareils devront être reconnectés (ils restent appairés). Le service btmux redémarre (environ 15 s) ; l'interface se reconnecte et se met à jour dès que les rôles sont actifs.`);
+  return new Promise((resolve) => {
+    const dlg = $("confirm-roles");
+    const done = (v) => { dlg.close(); $("confirm-roles-ok").onclick = $("confirm-roles-cancel").onclick = null; resolve(v); };
+    $("confirm-roles-ok").onclick = () => done(true);
+    $("confirm-roles-cancel").onclick = () => done(false);
+    dlg.oncancel = () => resolve(false);
+    dlg.showModal();
+    $("confirm-roles-cancel").focus();
+  });
+}
+const detailLabel = (x) => (typeof x === "string" ? x : x && (x.alias || x.name || x.mac) || "?");
+
+async function applyRoles(confirm) {
+  const d = draftOrCurrent();
+  S.busy.add("roles"); render();
+  try {
+    const roles = await api.putRoles({ sources: d.sources, headsets: d.headsets, confirm });
+    S.roles = roles && roles.sources !== undefined ? roles : S.roles;
+    S.draft = null; startRestart();
+    log("roles", `affectation acceptée : redémarrage attendu (~15 s)`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409 && e.code === "devices_connected" && !confirm) {
+      const list = Array.isArray(e.details) ? e.details.map(detailLabel) : [];
+      S.busy.delete("roles");
+      if (await confirmRoles(list)) return applyRoles(true);
+    } else if (e instanceof ApiError && e.status === 409 && e.code === "pairing_open") {
+      pushError(new ApiError(409, e.code, "Fermez d'abord la fenêtre d'appairage, puis réessayez."), { title: "Affectation refusée" });
+    } else if (e instanceof ApiError && e.status === 409 && e.code === "change_pending") {
+      pushError(new ApiError(409, e.code, "Un changement d'affectation est déjà en cours, patientez."), { title: "Affectation refusée" });
+    } else pushError(e, { title: "Affectation refusée" });
+  } finally { S.busy.delete("roles"); render(); }
+}
+
 function render() {
+  renderBanner();
+  renderControllers();
   renderPanel("sources");
   renderPanel("headsets");
+  if (restarting()) document.querySelectorAll("main button, main select").forEach((n) => { n.disabled = true; });
   if (S.live || pollTimer) setStatus(S.live ? "ok" : "warn", statusText());
 }
 
@@ -230,6 +343,8 @@ function tick() {
   let expired = false;
   for (const [mac, t] of S.pending) if (Date.now() >= t) { S.pending.delete(mac); expired = true; }
   if (expired) render();
+  document.querySelectorAll("[data-restart]").forEach((n) => { n.textContent = fmtTime(Math.max(0, Math.ceil((S.restartUntil - Date.now()) / 1000))); });
+  if (S.restartUntil && Date.now() >= S.restartUntil && !(S.roles && S.roles.pending)) { S.restartUntil = 0; render(); }
   document.querySelectorAll("[data-countdown]").forEach((n) => { n.textContent = fmtTime(remaining()); });
   if (S.pairing && remaining() === 0) refresh();
 }
@@ -242,6 +357,16 @@ function setPairing(w) {
   if (!S.pairing) S.discovered = [];
 }
 
+function applyControllers(st) {
+  if (Array.isArray(st.controllers)) S.controllers = st.controllers;
+  if (st.roles) {
+    const was = S.roles;
+    S.roles = st.roles;
+    if (!st.roles.pending) S.restartUntil = 0;
+    if (S.draft && was && (was.sources !== st.roles.sources || was.headsets !== st.roles.headsets)) S.draft = null;
+  }
+}
+
 let refreshing = false;
 async function refresh() {
   if (refreshing) return;
@@ -249,18 +374,30 @@ async function refresh() {
   try {
     const st = await api.state();
     S.version = st.version; S.adapters = st.adapters; S.devices = st.devices;
+    applyControllers(st);
     setPairing(st.pairing);
     if (S.pairing && S.pairing.adapter === "headsets") S.discovered = await api.discovered();
     if (S.errors.some((e) => e.id === "net")) dismiss("net");
     render();
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) askToken();
+    else if (restarting()) setStatus("warn", "redémarrage du service…");
     else { setStatus("err", e.message); if (!S.errors.some((x) => x.id === "net")) { S.errors = [{ id: "net", title: "API", message: e.message, code: e.code, ctx: {}, status: e.status }, ...S.errors]; renderErrors(); } }
   } finally { refreshing = false; }
 }
 
 function onEvent(type, data) {
   switch (type) {
+    case "controllers":
+      S.controllers = data;
+      log("controllers", `${data.length} contrôleur(s)`);
+      break;
+    case "roles":
+      S.roles = data;
+      if (data.pending && data.restart_expected) startRestart();
+      else if (!data.pending) S.restartUntil = 0;
+      log("roles", `sources=${data.sources ? shortMac(data.sources) : "—"} casques=${data.headsets ? shortMac(data.headsets) : "—"}${data.pending ? " (en cours, redémarrage attendu)" : ""}`);
+      break;
     case "adapter": {
       const i = S.adapters.findIndex((a) => a.role === data.role);
       i >= 0 ? (S.adapters[i] = data) : S.adapters.push(data);
@@ -282,6 +419,7 @@ function onEvent(type, data) {
     }
     case "state": // état complet (Last-Event-ID hors tampon serveur)
       S.version = data.version; S.adapters = data.adapters; S.devices = data.devices;
+      applyControllers(data);
       setPairing(data.pairing);
       log("state", "état complet resynchronisé");
       if (S.pairing && S.pairing.adapter === "headsets") refresh();
