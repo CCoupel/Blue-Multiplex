@@ -272,7 +272,7 @@ function renderControllers() {
   el.replaceChildren(...[
     h("h2", { id: "h-ctl" }, "Contrôleurs Bluetooth ", tag(`${S.controllers.length} détecté${S.controllers.length > 1 ? "s" : ""}`),
       S.roles ? tag(`affectation : ${S.roles.source === "state" ? "état (API)" : "config"}`, S.roles.source === "state" ? "on" : "") : null),
-    h("p", { class: "sub" }, "Choisissez quel contrôleur joue chaque rôle (USB ou UART). Les contrôleurs sans rôle sont fermés (ni appairables ni visibles). L'affectation est mémorisée par adresse et appliquée par un redémarrage du service (~15 s)."),
+    h("p", { class: "sub" }, "Choisissez quel contrôleur joue chaque rôle (USB ou UART). Les contrôleurs sans rôle sont fermés (ni appairables ni visibles). L'affectation est mémorisée par adresse et appliquée par un redémarrage du service (~15–20 s)."),
     S.controllers.length
       ? h("table", {}, h("thead", {}, h("tr", {}, ["Contrôleur", "Adresse", "Bus", "État", "Rôle"].map((t) => h("th", {}, t)))), h("tbody", {}, rows))
       : h("p", { class: "empty" }, "Aucun contrôleur détecté."),
@@ -288,7 +288,7 @@ function renderBanner() {
   if (!restarting()) { b.hidden = true; b.replaceChildren(); return; }
   b.hidden = false;
   b.replaceChildren(h("span", { class: "dot warn" }), h("strong", {}, "Application de l'affectation… "),
-    "le service btmux redémarre (environ 15 s). Les actions sont désactivées ; la page se reconnecte automatiquement. ",
+    "le service btmux redémarre (environ 15 à 20 s). Les actions sont désactivées ; la page se reconnecte automatiquement. ",
     h("span", { class: "spacer" }), h("span", { class: "count", "data-restart": "1" }, fmtTime(Math.max(0, Math.ceil((S.restartUntil - Date.now()) / 1000)))));
 }
 
@@ -296,7 +296,7 @@ function startRestart() { S.restartUntil = Date.now() + 15000; }
 
 function confirmRoles(lines) {
   $("confirm-roles-text").replaceChildren(h("strong", {}, "Appliquer la nouvelle affectation ?"), h("br"),
-    `${lines.length ? lines.length + " appareil(s) connecté(s) seront déconnectés : " + lines.join(", ") + ". " : ""}Les appareils devront être reconnectés (ils restent appairés). Le service btmux redémarre (environ 15 s) ; l'interface se reconnecte et se met à jour dès que les rôles sont actifs.`);
+    `${lines.length ? lines.length + " appareil(s) connecté(s) seront déconnectés : " + lines.join(", ") + ". " : ""}Les appareils devront être reconnectés (ils restent appairés). Le service btmux redémarre (environ 15 à 20 s) ; l'interface se reconnecte et se met à jour dès que les rôles sont actifs.`);
   return new Promise((resolve) => {
     const dlg = $("confirm-roles");
     const done = (v) => { dlg.close(); $("confirm-roles-ok").onclick = $("confirm-roles-cancel").onclick = null; resolve(v); };
@@ -316,7 +316,7 @@ async function applyRoles(confirm) {
     const roles = await api.putRoles({ sources: d.sources, headsets: d.headsets, confirm });
     S.roles = roles && roles.sources !== undefined ? roles : S.roles;
     S.draft = null; startRestart();
-    log("roles", `affectation acceptée : redémarrage attendu (~15 s)`);
+    log("roles", `affectation acceptée : redémarrage attendu (~15–20 s)`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === "devices_connected" && !confirm) {
       const list = Array.isArray(e.details) ? e.details.map(detailLabel) : [];

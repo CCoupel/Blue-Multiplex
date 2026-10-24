@@ -29,7 +29,7 @@ Scénarios mock : `default`, `swap-ready`, `unassigned`, `uart-only`, `restart-p
 | # | Action | Résultat attendu | A | B | OK A | OK B |
 |---|--------|------------------|---|---|------|------|
 | 2.1 | Mettre Sources → contrôleur HP, puis Casques → contrôleur SRC (permutation en deux choix), « Appliquer » | `PUT /api/controllers/roles` unique (les deux rôles), réponse 202 ; **pas** de boîte de confirmation (aucun appareil connecté) | ✔ | ✔ | | |
-| 2.2 | Observer l'écran | Bandeau en tête de page « Application de l'affectation… » avec compte à rebours (~15 s) ; boutons et sélecteurs désactivés ; ligne `roles` dans le journal | ✔ | ✔ | | |
+| 2.2 | Observer l'écran | Bandeau en tête de page « Application de l'affectation… » avec compte à rebours (~15–20 s) ; boutons et sélecteurs désactivés ; ligne `roles` dans le journal | ✔ | ✔ | | |
 | 2.3 | Attendre la fin du redémarrage | La page se reconnecte seule, bandeau retiré, `state` complet resynchronisé, tag « affectation : état (API) », rôles permutés, panneaux Sources/Casques cohérents | ✔ | ✔ | | |
 
 ## S3 — Confirmation de déconnexion (`default`) — `critical`
@@ -46,7 +46,7 @@ Scénarios mock : `default`, `swap-ready`, `unassigned`, `uart-only`, `restart-p
 | # | Action | Résultat attendu | A | B | OK A | OK B |
 |---|--------|------------------|---|---|------|------|
 | 4.1 | Ouvrir la page (`roles.pending:true`) | Bandeau de redémarrage visible d'emblée ; toutes les actions désactivées ; erreur réseau pendant la coupure = « redémarrage du service… » (pas d'erreur rouge) | ✔ | — | | |
-| 4.2 | Pendant la coupure (≈ 10–15 s), recharger la page | Pas de crash ; reconnexion automatique à la fin | ✔ | ✔ | | |
+| 4.2 | Pendant la coupure (≈ 15–20 s), recharger la page | Pas de crash ; reconnexion automatique à la fin | ✔ | ✔ | | |
 | 4.3 | Après reconnexion | Premier événement `state` (compteur `id` repart de 1) : vue réinitialisée, `pending:false`, bandeau retiré | ✔ | ✔ | | |
 | 4.4 | Tenter une écriture (autre onglet) entre acceptation et arrêt | 409 `change_pending` affiché clairement | ✔ | ✔ | | |
 
