@@ -1,4 +1,5 @@
-"""Client CLI de l'API btmuxd : `state`, `pairing open|close`, `device pair|connect|disconnect|forget`.
+"""Client CLI de l'API btmuxd : `state`, `pairing open|close`, `device pair|connect|disconnect|forget`,
+`controllers`, `roles set`.
 
 Connexion : `--url` (défaut `$BTMUX_URL` ou http://127.0.0.1:8088) ; jeton : `--token`, `$BTMUX_TOKEN` ou
 `/etc/btmux/token` si lisible. Codes de sortie : 0 succès, 1 erreur renvoyée par l'API, 2 usage / réseau.
@@ -26,9 +27,10 @@ _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 class CtlError(Exception):
-    def __init__(self, message: str, code: int) -> None:
+    def __init__(self, message: str, code: int, details: list[Any] | None = None) -> None:
         super().__init__(message)
         self.code = code
+        self.details = details or []
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,6 +51,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     for action in ("pair", "connect", "disconnect", "forget"):
         device.add_parser(action).add_argument("mac")
+    sub.add_parser("controllers", help="contrôleurs détectés et rôles (JSON)")
+    roles = sub.add_parser("roles", help="affectation des rôles").add_subparsers(
+        dest="action", required=True
+    )
+    setter = roles.add_parser("set", help="affecte les deux rôles (MAC ou none)")
+    setter.add_argument("--sources", required=True, metavar="MAC|none")
+    setter.add_argument("--headsets", required=True, metavar="MAC|none")
+    setter.add_argument(
+        "--confirm", action="store_true", help="déconnecte les appareils connectés concernés"
+    )
     return parser
 
 
@@ -72,12 +84,15 @@ def request(method: str, url: str, token: str | None, body: dict[str, Any] | Non
         with _OPENER.open(req, timeout=TIMEOUT_S) as resp:
             raw = resp.read()
     except urllib.error.HTTPError as exc:
+        details: list[Any] = []
         try:
             info = json.loads(exc.read())
             detail = f"{info.get('error', '')}: {info.get('message', '')}"
+            if isinstance(info.get("details"), list):
+                details = info["details"]
         except ValueError:
             detail = exc.reason
-        raise CtlError(f"HTTP {exc.code} {detail}", 1) from exc
+        raise CtlError(f"HTTP {exc.code} {detail}", 1, details) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise CtlError(f"cannot reach {url}: {getattr(exc, 'reason', exc)}", 2) from exc
     return json.loads(raw) if raw else None
@@ -88,6 +103,16 @@ def run(args: argparse.Namespace) -> Any:
     token = resolve_token(args.token)
     if args.command == "state":
         return request("GET", f"{base}/api/state", token)
+    if args.command == "controllers":
+        return request("GET", f"{base}/api/controllers", token)
+    if args.command == "roles":
+        change: dict[str, Any] = {
+            "sources": None if args.sources.lower() == "none" else args.sources,
+            "headsets": None if args.headsets.lower() == "none" else args.headsets,
+        }
+        if args.confirm:
+            change["confirm"] = True
+        return request("PUT", f"{base}/api/controllers/roles", token, change)
     if args.command == "pairing":
         if args.action == "close":
             return request("DELETE", f"{base}/api/pairing", token)
@@ -104,6 +129,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = run(args)
     except CtlError as exc:
         print(f"btmuxctl: {exc}", file=sys.stderr)
+        for item in exc.details:  # une ligne par appareil (devices_connected)
+            if isinstance(item, dict):
+                fields = (item.get("mac"), item.get("alias"), item.get("name"), item.get("adapter"))
+                print(
+                    "  " + "\t".join("-" if v is None else str(v) for v in fields), file=sys.stderr
+                )
         return exc.code
     if result is not None:
         print(json.dumps(result, indent=2, ensure_ascii=False))

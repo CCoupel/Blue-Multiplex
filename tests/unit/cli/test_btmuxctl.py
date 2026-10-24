@@ -19,6 +19,17 @@ class Handler(BaseHTTPRequestHandler):
         SEEN.append((self.command, self.path, self.headers.get("Authorization"), body))
         if "boom" in self.path:
             payload, status = {"error": "stale_bond", "message": "oublier des deux côtés"}, 409
+        elif "devconn" in self.path or self.command == "PUT" and b"devconn" in body:
+            payload, status = (
+                {
+                    "error": "devices_connected",
+                    "message": "confirm needed",
+                    "details": [
+                        {"mac": "AA:11", "alias": None, "name": "PC", "adapter": "sources"}
+                    ],
+                },
+                409,
+            )
         elif self.path == "/api/state":
             payload, status = {"version": "x", "adapters": []}, 200
         elif self.command == "DELETE":
@@ -34,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.end_headers()
 
-    do_GET = do_POST = do_DELETE = _go
+    do_GET = do_POST = do_DELETE = do_PUT = _go
 
     def log_message(self, *args: Any) -> None: ...
 
@@ -104,3 +115,68 @@ def test_usage_errors_exit_2() -> None:
     with pytest.raises(SystemExit) as info:
         btmuxctl.main([])
     assert info.value.code == 2
+
+
+def test_controllers_and_roles_set_requests(url: str, capsys: pytest.CaptureFixture[str]) -> None:
+    base = ["--url", url, "--token", "tok"]
+    assert btmuxctl.main([*base, "controllers"]) == 0
+    assert SEEN[0][:3] == ("GET", "/api/controllers", "Bearer tok")
+    assert (
+        btmuxctl.main(
+            [*base, "roles", "set", "--sources", "AA:BB:CC:00:00:01", "--headsets", "none"]
+        )
+        == 0
+    )
+    assert SEEN[1][:3] == ("PUT", "/api/controllers/roles", "Bearer tok")
+    assert json.loads(SEEN[1][3]) == {"sources": "AA:BB:CC:00:00:01", "headsets": None}
+    assert (
+        btmuxctl.main(
+            [
+                *base,
+                "roles",
+                "set",
+                "--sources",
+                "NONE",
+                "--headsets",
+                "AA:BB:CC:00:00:02",
+                "--confirm",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(SEEN[2][3]) == {
+        "sources": None,
+        "headsets": "AA:BB:CC:00:00:02",
+        "confirm": True,
+    }
+
+
+def test_roles_set_409_prints_details_one_line_per_device(
+    url: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = btmuxctl.main(
+        [
+            "--url",
+            url,
+            "--token",
+            "tok",
+            "roles",
+            "set",
+            "--sources",
+            "devconn",
+            "--headsets",
+            "none",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert code == 1 and "devices_connected" in err
+    assert "  AA:11\t-\tPC\tsources" in err.splitlines()
+
+
+@pytest.mark.parametrize(
+    "args", [["roles", "set"], ["roles", "set", "--sources", "none"], ["roles"]]
+)
+def test_roles_set_usage_errors_exit_2(args: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        btmuxctl.main(args)
+    assert exc.value.code == 2
