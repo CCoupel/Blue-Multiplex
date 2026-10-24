@@ -32,4 +32,4 @@
 | tests/procedures/ui/pairing/ | procedure | webui | Web UI appairages : jeton, fenetre, sources, casques, erreurs, SSE, responsive (#16 #21) | feature | critical |
 | tests/webui/api.test.mjs | unit | webui | Client JS api.js : parsing SSE, Last-Event-ID, 401, retry, ApiError (`node --test`, hors pytest/CI) (#16) | feature | |
 | tests/integration/api/controllers/ | integration | api | Controleurs, affectation des roles, redemarrage pilote, change_pending, role_unassigned (#23) | feature | critical |
-| tests/procedures/hardware/roles-restart/ | procedure | bluez | Redemarrage pilote apres changement de roles sur le Pi : .path, code 4, change_pending, hotplug (#23) | feature | hardware |
+| tests/procedures/hardware/roles-restart/ | procedure | bluez | Redemarrage pilote apres changement de roles sur le Pi : .path, code 4, change_pending, hotplug + identite, alias par role (#23) | feature | hardware |
