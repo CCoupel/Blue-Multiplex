@@ -307,8 +307,24 @@ def test_sse_resyncs_with_a_full_state_and_restarted_ids_after_the_restart(swap)
 
 
 def test_restart_pending_scenario_reports_pending_at_start(api_factory):
-    roles = api_factory("restart-pending").call("GET", "/api/controllers")[1]["roles"]
+    c = api_factory("restart-pending", time_scale=1.0)
+    roles = c.call("GET", "/api/controllers")[1]["roles"]
     assert roles["pending"] is True and roles["restart_expected"] is True
+
+
+def test_restart_pending_scenario_ends_with_the_service_coming_back(api_factory):
+    """Le scenario simule aussi la fin du redemarrage (coupure puis retour, pending retombe)."""
+    c = api_factory("restart-pending", time_scale=100.0)
+
+    def back():
+        try:
+            return c.call("GET", "/api/controllers")[1]["roles"]["pending"] is False
+        except OSError:
+            return False
+
+    assert wait_for(back, timeout=20)
+    roles = c.call("GET", "/api/controllers")[1]["roles"]
+    assert roles["restart_expected"] is False and roles["source"] == "state"
 
 
 def test_same_assignment_again_is_a_noop(swap):

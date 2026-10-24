@@ -114,6 +114,9 @@ class MockState:
             self.restart_delay = float(sc.get("restart_delay_s", 3.0))
             self.restart_outage = float(sc.get("restart_outage_s", 12.0))
             self.outage = False
+            if self.roles["pending"]:  # scenario demarre en plein redemarrage : meme echeancier
+                self.schedule(self.restart_delay, "begin_outage")
+                self.schedule(self.restart_delay + self.restart_outage, "end_outage")
 
     @staticmethod
     def _full_device(d: dict) -> dict:
