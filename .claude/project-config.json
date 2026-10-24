@@ -8,8 +8,8 @@
   "initialized_at": "2026-10-13T10:30:00+02:00",
   "initialized_from": "workshop",
   "template_version": {
-    "tag": "v3.23.3",
-    "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec"
+    "tag": "v3.26.0",
+    "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de"
   },
   "src_dir": "src",
   "version_file": "pyproject.toml",
@@ -53,6 +53,32 @@
           "mechanism": "vps",
           "target": "ubuntu@btmux-qualif.local:/opt/btmux",
           "notes": "Pi de qualification — scripts/deploy.sh : scp de la wheel, uv pip install, unites systemd, restart"
+        },
+        "access": {
+          "method": "ssh",
+          "host_env": "DEPLOY_HOST",
+          "port": 22,
+          "runtime": "systemd",
+          "target_dir": "/opt/btmux",
+          "privilege": "sudo -n",
+          "credentials_env": [
+            "SSH_KEY_PATH",
+            "DEPLOY_HOST",
+            "FORBIDDEN_HOSTS"
+          ],
+          "verified": {
+            "status": "ok",
+            "at": "2026-10-24T15:06:28Z",
+            "checks": [
+              "forbidden-hosts",
+              "ssh",
+              "hostname=pi-qualif",
+              "sudo-n",
+              "python3",
+              "systemd",
+              "target-dir"
+            ]
+          }
         }
       },
       {
@@ -68,6 +94,25 @@
           "mechanism": "vps",
           "target": "ubuntu@btmux.local:/opt/btmux",
           "notes": "Pi de production — telechargement du .deb de la release, scp, dpkg -i, restart"
+        },
+        "access": {
+          "method": "ssh",
+          "host_env": "DEPLOY_HOST",
+          "port": 22,
+          "runtime": "systemd",
+          "target_dir": "/opt/btmux",
+          "credentials_env": [
+            "SSH_KEY_PATH",
+            "DEPLOY_HOST"
+          ],
+          "verified": {
+            "status": "skipped",
+            "at": "2026-10-24T15:06:28Z",
+            "checks": [
+              "repo-push"
+            ],
+            "note": "droit de push du tag verifie (rebuild-ci) ; Pi de production pas encore disponible, sondes SSH a rejouer"
+          }
         }
       }
     ]
@@ -156,9 +201,9 @@
       {
         "name": "cdp",
         "source": "agents/cdp.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "7611a074e0afec13cbb9f749d983dc54af0eaa7c0e292a9c4f5b34ca05b72ad1"
+        "tag": "v3.26.0",
+        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
+        "sha256": "295f16df7bd0eb0afd044dda340e2cbc8988d431b52812999d503d00cfc4d480"
       },
       {
         "name": "code-reviewer",
@@ -170,9 +215,9 @@
       {
         "name": "deploy",
         "source": "agents/deploy.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "f0302369b60aa862760ecdfc42d31ef4ef55f478fde65b35c8ba6cc9a8dad978"
+        "tag": "v3.26.0",
+        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
+        "sha256": "bf101fa474095d636795fe6aaab6ae454418c1720718358cdd189868d5346228"
       },
       {
         "name": "dev-backend",
@@ -210,16 +255,16 @@
       {
         "name": "implementation-planner",
         "source": "agents/implementation-planner.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "a1c60179af7932db0a16b7468391429bfe43be477588095fc930f8f455e7f82d"
+        "tag": "v3.26.0",
+        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
+        "sha256": "2c71da89ba3131c613751c6a206bd149c50669e43bc9f983f63e556936a2f664"
       },
       {
         "name": "infra",
         "source": "agents/infra.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "15dc6ae8ab1ed1950748b5269d88608fd09ac55884a5c3b986b2b509b4f55daf"
+        "tag": "v3.26.0",
+        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
+        "sha256": "5fdd23850c026d42325ee587d365a404ceacb6bcf1c4722d82003196f97a7ff5"
       },
       {
         "name": "marketing-release",
@@ -259,9 +304,9 @@
       {
         "name": "test-writer",
         "source": "agents/test-writer.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "4af9502b21c0bf143a695b087a7564d93d243ecb23e8707469fca4f5f73f190c"
+        "tag": "v3.26.0",
+        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
+        "sha256": "9cbdc9e2139ca755e07a4075b82bf3c9e2e29958eb950927dde95c2966a3faaf"
       }
     ]
   },
