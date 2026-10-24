@@ -120,7 +120,22 @@ Règles :
   [--config …] [--state …]` (utilisé par `btmux-adapters.sh`) imprime la même liste effective (défaut `--state` = `/var/lib/btmux/adapters.yaml`).
 - **Écriture atomique** : fichier temporaire dans le même répertoire, `fsync`, `rename` ; jamais d'écriture dans `/etc/btmux/config.yaml`
   (reste propriété de l'administrateur, lecture seule pour le daemon — `ProtectSystem=strict`).
-- `name` d'un contrôleur nouvellement affecté : repris de `config.yaml` si la MAC y figure, sinon défaut `btmux` (sources) / `btmux-hp` (headsets).
+- **L'alias suit le rôle, pas le dongle** (décision utilisateur du 2026-10-24, remplace « repris de `config.yaml` si la MAC y figure ») :
+  le `name` écrit dans l'état pour un contrôleur affecté est le **nom du rôle** — `name` de l'entrée de `config.yaml` qui porte ce rôle
+  (unique par V3), sinon défaut **`btmux`** (sources) / **`btmux-hp`** (headsets) ; un contrôleur portant les deux rôles prend le nom du rôle
+  `sources`. Après une permutation, le nouveau contrôleur `sources` s'annonce donc `btmux` quel que soit son MAC. `Controller.name`
+  (API) reste l'alias BlueZ courant et reflète ce nom une fois l'identité appliquée.
+- **Identité réappliquée au hotplug** (décision utilisateur du 2026-10-24) : quand un contrôleur **affecté** réapparaît sur le bus
+  (`InterfacesAdded` de `org.bluez.Adapter1` — rebranchement, reset USB, énumération tardive au boot), le daemon, non root, ne peut pas
+  rétablir la classe : il écrit atomiquement **`/var/lib/btmux/identity.request`** (une ligne : horodatage ISO, `hci`, MAC ; journal
+  `identity_requested`) ; `btmux-adapters-identity.path` (`PathChanged=`) déclenche **`btmux-adapters-identity.service`** (root, oneshot) qui
+  rejoue `btmux-adapters.sh --state … --config … --wait 5` : alias et classe du rôle sur les contrôleurs affectés, fermeture de tous les autres,
+  **sans redémarrage de `btmuxd`** ni coupure de l'API. Le daemon ferme lui-même (`Pairable/Discoverable=false`, `Powered=true`) le contrôleur dès
+  son apparition, avant même la passe d'identité. Délai attendu rebranchement → classe rétablie : **≤ 10 s**. Garanties : la passe est
+  idempotente (une exécution par salve, l'unité `.path` coalesce) ; aucune requête n'est émise au chargement initial ni sur
+  `PropertiesChanged` (pas de boucle alias/classe → requête) ; un hotplug pendant un redémarrage piloté peut produire une passe
+  supplémentaire, sans effet. Sans l'unité `.path` (absente/inactive), l'identité n'est rétablie qu'au prochain démarrage du daemon
+  (journal `identity_request_failed` si l'écriture échoue — jamais fatal).
 - **Application par redémarrage piloté du service (D3 b)** — séquence :
   1. `PUT` validé (no-op → 200 sans suite) → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, rien n'est
      déconnecté, `pending` reste faux) → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → réponse 202 + événement
@@ -134,7 +149,7 @@ Règles :
   3. **Repli** : si le daemon n'a pas reçu SIGTERM **30 s** après l'écriture (unité path absente/inactive), il sort en code **4**
      (`RestartForceExitStatus=4` ; `RestartSec=30` s'applique alors — journal `restart_fallback`).
   Coupure attendue de l'API : ≈ 15–20 s (arrêt ≤ 2 s + `ExecStartPre` ≈ 4 s + démarrage ≈ 5–10 s, mesuré 9,5 s hors `ExecStartPre` en
-  QUALIF 0.2.0.4) ; les clients SSE
+  QUALIF 0.2.0.4, 16,9–18,3 s mesurés en QUALIF 0.2.0.5) ; les clients SSE
   reconnectent et reçoivent un `state` complet (`roles.pending:false`, `source:"state"`). `btmux-adapters.service` (démarrage) est inchangé.
 - Un contrôleur configuré mais absent (`present:false`) n'empêche plus le démarrage : le code de sortie 3 (« adaptateur introuvable ») est
   **remplacé** par l'état `role_unassigned` + journal `adapter_missing` (CHANGED — permet de réaffecter via l'API/Web UI).

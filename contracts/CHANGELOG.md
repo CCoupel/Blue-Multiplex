@@ -58,3 +58,8 @@
 ## [20261024-g] — alignement D3 sur l'infra livrée (`c24ffba`, rapport `infra-20261024-194500` écart 1) — non BREAKING
 
 - **[CHANGED]** `contracts/config-schema.md` — § Affectation étape 2 : `btmux-adapters-reload.service` ne fait que redémarrer `btmuxd` ; l'identité des contrôleurs (`btmux-adapters.sh --state …`) est appliquée par l'`ExecStartPre` de `btmuxd.service` à chaque démarrage (redémarrage piloté, repli code 4, boot) ; coupure attendue de l'API ≈ **15–20 s** (au lieu de 10–15 s, aussi dans `http-endpoints.md`). Le libellé de la Web UI (« environ 15 s ») et la procédure R-16 suivent.
+
+## [20261024-h] — réserves QA matériel #23 (`qa-20261024-201039` écarts 1 et 2, décisions utilisateur du 2026-10-24) — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § Affectation : **l'alias suit le rôle** (`name` écrit dans l'état = nom du rôle : entrée `config.yaml` portant le rôle, sinon `btmux` / `btmux-hp` ; mono-rôle double → nom `sources`), au lieu d'être repris par MAC.
+- **[NEW]** `contracts/config-schema.md` — § Affectation : **identité réappliquée au hotplug** — le daemon écrit `/var/lib/btmux/identity.request` à l'apparition (`InterfacesAdded`) d'un contrôleur affecté ; `btmux-adapters-identity.path` → `btmux-adapters-identity.service` (root, oneshot) rejoue `btmux-adapters.sh --wait 5` sans redémarrer `btmuxd` (≤ 10 s) ; journaux `identity_requested` / `identity_request_failed`. Mesures QUALIF 0.2.0.5 de la coupure (16,9–18,3 s) notées.
