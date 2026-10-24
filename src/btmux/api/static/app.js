@@ -176,7 +176,7 @@ function discoveredBlock() {
   const open = S.pairing && S.pairing.adapter === "headsets";
   const rows = S.discovered.filter((x) => !dev(x.mac) || !dev(x.mac).paired);
   return [
-    h("h3", { style: "font-size:14px;margin:14px 0 4px" }, "Casques découverts ", h("span", { class: "sub", style: "display:inline" }, "(pendant une recherche)")),
+    h("h3", { class: "sub-title" }, "Casques découverts ", h("span", { class: "sub inline" }, "(pendant une recherche)")),
     !open ? h("p", { class: "empty" }, "Aucune recherche en cours.")
       : !rows.length ? h("p", { class: "empty" }, "Recherche en cours… aucun casque vu pour l'instant.")
       : h("table", {},

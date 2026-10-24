@@ -44,3 +44,6 @@ main > * { min-width:0; }
 section { overflow-x:auto; }
 .log { white-space:pre-wrap; word-break:break-word; }
 @media (max-width: 600px) { header { position:static; } .actions button { padding:8px 10px; } }
+.token-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.sub-title { font-size:14px; margin:14px 0 4px; }
+.sub.inline { display:inline; }
