@@ -110,6 +110,7 @@ class MockState:
                 "restart_expected": False,
             }
             self.roles.update(sc.get("roles", {}))
+            self.state_write_error = bool(sc.get("state_write_error", False))
             self.restart_delay = float(sc.get("restart_delay_s", 3.0))
             self.restart_outage = float(sc.get("restart_outage_s", 12.0))
             self.outage = False
@@ -433,11 +434,11 @@ class MockState:
             new[role] = mac
         if new["sources"] is not None and new["sources"] == new["headsets"]:
             raise ApiError(400, "same_controller", "un controleur ne peut porter qu'un seul role")
+        affected = [r for r in ROLES if new[r] != self.roles[r]]
+        if not affected:  # no-op : 200, prioritaire sur pairing_open (aucun redemarrage)
+            return 200, self.roles
         if self.pairing:
             raise ApiError(409, "pairing_open", "fermez la fenetre d'appairage avant de changer")
-        affected = [r for r in ROLES if new[r] != self.roles[r]]
-        if not affected:
-            return 200, self.roles
         connected = [
             {"mac": d["mac"], "alias": d["alias"], "name": d["name"], "adapter": d["adapter"]}
             for d in self.devices.values()
@@ -450,6 +451,8 @@ class MockState:
                 "des appareils sont connectes : confirm:true pour les deconnecter",
                 details=connected,
             )
+        if self.state_write_error:  # ecriture du fichier d'etat impossible : rien n'a change
+            raise ApiError(500, "state_write_failed", "ecriture du fichier d'etat impossible")
         for item in connected:  # confirm:true -> le daemon deconnecte d'abord
             dev = self.devices[item["mac"]]
             dev["connected"] = False

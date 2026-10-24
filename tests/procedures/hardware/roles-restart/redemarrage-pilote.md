@@ -64,7 +64,7 @@
 |-------|--------|------------------|--------|------|
 | 1 | `sudo systemctl mask --now btmux-adapters.path` | Unité masquée | | |
 | 2 | `btmuxctl roles set --sources $HP --headsets $SRC` | Code 0 (202) ; `pending=true` | | |
-| 3 | Attendre ≈ 20 s sans rien faire | Journal `restart_fallback` ; `btmuxd` sort en **code 4** (`systemctl show btmuxd -p ExecMainStatus`) | | |
+| 3 | Attendre ≈ 30 s sans rien faire | Journal `restart_fallback` ; `btmuxd` sort en **code 4** (`systemctl show btmuxd -p ExecMainStatus`) | | |
 | 4 | Attendre | systemd relance `btmuxd` (`RestartForceExitStatus=4`) ; le service revient avec la nouvelle affectation | | |
 | 5 | Nettoyage : `sudo systemctl unmask btmux-adapters.path && sudo systemctl start btmux-adapters.path`, rétablir l'affectation initiale | `is-active` = `active` | | |
 

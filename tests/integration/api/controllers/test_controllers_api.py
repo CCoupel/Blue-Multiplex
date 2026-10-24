@@ -147,6 +147,30 @@ def test_pairing_open_blocks_the_role_change(swap):
     assert status == 409 and body["error"] == "pairing_open"
 
 
+def test_noop_is_200_even_when_a_pairing_window_is_open(swap):
+    """Affectation identique : 200 prioritaire sur pairing_open (fenetre intacte)."""
+    swap.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
+    status, roles = swap.call("PUT", "/api/controllers/roles", {"sources": SRC, "headsets": HP})
+    assert status == 200 and roles["pending"] is False
+    assert swap.call("GET", "/api/state")[1]["pairing"]["open"] is True
+
+
+def test_state_write_failure_is_500_without_disconnect_nor_pending(api_factory):
+    """Echec d'ecriture du fichier d'etat : 500 state_write_failed, ni deconnexion ni pending."""
+    c = api_factory("state-write-error")
+    before = c.call("GET", "/api/state")[1]
+    status, body = c.call(
+        "PUT", "/api/controllers/roles", {"sources": HP, "headsets": SRC, "confirm": True}
+    )
+    assert status == 500 and body["error"] == "state_write_failed"
+    after = c.call("GET", "/api/state")[1]
+    assert after["roles"]["pending"] is False and after["roles"]["restart_expected"] is False
+    assert (after["roles"]["sources"], after["roles"]["headsets"]) == (SRC, HP)
+    assert [d["connected"] for d in after["devices"]] == [d["connected"] for d in before["devices"]]
+    assert any(d["connected"] for d in after["devices"])
+    assert c.call("POST", "/api/pairing", {"adapter": "sources", "duration": 5})[0] == 202
+
+
 def test_unassigned_role_refuses_pairing_and_actions(api_factory):
     c = api_factory("unassigned")
     for role in ("sources", "headsets"):
