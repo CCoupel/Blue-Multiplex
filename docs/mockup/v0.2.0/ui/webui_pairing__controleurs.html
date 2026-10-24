@@ -1,0 +1,169 @@
+<!--
+mockup:
+  composant: webui_pairing
+  feature: controleurs
+  version: 0.2.0
+  type: ui
+  issue: "#23"
+  validee_le: 2026-10-23
+  complete: [docs/mockup/v0.2.0/ui/webui_pairing__appairages.html]
+  remplace: []
+-->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>btmux — Appairages et contrôleurs</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --fg:#1b1f23; --muted:#6a737d; --line:#d8dde3; --ok:#1a7f37; --warn:#b35c00; --err:#b42318; --accent:#0b57d0; --accent-fg:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1115; --card:#181b21; --fg:#e6e8eb; --muted:#9aa4b2; --line:#2a2f38; --accent:#8ab4f8; --accent-fg:#0f1115; } }
+  * { box-sizing:border-box; } body { margin:0; font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); background:var(--card); position:sticky; top:0; }
+  header h1 { font-size:18px; margin:0; } .spacer { flex:1; }
+  .status { font-size:13px; color:var(--muted); } .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--ok); margin-right:5px; vertical-align:middle; }
+  .dot.err { background:var(--err); } .dot.warn { background:var(--warn); }
+  main { display:grid; grid-template-columns:1fr; gap:16px; padding:16px; max-width:1100px; margin:0 auto; }
+  @media (min-width: 800px) { main { grid-template-columns:1fr 1fr; } .full { grid-column:1 / -1; } }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  section h2 { font-size:16px; margin:0 0 4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 10px; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .pair { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px; border:1px dashed var(--line); border-radius:8px; margin-bottom:10px; }
+  .pair.open { border-style:solid; border-color:var(--warn); }
+  .count { font-weight:600; color:var(--warn); font-variant-numeric:tabular-nums; }
+  button, select, input { font:inherit; border-radius:7px; border:1px solid var(--line); background:var(--card); color:var(--fg); padding:6px 10px; }
+  button { cursor:pointer; } button.primary { background:var(--accent); color:var(--accent-fg); border-color:var(--accent); }
+  button.danger { color:var(--err); border-color:var(--err); } button:disabled { opacity:.5; cursor:default; }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:8px 6px; border-top:1px solid var(--line); vertical-align:top; font-size:14px; }
+  th { color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; border-top:0; }
+  .mac { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--muted); }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); margin:1px 2px 1px 0; }
+  .tag.on { border-color:var(--ok); color:var(--ok); } .tag.off { color:var(--muted); } .tag.cfg { border-color:var(--accent); color:var(--accent); }
+  .actions { display:flex; flex-wrap:wrap; gap:4px; } .actions button { padding:4px 8px; font-size:13px; }
+  .empty { color:var(--muted); font-style:italic; padding:8px 0; }
+  .log { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; max-height:160px; overflow:auto; margin:0; padding:8px; background:var(--bg); border-radius:7px; }
+  .toast { border-left:4px solid var(--err); background:var(--card); padding:8px 12px; border-radius:6px; font-size:14px; }
+  dialog { border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--fg); max-width:380px; }
+  @media (max-width: 600px) { th:nth-child(2), td:nth-child(2) { display:none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>btmux · Appairages</h1>
+  <span class="status"><span class="dot"></span>BlueZ 5.85 · API 0.2.0.0 · événements : en direct</span>
+  <span class="spacer"></span>
+  <label class="status">Jeton <input type="password" value="••••••••••••" size="14" aria-label="Jeton API"></label>
+  <button>Enregistrer</button>
+</header>
+
+<main>
+  <!-- Panneau CONTRÔLEURS (#23) — nouveau, au-dessus des panneaux existants -->
+  <section class="full" aria-labelledby="h-ctl">
+    <h2 id="h-ctl">Contrôleurs Bluetooth <span class="tag">3 détectés</span><span class="tag on">affectation : état (API)</span></h2>
+    <p class="sub">Choisissez quel contrôleur joue chaque rôle (USB ou UART). Les contrôleurs sans rôle sont fermés (ni appairables ni visibles). L'affectation est mémorisée par adresse (les index hciN changent à chaque démarrage) et appliquée par un redémarrage du service (~15 s).</p>
+    <table>
+      <thead><tr><th>Contrôleur</th><th>Adresse</th><th>Bus</th><th>État</th><th>Rôle</th></tr></thead>
+      <tbody>
+        <tr><td><strong>btmux</strong><br><span class="mac">UB500 n°1 · hci1</span></td><td class="mac">18:69:45:42:9D:E2</td><td>USB 2357:0604</td>
+            <td><span class="tag on">powered</span><span class="tag off">fermé</span><span class="tag">2 appareils connectés</span></td>
+            <td><select aria-label="Rôle du contrôleur 9D:E2"><option selected>Sources (hci-src)</option><option>Casques (hci-hp)</option><option>Aucun</option></select></td></tr>
+        <tr><td><strong>btmux-hp</strong><br><span class="mac">UB500 n°2 · hci2</span></td><td class="mac">18:69:45:42:B5:54</td><td>USB 2357:0604</td>
+            <td><span class="tag on">powered</span><span class="tag off">fermé</span><span class="tag">1 appareil connecté</span></td>
+            <td><select aria-label="Rôle du contrôleur B5:54"><option>Sources (hci-src)</option><option selected>Casques (hci-hp)</option><option>Aucun</option></select></td></tr>
+        <tr><td><strong>pi-qualif</strong><br><span class="mac">Bluetooth interne · hci0</span></td><td class="mac">B8:27:EB:1A:2E:D6</td><td>UART</td>
+            <td><span class="tag on">powered</span><span class="tag on">fermé</span><span class="tag">0 appareil</span></td>
+            <td><select aria-label="Rôle du contrôleur 2E:D6"><option>Sources (hci-src)</option><option>Casques (hci-hp)</option><option selected>Aucun</option></select></td></tr>
+      </tbody>
+    </table>
+    <div class="pair" style="margin-top:10px">
+      <span class="status">Modification en attente : <strong>Sources</strong> 9D:E2 → B5:54, <strong>Casques</strong> B5:54 → 9D:E2 (permutation).</span>
+      <span class="spacer"></span>
+      <button>Annuler</button><button class="primary">Appliquer</button>
+    </div>
+  </section>
+
+  <!-- Panneau SOURCES (hci-src) -->
+  <section aria-labelledby="h-src">
+    <h2 id="h-src">Sources <span class="tag on">hci-src</span><span class="tag">alias btmux</span><span class="tag on">powered</span></h2>
+    <p class="sub">E8:48:B8:xx:xx:01 · hci1 · classe 0x6c0404 · vus comme « casque » par les PC et téléphones</p>
+    <div class="pair open">
+      <strong>Fenêtre d'appairage ouverte</strong> <span class="count">00:42</span> restantes — les appareils qui s'appairent maintenant sont acceptés et marqués de confiance
+      <span class="spacer"></span>
+      <button class="danger">Fermer</button>
+    </div>
+    <table>
+      <thead><tr><th>Appareil</th><th>MAC</th><th>État</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr><td><strong>pc-pro</strong><br><span class="mac">MSI-PC · source</span></td><td class="mac">8C:xx:xx:xx:xx:21</td>
+            <td><span class="tag on">connecté</span><span class="tag on">appairé</span><span class="tag on">confiance</span><span class="tag cfg">config</span></td>
+            <td class="actions"><button>Déconnecter</button><button>Retirer la confiance</button><button class="danger">Oublier</button></td></tr>
+        <tr><td><strong>tel-perso</strong><br><span class="mac">Galaxy S24 Ultra · source</span></td><td class="mac">D4:xx:xx:xx:xx:7A</td>
+            <td><span class="tag off">déconnecté</span><span class="tag on">appairé</span><span class="tag on">confiance</span><span class="tag cfg">config</span></td>
+            <td class="actions"><button class="primary">Connecter</button><button>Retirer la confiance</button><button class="danger">Oublier</button></td></tr>
+        <tr><td><strong>DESKTOP-9F2K</strong><br><span class="mac">inconnu</span></td><td class="mac">A0:xx:xx:xx:xx:3C</td>
+            <td><span class="tag off">déconnecté</span><span class="tag on">appairé</span><span class="tag off">non confiance</span><span class="tag off">hors config</span></td>
+            <td class="actions"><button class="primary">Connecter</button><button>Faire confiance</button><button class="danger">Oublier</button></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Panneau CASQUES (hci-hp) -->
+  <section aria-labelledby="h-hp">
+    <h2 id="h-hp">Casques <span class="tag on">hci-hp</span><span class="tag">alias btmux-src</span><span class="tag on">powered</span></h2>
+    <p class="sub">E8:48:B8:xx:xx:02 · hci0 · classe 0x1c010c · le Pi initie l'appairage et la connexion des casques</p>
+    <div class="pair">
+      <strong>Fenêtre d'appairage fermée</strong>
+      <span class="spacer"></span>
+      <label>Durée <select><option>30 s</option><option selected>60 s</option><option>120 s</option><option>300 s</option></select></label>
+      <button class="primary">Rechercher des casques</button>
+    </div>
+    <table>
+      <thead><tr><th>Appareil</th><th>MAC</th><th>État</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr><td><strong>xm5</strong><br><span class="mac">Bose QC45 · casque</span></td><td class="mac">04:xx:xx:xx:xx:E9</td>
+            <td><span class="tag on">connecté</span><span class="tag on">appairé</span><span class="tag on">confiance</span><span class="tag cfg">config</span></td>
+            <td class="actions"><button>Déconnecter</button><button>Retirer la confiance</button><button class="danger">Oublier</button></td></tr>
+      </tbody>
+    </table>
+    <h3 style="font-size:14px;margin:14px 0 4px">Casques découverts <span class="sub" style="display:inline">(pendant une recherche)</span></h3>
+    <table>
+      <thead><tr><th>Appareil</th><th>MAC</th><th>Signal</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr><td>WH-1000XM5</td><td class="mac">38:xx:xx:xx:xx:10</td><td>-58 dBm</td><td class="actions"><button class="primary">Appairer</button></td></tr>
+        <tr><td colspan="4" class="empty">La liste se vide à la fermeture de la fenêtre. Hors fenêtre : « Aucune recherche en cours ».</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Bandeau pendant le redémarrage (après Appliquer : roles pending/restart_expected) -->
+  <div class="full pair open" role="status"><span class="dot warn"></span><strong>Application de l'affectation…</strong> le service btmux redémarre (environ 15 s). Les actions sont désactivées ; la page se reconnecte automatiquement. <span class="spacer"></span><span class="count">00:09</span></div>
+
+  <!-- Erreur API (exemple) -->
+  <div class="full toast" role="alert"><strong>Appairage refusé</strong> — D4:xx:xx:xx:xx:7A : <code>org.bluez.Error.AuthenticationFailed</code> (bond périmé). Oubliez l'appareil ici <em>et</em> sur le téléphone, puis rouvrez la fenêtre.</div>
+
+  <!-- Journal des événements (SSE) -->
+  <section class="full" aria-labelledby="h-log">
+    <h2 id="h-log">Événements <span class="tag">SSE</span></h2>
+    <pre class="log">17:01:12  pairing   hci-src  fenêtre ouverte (60 s)
+17:01:35  device    hci-src  DESKTOP-9F2K  appairé (hors config, non confiance)
+17:01:40  device    hci-src  pc-pro        connecté
+17:02:03  discovered hci-hp  WH-1000XM5    -58 dBm
+17:02:12  device    hci-src  tel-perso     échec : AuthenticationFailed (bond périmé)
+17:05:40  roles     pending  sources=B5:54 headsets=9D:E2 (confirm) — redémarrage attendu
+17:05:41  —         connexion fermée (service en redémarrage), nouvelle tentative dans 3 s…
+17:05:53  state     complet  roles source=state pending=false · hci0 fermé · hci1 alias btmux-hp · hci2 alias btmux</pre>
+  </section>
+</main>
+
+<!-- Confirmation d'oubli (inchangé, fermé ici) -->
+<dialog>
+  <p><strong>Oublier « DESKTOP-9F2K » ?</strong><br>L'appareil sera supprimé de <code>hci-src</code>. Il faudra aussi l'oublier côté PC avant tout nouvel appairage.</p>
+  <menu style="display:flex;gap:8px;justify-content:flex-end;padding:0;margin:0"><button>Annuler</button><button class="danger">Oublier</button></menu>
+</dialog>
+<!-- Confirmation d'affectation (409 devices_connected → confirm:true) -->
+<dialog open>
+  <p><strong>Appliquer la nouvelle affectation ?</strong><br>3 appareils connectés seront déconnectés : pc-pro, tel-perso (9D:E2), xm5 (B5:54). La fenêtre d'appairage doit être fermée. Les appareils devront être reconnectés (ils restent appairés). Le service btmux redémarre (environ 15 s) ; l'interface se reconnecte et se met à jour dès que les rôles sont actifs.</p>
+  <menu style="display:flex;gap:8px;justify-content:flex-end;padding:0;margin:0"><button>Annuler</button><button class="primary">Déconnecter et appliquer</button></menu>
+</dialog>
+</body>
+</html>
