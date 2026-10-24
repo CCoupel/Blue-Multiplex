@@ -31,6 +31,7 @@ Colonnes « A » / « B » : ✔ = jouable dans ce mode, — = sans objet. Coche
 | 1.2 | Saisir un jeton invalide puis « Enregistrer » | Message d'erreur clair (401), aucune liste affichée, le jeton n'apparaît pas en clair dans l'URL ni dans l'erreur | ✔ | ✔ | | |
 | 1.3 | Saisir le bon jeton → « Enregistrer » | Les panneaux **Sources** et **Casques** se remplissent ; statut « API <version> · événements : en direct » | ✔ | ✔ | | |
 | 1.4 | Recharger la page | Le jeton est retenu (ou redemandé selon le choix de #16, noté) ; jamais de jeton dans l'URL | ✔ | ✔ | | |
+| 1.0 | Mode B — **chargement des ressources** : DevTools > Réseau, recharger `/` sans jeton | `GET /` 200 puis `/static/style.css`, `/static/app.js`, `/static/api.js`, `/static/favicon.svg` (toutes les ressources sous `/static/`) en **200** ; **aucune 401 ni 404** (onglet Réseau et console) ; aucune requête hors origine | ✔ | ✔ | | |
 | 1.5 | DevTools > Réseau : toutes les requêtes `/api/*` | En-tête `Authorization: Bearer …` ; `Cache-Control: no-store` sur les réponses d'API | ✔ | ✔ | | |
 
 ### S2 — Ouvrir et fermer la fenêtre d'appairage (Sources)
@@ -111,6 +112,7 @@ Colonnes « A » / « B » : ✔ = jouable dans ce mode, — = sans objet. Coche
 | 9.2 | Contraintes de `docs/mockup/DECISIONS.md` respectées (aucune ajoutée sans validation) | | |
 | 9.3 | Les valeurs dynamiques (noms d'appareils) sont échappées : un nom `<img src=x onerror=alert(1)>` (via `/__mock__/incoming`) s'affiche en texte, sans exécution | | |
 | 9.4 | `GET /` et `/static/*` publics ; `/api/*` sans jeton → 401 (testé en S1) ; en-têtes de sécurité raisonnables (`X-Content-Type-Options`) | | |
+| 9.5 | Ressources : `curl -s -o /dev/null -w '%{http_code}' http://<IP-du-Pi>:8088/app.js` → **404** (hors `/static/`) et `.../static/app.js` → **200** ; `.../static/README.md` → 404 (seuls html/js/css) ; la page ne référence aucune ressource sans préfixe `/static/` (`grep -nE 'src=|href=' src/btmux/api/static/index.html`) | | |
 
 ## Critères de validation
 

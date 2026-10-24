@@ -60,7 +60,7 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
   `name:null`, `uuids:[]`) si l'appareil est dans la config ; sinon l'appareil disparaît de `State.devices`.
 - Premier événement de toute connexion SSE : `state` (State complet, `id` = dernier id courant), puis les événements.
 - `pair` deux fois sur le même appareil pendant l'opération → 409 `operation_in_progress` ; en-têtes de sécurité (CSP, nosniff, DENY, no-referrer, no-store) sur toutes les réponses.
-- `/static/*` : uniquement `.html`/`.js`/`.css` (comme l'app réelle) ; le reste → 404.
+- `GET /` sert `index.html` ; les ressources sont servies **uniquement sous `/static/*`** (`.html`/`.js`/`.css`) ; `/app.js` à la racine → 404, comme l'app réelle (une page qui référence `app.js` sans préfixe `/static/` est donc inerte).
 - `Last-Event-ID` : le mock garde un tampon de 100 événements ; un id couvert rejoue les manqués, un id hors tampon envoie un
   événement `state` (State complet).
 - Auth du flux : en-tête `Authorization` uniquement (pas de `?token=`) ; le front lit le SSE par `fetch` streaming.

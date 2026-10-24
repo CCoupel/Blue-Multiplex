@@ -111,3 +111,23 @@ def test_static_serves_only_html_js_css(tmp_path):
     finally:
         srv.stop()
     assert codes == {"app.js": 200, "style.css": 200, "README.md": 404, "api.test.mjs": 404}
+
+
+def test_assets_are_only_served_under_static_not_at_the_root(tmp_path):
+    import http.client
+
+    (tmp_path / "index.html").write_text("<html></html>")
+    (tmp_path / "app.js").write_text("//")
+    srv = mock_mod.MockApi("default", token="t", static_dir=tmp_path).start()
+    try:
+        conn = http.client.HTTPConnection(*srv.httpd.server_address[:2], timeout=5)
+        codes = {}
+        for path in ("/", "/app.js", "/static/app.js", "/index.html"):
+            conn.request("GET", path)
+            r = conn.getresponse()
+            r.read()
+            codes[path] = r.status
+        conn.close()
+    finally:
+        srv.stop()
+    assert codes == {"/": 200, "/app.js": 404, "/static/app.js": 200, "/index.html": 404}

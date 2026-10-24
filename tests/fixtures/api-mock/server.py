@@ -504,13 +504,19 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
                 self.close_connection = True
 
         def _static(self, path: str) -> None:
+            """Comme l'app reelle : `/` = index.html ; ressources UNIQUEMENT sous /static/*."""
             if not static_dir or self.command != "GET":
                 raise ApiError(404, "not_found", "pas de Web UI servie par ce mock (--static-dir)")
-            rel = "index.html" if path in ("/", "") else path.removeprefix("/static/").lstrip("/")
+            if path in ("/", ""):
+                rel = "index.html"
+            elif path.startswith("/static/"):
+                rel = path.removeprefix("/static/")
+            else:
+                raise ApiError(404, "not_found", f"ressource hors /static/ : {path}")
             if Path(rel).suffix.lower() not in {".html", ".js", ".css"}:
                 raise ApiError(404, "not_found", "seuls html/js/css sont servis")
             target = (static_dir / rel).resolve()
-            if static_dir.resolve() not in target.parents and target != static_dir.resolve():
+            if static_dir.resolve() not in target.parents:
                 raise ApiError(404, "not_found", "chemin hors du dossier statique")
             if not target.is_file():
                 raise ApiError(404, "not_found", f"fichier statique absent : {rel}")
