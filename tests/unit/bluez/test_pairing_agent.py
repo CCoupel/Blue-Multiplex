@@ -44,7 +44,7 @@ async def test_open_sources_window_sets_adapter_and_emits(service: BluezService,
     await service.pairing.close()
     await service.pairing.close()  # idempotent
     assert bus.objects[SRC_PATH]["org.bluez.Adapter1"]["Discoverable"] is False
-    assert service.inventory.state()["pairing"] is None
+    assert service.inventory.state()["pairing"]["open"] is False
 
 
 @pytest.mark.parametrize("duration", [0, 301, -1, "10", True, 1.5])
@@ -66,7 +66,7 @@ async def test_window_expires_by_itself(service: BluezService, bus: FakeBus):
     await started(service)
     await service.pairing.open("sources", 1)
     await asyncio.sleep(1.2)
-    assert service.inventory.state()["pairing"] is None
+    assert service.inventory.state()["pairing"]["open"] is False
     assert bus.objects[SRC_PATH]["org.bluez.Adapter1"]["Pairable"] is False
 
 
@@ -88,7 +88,7 @@ async def test_headsets_discovery_failure_resets_adapter(service: BluezService, 
     )
     with pytest.raises(BluezError, match="NotReady"):
         await service.pairing.open("headsets", 20)
-    assert service.inventory.state()["pairing"] is None
+    assert service.inventory.state()["pairing"]["open"] is False
     assert bus.objects[HP_PATH]["org.bluez.Adapter1"]["Discoverable"] is False
     # InProgress est toléré
     bus.errors[("org.bluez.Adapter1", "StartDiscovery")] = DBusCallError(

@@ -40,14 +40,23 @@ def test_deduce_kind_and_profiles() -> None:
 async def test_state_lists_adapters_and_config_devices(service: BluezService) -> None:
     await started(service)
     state = service.inventory.state()
-    assert state["version"] == __version__ and state["pairing"] is None
+    assert state["version"] == __version__ and state["pairing"] == {
+        "open": False,
+        "adapter": None,
+        "closed_at": None,
+        "reason": None,
+    }
     roles = {a["role"]: a for a in state["adapters"]}
     assert roles["sources"]["hci"] == "hci1" and roles["headsets"]["mac"] == "AA:BB:CC:00:00:02"
     assert roles["sources"]["class"] == "0x6c0404" and roles["sources"]["powered"] is True
     devices = {d["mac"]: d for d in state["devices"]}
     # appareils de la config absents de BlueZ : présents, non appairés
     assert devices[PHONE_MAC]["in_config"] is True and devices[PHONE_MAC]["paired"] is False
-    assert devices[PHONE_MAC]["alias"] == "pc-pro" and devices[PHONE_MAC]["adapter"] == "sources"
+    assert (
+        devices[PHONE_MAC]["alias"] == "pc-pro"
+        and devices[PHONE_MAC]["name"] is None
+        and devices[PHONE_MAC]["adapter"] == "sources"
+    )
     assert devices[HEADSET_MAC]["adapter"] == "headsets"
 
 
@@ -68,7 +77,11 @@ async def test_device_events_and_models(service: BluezService, bus: FakeBus) -> 
     assert sub.queue.empty()
     bus.remove_device(path)
     gone = sub.queue.get_nowait()
-    assert gone.data["paired"] is False and gone.data["connected"] is False
+    assert gone.kind == "device.removed" and gone.data == {
+        "mac": "AA:AA:AA:AA:AA:01",
+        "adapter": "sources",
+    }
+    assert sub.queue.empty()  # hors config : pas de placeholder
     assert "AA:AA:AA:AA:AA:01" not in {d["mac"] for d in service.inventory.state()["devices"]}
 
 
@@ -173,3 +186,17 @@ def test_registry_reports_missing_adapters(config) -> None:
     assert reg.path_for("sources") == SRC_PATH and reg.path_for("headsets") is None
     assert reg.paths() == {SRC_PATH} and reg.info_for_path("/x") is None
     assert asyncio.iscoroutinefunction(started)
+
+
+async def test_forget_of_config_device_emits_removed_then_placeholder(
+    service: BluezService, bus: FakeBus
+) -> None:
+    await started(service)
+    path = bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Trusted=True)
+    sub = service.inventory.subscribe()
+    bus.remove_device(path)
+    removed, placeholder = sub.queue.get_nowait(), sub.queue.get_nowait()
+    assert removed.kind == "device.removed" and removed.data["mac"] == PHONE_MAC
+    assert placeholder.kind == "device" and placeholder.data["name"] is None
+    assert placeholder.data["paired"] is False and placeholder.data["in_config"] is True
+    assert placeholder.data["uuids"] == [] and placeholder.data["alias"] == "pc-pro"

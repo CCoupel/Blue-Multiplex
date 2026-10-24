@@ -77,7 +77,7 @@ class DeviceModel:
     mac: str
     adapter: RoleName
     alias: str | None
-    name: str
+    name: str | None
     kind: KindName
     paired: bool
     trusted: bool
@@ -126,15 +126,37 @@ class DiscoveredModel:
 
 @dataclass(frozen=True)
 class PairingWindowModel:
-    adapter: RoleName
-    opened_at: str
-    expires_at: str
-    remaining_s: int
+    """Fenêtre d'appairage : ouverte (`open=True`) ou objet explicite fermé (jamais `null`)."""
+
+    open: bool
+    adapter: RoleName | None
+    opened_at: str | None = None
+    expires_at: str | None = None
+    remaining_s: int | None = None
+    closed_at: str | None = None
+    reason: str | None = None  # expired | closed | replaced | startup | None
 
     def to_dict(self) -> dict[str, Any]:
+        if self.open:
+            return {
+                "open": True,
+                "adapter": self.adapter,
+                "opened_at": self.opened_at,
+                "expires_at": self.expires_at,
+                "remaining_s": self.remaining_s,
+            }
         return {
+            "open": False,
             "adapter": self.adapter,
-            "opened_at": self.opened_at,
-            "expires_at": self.expires_at,
-            "remaining_s": self.remaining_s,
+            "closed_at": self.closed_at,
+            "reason": self.reason,
         }
+
+
+@dataclass(frozen=True)
+class DeviceRemovedModel:
+    mac: str
+    adapter: RoleName
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"mac": self.mac, "adapter": self.adapter}

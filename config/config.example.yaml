@@ -26,7 +26,9 @@ devices:
 default_routes:
   xm5: pc-pro
 
-# API HTTP (optionnel) — valeurs par defaut ci-dessous
+# API HTTP (optionnel) — valeurs par defaut ci-dessous.
+# listen : "0.0.0.0:8088" = tout le LAN (Web UI) ; "127.0.0.1:8088" = local seulement (btmuxctl, tunnel SSH).
+# Tout /api/* exige le jeton (Authorization: Bearer <contenu de token_file>) ; sans jeton lisible, l'API reste verrouillee.
 api:
   listen: "0.0.0.0:8088"
   token_file: /etc/btmux/token

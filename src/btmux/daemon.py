@@ -7,8 +7,10 @@ import signal
 import sys
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
+from typing import Any
 
 from btmux import __version__
+from btmux.api.server import ApiStartError, serve_api
 from btmux.bluez.daemon import EXIT_ADAPTER_NOT_FOUND, BluezService
 from btmux.bluez.errors import AdaptersNotFound
 from btmux.config import Config
@@ -16,7 +18,8 @@ from btmux.log import configure
 
 # Point d'accroche de l'API (#21) : reçoit le service BlueZ, retourne un gestionnaire de contexte asynchrone
 # qui démarre/arrête le serveur HTTP autour de la boucle principale.
-Extension = Callable[[BluezService], AbstractAsyncContextManager[None]]
+EXIT_CONFIG_ERROR = 2
+Extension = Callable[[BluezService], AbstractAsyncContextManager[Any]]
 
 
 async def serve(
@@ -35,6 +38,9 @@ async def serve(
         else:
             async with extension(svc):
                 code = await svc.run(stop)
+    except ApiStartError as exc:
+        print(f"btmuxd: {exc}", file=sys.stderr, flush=True)
+        return EXIT_CONFIG_ERROR
     except AdaptersNotFound as exc:
         print(f"btmuxd: {exc}", file=sys.stderr, flush=True)
         return EXIT_ADAPTER_NOT_FOUND
@@ -54,7 +60,7 @@ async def _run(config: Config) -> int:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
-    return await serve(stop, config)
+    return await serve(stop, config, extension=serve_api)
 
 
 def run(config: Config) -> int:

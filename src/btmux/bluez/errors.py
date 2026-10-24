@@ -22,6 +22,10 @@ class InvalidRequest(BluezError):
     status = 400
 
 
+class InvalidMac(InvalidRequest):
+    code = "invalid_mac"
+
+
 class NotFound(BluezError):
     """Appareil ou adaptateur inconnu — HTTP 404."""
 
@@ -29,24 +33,36 @@ class NotFound(BluezError):
     status = 404
 
 
+class UnknownDevice(NotFound):
+    """Appareil inconnu de BlueZ et de la configuration."""
+
+    code = "unknown_device"
+
+
+class NotDiscovered(NotFound):
+    """Appareil non vu sur l'adaptateur `headsets` (appairage Pi → casque)."""
+
+    code = "not_discovered"
+
+
 class WindowClosed(BluezError):
     """Opération qui exige une fenêtre d'appairage ouverte — HTTP 409."""
 
-    code = "window_closed"
+    code = "pairing_closed"
     status = 409
 
 
 class WindowOpen(BluezError):
     """Une fenêtre d'appairage est déjà ouverte — HTTP 409."""
 
-    code = "window_open"
+    code = "pairing_open"
     status = 409
 
 
 class BondStale(BluezError):
     """Appairage périmé (clé perdue d'un côté) : oublier des deux côtés puis réappairer — HTTP 409."""
 
-    code = "bond_stale"
+    code = "stale_bond"
     status = 409
 
 

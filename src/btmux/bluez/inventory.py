@@ -15,6 +15,7 @@ from btmux.bluez.bus import BusSignal, ManagedObjects, Props
 from btmux.bluez.models import (
     AdapterModel,
     DeviceModel,
+    DeviceRemovedModel,
     DiscoveredModel,
     KindName,
     PairingWindowModel,
@@ -79,11 +80,13 @@ class Inventory:
         self._last_seen: dict[str, str] = {}
         self._subs: set[Subscription] = set()
         self._counter = 0
-        self._window: Callable[[], PairingWindowModel | None] = lambda: None
+        self._window: Callable[[], PairingWindowModel] = lambda: PairingWindowModel(
+            open=False, adapter=None
+        )
         self._cfg_devices = {d.mac.upper(): d for d in config.devices}
 
     # ----- chargement et signaux -------------------------------------------------------------
-    def set_window_provider(self, provider: Callable[[], PairingWindowModel | None]) -> None:
+    def set_window_provider(self, provider: Callable[[], PairingWindowModel]) -> None:
         self._window = provider
 
     def load(self, objects: ManagedObjects) -> None:
@@ -130,6 +133,10 @@ class Inventory:
     def unsubscribe(self, sub: Subscription) -> None:
         self._subs.discard(sub)
 
+    @property
+    def last_event_id(self) -> int:
+        return self._counter
+
     def emit(self, kind: str, data: Any) -> None:
         self._counter += 1
         event = Event(self._counter, kind, data)
@@ -142,8 +149,7 @@ class Inventory:
                 log.warning(kv("subscriber_dropped", reason="queue_full"))
 
     def emit_pairing(self) -> None:
-        window = self._window()
-        self.emit("pairing", window.to_dict() if window else None)
+        self.emit("pairing", self._window().to_dict())
 
     def _emit_adapter(self, path: str) -> None:
         for model in self._adapter_models(path):
@@ -175,18 +181,21 @@ class Inventory:
             return
         props = self._devices[path]
         mac = str(props.get("Address", "")).upper()
-        if self._is_known(props):
+        if self._bonded(props):
             self._discovered.pop(mac, None)
-            if new or changed is None or changed & _DEVICE_EVENT_PROPS:
-                self.emit("device", self._device_model(path, props).to_dict())
         else:
             self._classify_discovered(path, emit=True)
+        if self._is_known(props) and (new or changed is None or changed & _DEVICE_EVENT_PROPS):
+            self.emit("device", self._device_model(path, props).to_dict())
+
+    def _bonded(self, props: Props) -> bool:
+        return bool(props.get("Paired") or props.get("Trusted") or props.get("Connected"))
 
     def _classify_discovered(self, path: str, *, emit: bool) -> None:
         props = self._devices.get(path)
         if props is None or not self._collect_discovered or not self._managed(path):
             return
-        if self._is_known(props):
+        if self._bonded(props):
             return
         adapter = AdapterRegistry.adapter_of_device(path)
         info = self._registry.info_for_path(adapter)
@@ -213,9 +222,28 @@ class Inventory:
             return
         mac = str(props.get("Address", "")).upper()
         self._discovered.pop(mac, None)
-        if self._is_known(props) or mac in self._cfg_devices:
-            gone = dict(props, Paired=False, Connected=False, Trusted=False)
-            self.emit("device", self._device_model(path, gone).to_dict())
+        if self._is_known(props):
+            kind = self._device_model(path, props).kind
+            role = self._role_of(path, props, kind)
+            self.emit("device.removed", DeviceRemovedModel(mac, role).to_dict())
+            if mac in self._cfg_devices:  # la ligne réapparaît : connu de la config, non appairé
+                self.emit("device", self._placeholder(mac).to_dict())
+
+    def _placeholder(self, mac: str) -> DeviceModel:
+        cfg = self._cfg_devices[mac]
+        return DeviceModel(
+            mac=mac,
+            adapter="sources" if cfg.kind == "source" else "headsets",
+            alias=self._aliases.get(mac) or cfg.alias,
+            name=None,
+            kind=cfg.kind,
+            paired=False,
+            trusted=False,
+            connected=False,
+            blocked=False,
+            last_seen=self._last_seen.get(mac),
+            in_config=True,
+        )
 
     def _role_of(self, path: str, props: Props, kind: KindName) -> RoleName:
         info = self._registry.info_for_path(AdapterRegistry.adapter_of_device(path))
@@ -278,33 +306,20 @@ class Inventory:
             if self._managed(path) and self._is_known(props):
                 model = self._device_model(path, props)
                 models[model.mac] = model
-        for mac, cfg in self._cfg_devices.items():
+        for mac in self._cfg_devices:
             if mac not in models:
-                models[mac] = DeviceModel(
-                    mac=mac,
-                    adapter="sources" if cfg.kind == "source" else "headsets",
-                    alias=self._aliases.get(mac) or cfg.alias,
-                    name=cfg.alias,
-                    kind=cfg.kind,
-                    paired=False,
-                    trusted=False,
-                    connected=False,
-                    blocked=False,
-                    last_seen=self._last_seen.get(mac),
-                    in_config=True,
-                )
+                models[mac] = self._placeholder(mac)
         return sorted(models.values(), key=lambda m: (m.adapter, m.alias or m.name, m.mac))
 
     def discovered(self) -> list[DiscoveredModel]:
         return sorted(self._discovered.values(), key=lambda m: (-(m.rssi or -999), m.mac))
 
     def state(self) -> dict[str, Any]:
-        window = self._window()
         return {
             "version": __version__,
             "adapters": [a.to_dict() for a in self.adapters()],
             "devices": [d.to_dict() for d in self.devices()],
-            "pairing": window.to_dict() if window else None,
+            "pairing": self._window().to_dict(),
         }
 
     def device_path(self, mac: str, role: str | None = None) -> str | None:

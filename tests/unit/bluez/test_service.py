@@ -39,7 +39,7 @@ async def test_start_registers_agent_and_closes_adapters(service: BluezService, 
     stop.set()
     assert await task == 0
     assert bus.agent is None and "UnregisterAgent" in [m for _, _, m, _ in bus.calls]
-    assert service.inventory.state()["pairing"] is None  # fenêtre fermée à l'arrêt
+    assert service.inventory.state()["pairing"]["open"] is False  # fenêtre fermée à l'arrêt
 
 
 async def test_missing_adapter_raises_after_wait(config: Config):
@@ -101,7 +101,7 @@ async def test_reconnects_when_bus_or_bluez_is_lost(service: BluezService, bus: 
     await asyncio.sleep(0.15)
     await asyncio.wait_for(service.ready.wait(), 5)
     assert bus.connect_count == first + 1 and bus.agent is service.agent
-    assert service.inventory.state()["pairing"] is None
+    assert service.inventory.state()["pairing"]["open"] is False
     stop.set()
     assert await task == 0
 

@@ -18,7 +18,8 @@ from btmux.bluez.errors import (
     BluezUnavailable,
     BondStale,
     InvalidRequest,
-    NotFound,
+    NotDiscovered,
+    UnknownDevice,
     WindowClosed,
     WindowOpen,
 )
@@ -68,10 +69,11 @@ class PairingManager:
         self._cfg = config
         self._now = now
         self._window: _Window | None = None
+        self._last_closed: tuple[str, str, str] | None = None  # (adapter, closed_at ISO, raison)
         self._outgoing: set[str] = set()
         self._bg: set[asyncio.Future[None]] = set()
         self._lock = asyncio.Lock()
-        inventory.set_window_provider(self.window)
+        inventory.set_window_provider(self.view)
 
     # ----- fenêtre ---------------------------------------------------------------------------
     def window(self) -> PairingWindowModel | None:
@@ -81,10 +83,26 @@ class PairingManager:
         loop = asyncio.get_running_loop()
         remaining = max(0, math.ceil(w.deadline - loop.time()))
         return PairingWindowModel(
+            open=True,
             adapter=w.role,  # type: ignore[arg-type]
             opened_at=_utc_iso(w.opened_at),
             expires_at=_utc_iso(w.expires_at),
             remaining_s=remaining,
+        )
+
+    def view(self) -> PairingWindowModel:
+        """Fenêtre ouverte, sinon objet explicite `open: false` (jamais `None`)."""
+        opened = self.window()
+        if opened is not None:
+            return opened
+        if self._last_closed is None:
+            return PairingWindowModel(open=False, adapter=None)
+        adapter, closed_at, reason = self._last_closed
+        return PairingWindowModel(
+            open=False,
+            adapter=adapter,  # type: ignore[arg-type]
+            closed_at=closed_at,
+            reason=reason,
         )
 
     def _adapter_path(self, role: str) -> str:
@@ -146,7 +164,7 @@ class PairingManager:
         return model
 
     def _expire(self) -> None:
-        task = asyncio.ensure_future(self.close())
+        task = asyncio.ensure_future(self.close("expired"))
         self._bg.add(task)
         task.add_done_callback(self._bg.discard)
 
@@ -157,13 +175,14 @@ class PairingManager:
             except (DBusCallError, BluezUnavailable) as exc:
                 log.warning(kv("adapter_reset_failed", prop=prop, error=exc))
 
-    async def close(self) -> None:
+    async def close(self, reason: str = "closed") -> None:
         """Ferme la fenêtre (idempotent) : Discoverable/Pairable à faux, fin de découverte."""
         async with self._lock:
             w, self._window = self._window, None
             if w is None:
                 return
             w.timer.cancel()
+            self._last_closed = (w.role, _utc_iso(self._now()), reason)
             path = self._registry.path_for(w.role)
             if path is not None:
                 await self._reset_adapter(path)
@@ -202,16 +221,18 @@ class PairingManager:
     def _path(self, mac: str, role: str | None = None) -> str:
         path = self._inventory.device_path(mac, role)
         if path is None:
-            raise NotFound(f"device {mac.upper()} unknown")
+            raise UnknownDevice(f"device {mac.upper()} unknown")
         return path
 
     async def pair(self, mac: str) -> None:
         """Appairage initié par le Pi (casques) : Pair + Trusted + Connect sur l'adaptateur `headsets`."""
         if self._window is None or self._window.role != "headsets":
             raise WindowClosed("a 'headsets' pairing window must be open")
-        path = self._path(mac, "headsets")
-        if AdapterRegistry.adapter_of_device(path) != self._registry.path_for("headsets"):
-            raise NotFound(f"device {mac.upper()} not seen on the headsets adapter")
+        path = self._inventory.device_path(mac, "headsets")
+        if path is None or AdapterRegistry.adapter_of_device(path) != self._registry.path_for(
+            "headsets"
+        ):
+            raise NotDiscovered(f"device {mac.upper()} not seen on the headsets adapter")
         props = self._inventory.device_props(path) or {}
         self._outgoing.add(path)
         try:

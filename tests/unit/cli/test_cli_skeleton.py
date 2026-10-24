@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from btmux import __version__
-from btmux.cli import btmuxctl, btmuxd
+from btmux.cli import btmuxd
 
 
 def test_btmuxd_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -26,8 +26,3 @@ def test_btmuxd_default_config() -> None:
 def test_btmuxd_missing_config_exits_2(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     assert btmuxd.main(["--config", str(tmp_path / "absent.yaml")]) == 2
     assert "config: cannot read" in capsys.readouterr().err
-
-
-def test_btmuxctl_stub(capsys: pytest.CaptureFixture[str]) -> None:
-    assert btmuxctl.main([]) == 1
-    assert "not implemented" in capsys.readouterr().err

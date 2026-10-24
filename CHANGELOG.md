@@ -9,6 +9,11 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
 - `btmux.bluez` : bus D-Bus système (dbus-fast, reconnexion), adaptateurs par MAC, agent `NoInputNoOutput` « fenêtre seulement » (refus par défaut), `PairingManager` (`open/close`, `pair/connect/disconnect/forget/set_trusted`, erreurs typées `BondStale`/`NotFound`/`WindowClosed`/`WindowOpen`), inventaire + file d'événements (modèles de `contracts/models.md`), journal structuré `clé=valeur`.
 - `btmuxd` : se connecte à BlueZ au démarrage ; adaptateur introuvable après `BTMUX_ADAPTER_WAIT` s (défaut 30) → code de sortie 3.
 
+### Added (T2.3 #21)
+- `btmux.api` (aiohttp) : routes `/api/*` de `contracts/http-endpoints.md`, auth Bearer (`hmac.compare_digest`, 401), SSE `/api/events` (keep-alive 15 s, `Last-Event-ID` tampon 100 sinon évènement `state`), Web UI statique `Cache-Control: no-store`, API verrouillée si le jeton est illisible, code de sortie 2 si `api.listen` est invalide ou occupé.
+- `btmuxctl` : `state`, `pairing open|close`, `device pair|connect|disconnect|forget` (`--url`/`--token`, `BTMUX_URL`/`BTMUX_TOKEN`, `/etc/btmux/token`).
+- Dépendance : `aiohttp`.
+
 ### Changed
 - Config : `adapters[].mac` dupliquée refusée ; `adapters[].name` sans caractère de contrôle (sortie TSV de `btmux.config adapters` non forgeable) ; `btmux-adapters.sh` : `python -I -P`, `btmgmt` en échec = avertissement + code 0 ; installation pip `--only-binary=:all:` ; agent de spike fail-closed.
 - `btmuxd.service` durci (`NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome=read-only`, `PrivateTmp`, `RestartPreventExitStatus=2 3`) ;
