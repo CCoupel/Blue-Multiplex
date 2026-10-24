@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        load_config(args.config)
+        config = load_config(args.config)
     except ConfigError as exc:
         for line in exc.errors:
             print(line, file=sys.stderr)
@@ -40,7 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.check_config:
         print(f"config OK: {args.config}")
         return 0
-    return daemon.run()
+    return daemon.run(config)
 
 
 if __name__ == "__main__":  # pragma: no cover
