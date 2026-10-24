@@ -155,6 +155,29 @@ def test_noop_is_200_even_when_a_pairing_window_is_open(swap):
     assert swap.call("GET", "/api/state")[1]["pairing"]["open"] is True
 
 
+def test_noop_is_200_even_while_a_change_is_pending(api_factory):
+    """Ordre : 400 -> no-op 200 -> change_pending : l'affectation en cours re-soumise reste 200."""
+    c = api_factory("swap-ready", time_scale=1.0)
+    assert c.call("PUT", "/api/controllers/roles", {"sources": HP, "headsets": SRC})[0] == 202
+    status, roles = c.call("PUT", "/api/controllers/roles", {"sources": HP, "headsets": SRC})
+    assert status == 200 and roles["pending"] is True
+    other = c.call("PUT", "/api/controllers/roles", {"sources": SRC, "headsets": HP})
+    assert other[0] == 409 and other[1]["error"] == "change_pending"
+
+
+def test_invalid_body_is_400_even_while_a_change_is_pending(api_factory):
+    c = api_factory("swap-ready", time_scale=1.0)
+    c.call("PUT", "/api/controllers/roles", {"sources": HP, "headsets": SRC})
+    assert c.call("PUT", "/api/controllers/roles", {"sources": SRC})[0] == 400
+
+
+def test_pairing_open_precedes_devices_connected(api_factory):
+    c = api_factory("default", time_scale=20.0)
+    c.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})
+    status, body = c.call("PUT", "/api/controllers/roles", {"sources": HP, "headsets": SRC})
+    assert status == 409 and body["error"] == "pairing_open"
+
+
 def test_state_write_failure_is_500_without_disconnect_nor_pending(api_factory):
     """Echec d'ecriture du fichier d'etat : 500 state_write_failed, ni deconnexion ni pending."""
     c = api_factory("state-write-error")

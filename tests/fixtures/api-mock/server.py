@@ -410,7 +410,6 @@ class MockState:
 
     def set_roles(self, body) -> tuple[int, dict]:
         self.check_bluez()
-        self.check_writable()
         if not isinstance(body, dict) or set(body) - {"sources", "headsets", "confirm"}:
             raise ApiError(400, "invalid_body", "champs : sources, headsets (MAC ou null), confirm")
         if not {"sources", "headsets"} <= set(body):
@@ -435,8 +434,10 @@ class MockState:
         if new["sources"] is not None and new["sources"] == new["headsets"]:
             raise ApiError(400, "same_controller", "un controleur ne peut porter qu'un seul role")
         affected = [r for r in ROLES if new[r] != self.roles[r]]
-        if not affected:  # no-op : 200, prioritaire sur pairing_open (aucun redemarrage)
+        # ordre : 400 -> no-op 200 -> 409 change_pending -> pairing_open -> devices_connected
+        if not affected:
             return 200, self.roles
+        self.check_writable()
         if self.pairing:
             raise ApiError(409, "pairing_open", "fermez la fenetre d'appairage avant de changer")
         connected = [
