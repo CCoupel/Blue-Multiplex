@@ -57,6 +57,8 @@ Champs : `adapters`, `devices`, `discoverable_headsets[{mac,name,rssi,class,reve
 - `DELETE /api/pairing` idempotent (204 même sans fenêtre).
 - `forget` : événement `device.removed {mac, adapter}`, puis `device` placeholder (`in_config:true`, `paired/trusted/connected:false`,
   `name:null`, `uuids:[]`) si l'appareil est dans la config ; sinon l'appareil disparaît de `State.devices`.
+- Premier événement de toute connexion SSE : `state` (State complet, `id` = dernier id courant), puis les événements.
+- `pair` deux fois sur le même appareil pendant l'opération → 409 `operation_in_progress` ; en-têtes de sécurité (CSP, nosniff, DENY, no-referrer, no-store) sur toutes les réponses.
 - `Last-Event-ID` : le mock garde un tampon de 100 événements ; un id couvert rejoue les manqués, un id hors tampon envoie un
   événement `state` (State complet).
 - Auth du flux : en-tête `Authorization` uniquement (pas de `?token=`) ; le front lit le SSE par `fetch` streaming.
