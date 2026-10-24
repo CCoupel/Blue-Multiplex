@@ -19,9 +19,10 @@ ExecStart=/opt/btmux/bin/btmuxd --config /etc/btmux/config.yaml
 # Quel que soit l'arrêt (SIGKILL, OOM, crash) : refermer appairage et découverte (root, hors bac à sable)
 ExecStopPost=-+/usr/lib/btmux/btmux-adapters.sh --config /etc/btmux/config.yaml --reset --wait 0
 Restart=on-failure
-# Codes 2 (configuration invalide) et 3 (adaptateur introuvable) : inutile de boucler (cf. contrat config-schema)
-RestartPreventExitStatus=2 3
-RestartSec=5
+# Code 2 (configuration invalide ou API impossible à démarrer) : inutile de boucler (cf. contrat config-schema).
+# Code 3 (adaptateur introuvable après BTMUX_ADAPTER_WAIT, 30 s) : on réessaie (dongle USB lent à énumérer).
+RestartPreventExitStatus=2
+RestartSec=30
 # Durcissement : lecture seule partout, sauf le socket PipeWire de l'utilisateur (drop-in : ReadWritePaths=-/run/user/<uid>)
 NoNewPrivileges=yes
 ProtectSystem=strict
