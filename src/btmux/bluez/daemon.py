@@ -21,6 +21,10 @@ log = logging.getLogger("btmux.bluez")
 
 EXIT_OK = 0
 EXIT_ADAPTER_NOT_FOUND = 3
+EXIT_RESTART_FALLBACK = (
+    4  # redémarrage piloté non reçu : systemd relance (RestartForceExitStatus=4)
+)
+RESTART_TIMEOUT_S = 20.0
 DEFAULT_ADAPTER_WAIT = 30.0
 ENV_ADAPTER_WAIT = "BTMUX_ADAPTER_WAIT"
 
@@ -40,7 +44,11 @@ class BluezService:
         *,
         adapter_wait: float | None = None,
         retry_interval: float = 1.0,
+        restart_timeout: float = RESTART_TIMEOUT_S,
     ) -> None:
+        self.restart_timeout = restart_timeout
+        self._fallback = asyncio.Event()
+        self._restart_task: asyncio.Task[None] | None = None
         self.config = config
         self.bus: Bus = bus if bus is not None else DBusFastBus()
         self.registry = AdapterRegistry(config)
@@ -56,7 +64,17 @@ class BluezService:
         self._guards: set[asyncio.Future[None]] = set()
 
     def on_roles_written(self) -> None:
-        """L'état des rôles vient d'être écrit (le redémarrage piloté est géré en R-14)."""
+        """L'état des rôles vient d'être écrit : `btmux-adapters.path` doit relancer le service (SIGTERM) ;
+        sans signal dans `restart_timeout` s, repli : sortie code 4 (journal `restart_fallback`)."""
+        if self._restart_task is None:
+            self._restart_task = asyncio.create_task(self._restart_watch())
+
+    async def _restart_watch(self) -> None:
+        await asyncio.sleep(self.restart_timeout)
+        log.error(
+            kv("restart_fallback", after_s=self.restart_timeout, exit_code=EXIT_RESTART_FALLBACK)
+        )
+        self._fallback.set()
 
     # ----- démarrage / arrêt -----------------------------------------------------------------
     def _on_signal(self, signal: BusSignal) -> None:
@@ -184,7 +202,16 @@ class BluezService:
         await self.agent.drain()
 
     async def run(self, stop: asyncio.Event) -> int:
-        """Boucle principale : démarre, surveille, redémarre si BlueZ disparaît. Retourne le code de sortie."""
+        """Boucle principale : démarre, surveille, redémarre si BlueZ disparaît. Retourne le code de sortie
+        (0 arrêt propre, 3 BlueZ injoignable, 4 redémarrage piloté non reçu)."""
+        try:
+            return await self._run(stop)
+        finally:
+            if self._restart_task is not None:
+                self._restart_task.cancel()
+                self._restart_task = None
+
+    async def _run(self, stop: asyncio.Event) -> int:
         loop = asyncio.get_running_loop()
         while not stop.is_set():
             deadline = loop.time() + self.adapter_wait
@@ -210,7 +237,11 @@ class BluezService:
                 return EXIT_OK
             self._lost.clear()
             self.ready.set()
-            waiters = {asyncio.ensure_future(stop.wait()), asyncio.ensure_future(self._lost.wait())}
+            waiters = {
+                asyncio.ensure_future(stop.wait()),
+                asyncio.ensure_future(self._lost.wait()),
+                asyncio.ensure_future(self._fallback.wait()),
+            }
             await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
             for w in waiters:
                 w.cancel()
@@ -218,6 +249,8 @@ class BluezService:
             await self._teardown()
             if stop.is_set():
                 return EXIT_OK
+            if self._fallback.is_set():
+                return EXIT_RESTART_FALLBACK
             log.warning(kv("bluez_reconnect"))
             await asyncio.sleep(self.retry_interval)
         await self._teardown()

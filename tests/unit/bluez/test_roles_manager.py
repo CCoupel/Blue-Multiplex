@@ -178,3 +178,60 @@ async def test_sse_after_restart_client_with_higher_last_event_id_gets_state(api
             data += (await asyncio.wait_for(resp.content.readline(), 3)).decode()
         resp.close()
         assert "controllers" in (await a.req("GET", "/api/state"))[1]
+
+
+# ----- R-14 : redémarrage piloté côté daemon -----
+def _service(config: Config, bus: FakeBus, state_file: Path, timeout: float) -> BluezService:
+    cfg = config.model_copy(update={"state_path": state_file})
+    return BluezService(cfg, bus, adapter_wait=0.3, retry_interval=0.02, restart_timeout=timeout)
+
+
+async def test_restart_fallback_exits_with_code_4_when_no_sigterm(
+    config: Config, bus: FakeBus, state_file: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = _service(config, bus, state_file, 0.2)
+    task = asyncio.create_task(service.run(asyncio.Event()))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    assert (await service.roles.set_roles({"sources": HP, "headsets": SRC}))[0] == 202
+    assert service.inventory.roles_pending is True  # reste vrai jusqu'à l'arrêt
+    assert await asyncio.wait_for(task, 5) == 4
+    assert "event=restart_fallback" in caplog.text
+    assert bus.agent is None  # teardown propre avant la sortie
+
+
+async def test_sigterm_before_timeout_exits_0_without_fallback(
+    config: Config, bus: FakeBus, state_file: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    service = _service(config, bus, state_file, 0.5)
+    stop = asyncio.Event()
+    task = asyncio.create_task(service.run(stop))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    await service.roles.set_roles({"sources": HP, "headsets": SRC})
+    stop.set()  # SIGTERM reçu : arrêt propre
+    assert await asyncio.wait_for(task, 5) == 0
+    await asyncio.sleep(0.6)
+    assert "restart_fallback" not in caplog.text
+
+
+async def test_no_timer_without_role_change(config: Config, bus: FakeBus, state_file: Path):
+    service = _service(config, bus, state_file, 0.1)
+    stop = asyncio.Event()
+    task = asyncio.create_task(service.run(stop))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    assert (await service.roles.set_roles({"sources": SRC, "headsets": HP}))[0] == 200
+    await asyncio.sleep(0.3)
+    assert not task.done()
+    stop.set()
+    assert await task == 0
+
+
+async def test_serve_returns_4_on_restart_fallback(
+    config: Config, bus: FakeBus, state_file: Path
+) -> None:
+    from btmux import daemon
+
+    service = _service(config, bus, state_file, 0.1)
+    task = asyncio.create_task(daemon.serve(asyncio.Event(), config, service=service))
+    await asyncio.wait_for(service.ready.wait(), 5)
+    await service.roles.set_roles({"sources": None, "headsets": HP})
+    assert await asyncio.wait_for(task, 5) == 4

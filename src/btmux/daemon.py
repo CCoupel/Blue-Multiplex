@@ -29,7 +29,7 @@ async def serve(
     service: BluezService | None = None,
     extension: Extension | None = None,
 ) -> int:
-    """Démarre la couche BlueZ puis attend `stop`. Codes : 0 arrêt propre, 3 adaptateur introuvable."""
+    """Démarre la couche BlueZ puis attend `stop`. Codes : 0 arrêt propre, 2 API, 3 BlueZ injoignable, 4 redémarrage piloté non reçu."""
     svc = service or BluezService(config)
     announce = asyncio.create_task(_announce(svc))
     try:
