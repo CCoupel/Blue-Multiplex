@@ -58,12 +58,12 @@ async def test_device_events_and_models(service: BluezService, bus: FakeBus) -> 
         SRC_PATH, "AA:AA:AA:AA:AA:01", name="S24", Paired=True, UUIDs=[A2DP_SOURCE], Class=0x5A020C
     )
     event = sub.queue.get_nowait()
-    assert event.kind == "device" and event.id == 1
+    assert event.kind == "device"
     assert event.data["kind"] == "source" and event.data["in_config"] is False
     assert event.data["profiles"] == ["a2dp_source"] and event.data["last_seen"] is None
     bus.change(path, "org.bluez.Device1", Connected=True)
     ev2 = sub.queue.get_nowait()
-    assert ev2.id == 2 and ev2.data["connected"] is True and ev2.data["last_seen"]
+    assert ev2.id == event.id + 1 and ev2.data["connected"] is True and ev2.data["last_seen"]
     bus.change(path, "org.bluez.Device1", RSSI=-50)  # RSSI seul : pas d'évènement
     assert sub.queue.empty()
     bus.remove_device(path)

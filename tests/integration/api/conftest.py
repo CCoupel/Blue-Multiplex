@@ -1,4 +1,4 @@
-"""Fixtures des tests d'API : cible `mock` (tests/fixtures/api-mock) ou `real` (btmux.api + FakeBus).
+"""Fixtures des tests d'API : cible `mock` (api-mock) ou `real` (btmux.api + FakeBus).
 
 BTMUX_API_TARGET=mock (defaut) | real. La cible `real` attend le harnais de l'application reelle
 (T2.3, dev-backend) : tant qu'il manque, ces tests sont skippes — pas d'echec.
