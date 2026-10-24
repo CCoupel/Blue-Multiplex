@@ -454,3 +454,37 @@ async def test_pair_marks_origin_so_unclassified_headset_goes_to_headsets(
     dev = next(d for d in svc.inventory.state()["devices"] if d["mac"] == "28:11:A5:32:3B:22")
     assert dev["kind"] == "headset" and dev["adapter"] == "headsets" and dev["trusted"] is True
     assert path in mono_bus.objects
+
+
+# ----- revue LOT-2 : réserves 6 et 7 -----
+async def test_pending_pair_is_cancelled_cleanly_on_teardown(
+    service: BluezService, bus: FakeBus
+) -> None:
+    await started(service)
+    path = bus.add_device(HP_PATH, HEADSET_MAC, name="Bose", Class=0x240404)
+    never = asyncio.Event()
+
+    async def hung_pair(p: str, body: list[Any]) -> list[Any]:
+        await never.wait()
+        return []
+
+    bus.handlers[("org.bluez.Device1", "Pair")] = hung_pair
+    await service.pairing.open("headsets", 30)
+    waiter = asyncio.create_task(service.pairing.pair(HEADSET_MAC))
+    await asyncio.sleep(0.05)
+    assert service.pairing.allows(path)
+    await asyncio.wait_for(service.pairing.cancel_pending(), 2)
+    await asyncio.sleep(0)
+    assert not service.pairing.allows(path)  # _outgoing nettoyé, plus d'agent autorisé
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+
+
+async def test_patch_trusted_bluez_failure_is_502(api: _AsyncCtx) -> None:
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True)
+        a.bus.set_errors[("org.bluez.Device1", "Trusted")] = DBusCallError(
+            "org.bluez.Error.Failed", "boom"
+        )
+        status, body = await a.req("PATCH", f"/api/devices/{PHONE_MAC}", json={"trusted": True})
+        assert status == 502 and body["error"] == "bluez_error"

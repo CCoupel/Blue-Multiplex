@@ -129,6 +129,8 @@ class BluezService:
 
     async def _teardown(self) -> None:
         with contextlib.suppress(Exception):
+            await self.pairing.cancel_pending()
+        with contextlib.suppress(Exception):
             await self.pairing.close()
         with contextlib.suppress(Exception):
             await self.bus.call(

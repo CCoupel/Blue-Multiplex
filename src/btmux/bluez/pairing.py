@@ -182,6 +182,13 @@ class PairingManager:
             except (DBusCallError, BluezUnavailable) as exc:
                 log.warning(kv("adapter_reset_failed", prop=prop, error=exc))
 
+    async def cancel_pending(self) -> None:
+        """Annule les appairages sortants en cours (arrêt du démon) et attend leur fin propre."""
+        tasks = list(self._pair_tasks.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
     async def close(self, reason: str = "closed") -> None:
         """Ferme la fenêtre (idempotent) : Discoverable/Pairable à faux, fin de découverte."""
         async with self._lock:
