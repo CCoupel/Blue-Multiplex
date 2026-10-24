@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 import yaml
+from apisupport import TARGET, TOKEN, Client, mock_mod
 
 VALID_CONFIG: dict[str, Any] = {
     "adapters": [
@@ -132,3 +133,25 @@ def run_btmuxctl(tmp_path: Path):
         )
 
     return _run
+
+
+@pytest.fixture
+def api_factory():
+    """`api_factory(scenario="default", time_scale=20)` -> Client ; arrete les serveurs a la fin."""
+    started = []
+
+    def _make(scenario="default", time_scale=20.0):
+        if TARGET != "mock":
+            pytest.skip("cible `real` : harnais de l'application reelle (T2.3) non disponible")
+        api = mock_mod.MockApi(scenario, token=TOKEN, time_scale=time_scale).start()
+        started.append(api)
+        return Client(api)
+
+    yield _make
+    for a in started:
+        a.stop()
+
+
+@pytest.fixture
+def api(api_factory):
+    return api_factory("default")
