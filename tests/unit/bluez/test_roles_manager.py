@@ -288,3 +288,62 @@ async def test_put_roles_check_order_while_pending(api: _AsyncCtx) -> None:
         assert status == 200 and roles["pending"] is True  # identique à l'écrit : no-op
         status, body = await _put(a, {"sources": SRC, "headsets": HP})
         assert (status, body["error"]) == (409, "change_pending")
+
+
+# ----- B-1 : l'alias suit le rôle -----
+def _names(state_file: Path) -> dict[str, str]:
+    return {a["mac"]: a["name"] for a in yaml.safe_load(state_file.read_text())["adapters"]}
+
+
+async def test_alias_follows_the_role_after_a_swap(api: _AsyncCtx, state_file: Path) -> None:
+    async with api as a:
+        assert (await _put(a, {"sources": HP, "headsets": SRC}))[0] == 202
+        assert _names(state_file) == {HP: "btmux", SRC: "btmux-hp"}
+
+
+async def test_alias_of_a_new_controller_is_the_role_name(api: _AsyncCtx, state_file: Path) -> None:
+    async with api as a:
+        assert (await _put(a, {"sources": EXTRA, "headsets": SRC}))[0] == 202
+        assert _names(state_file) == {EXTRA: "btmux", SRC: "btmux-hp"}
+
+
+async def test_alias_of_a_controller_carrying_both_roles_is_the_sources_name(
+    api: _AsyncCtx, state_file: Path
+) -> None:
+    async with api as a:
+        assert (await _put(a, {"sources": EXTRA, "headsets": EXTRA}))[0] == 400  # même contrôleur
+    # (un seul contrôleur pour les deux rôles passe par la config mono, testé via _adapters_for)
+    cfg = api.service.roles
+    from btmux.bluez.controllers import RoleManager
+
+    assert isinstance(cfg, RoleManager)
+    [only] = cfg._adapters_for({"sources": SRC, "headsets": None})
+    assert (only.name, only.roles) == ("btmux", ("sources",))
+
+
+async def test_alias_defaults_when_config_has_no_entry_for_the_role(
+    config: Config, bus: FakeBus, state_file: Path
+) -> None:
+    empty = config.model_copy(update={"adapters": (), "state_path": state_file})
+    service = BluezService(empty, bus, adapter_wait=0.3, retry_interval=0.02)
+    adapters = service.roles._adapters_for({"sources": HP, "headsets": SRC})
+    assert {a.mac: a.name for a in adapters} == {HP: "btmux", SRC: "btmux-hp"}
+    both = service.roles._adapters_for({"sources": HP, "headsets": HP})
+    assert [(a.name, a.roles) for a in both] == [("btmux", ("sources", "headsets"))]
+
+
+async def test_alias_uses_custom_config_names_per_role(config: Config, bus: FakeBus, tmp_path):
+    from btmux.config import Adapter
+
+    custom = config.model_copy(
+        update={
+            "adapters": (
+                Adapter(mac=SRC, name="salon", roles=("sources",)),
+                Adapter(mac=HP, name="salon-casque", roles=("headsets",)),
+            ),
+            "state_path": tmp_path / "a.yaml",
+        }
+    )
+    service = BluezService(custom, bus, adapter_wait=0.3, retry_interval=0.02)
+    swapped = service.roles._adapters_for({"sources": HP, "headsets": SRC})
+    assert {a.mac: a.name for a in swapped} == {HP: "salon", SRC: "salon-casque"}

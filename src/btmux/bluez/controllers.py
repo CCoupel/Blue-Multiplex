@@ -76,19 +76,20 @@ class RoleManager:
             raise ControllerError("same_controller", "a controller can carry only one role")
         return wanted, confirm
 
+    def _role_name(self, role: str) -> str:
+        """Nom du rôle : `name` de l'entrée de config portant le rôle (unique, V3), sinon le défaut."""
+        entry = next((a for a in self._config.adapters if role in a.roles), None)
+        return entry.name if entry else DEFAULT_NAMES[role]
+
     def _adapters_for(self, wanted: dict[str, str | None]) -> list[Adapter]:
-        known = {a.mac.upper(): a.name for a in self._config.adapters}
+        """L'alias suit le rôle, pas le dongle ; un contrôleur à deux rôles prend le nom de `sources`."""
         out: dict[str, list[str]] = {}
         for role in ROLES:
             mac = wanted[role]
             if mac is not None:
                 out.setdefault(mac, []).append(role)
         return [
-            Adapter(
-                mac=mac,
-                name=known.get(mac) or DEFAULT_NAMES[roles[0]],
-                roles=tuple(roles),  # type: ignore[arg-type]
-            )
+            Adapter(mac=mac, name=self._role_name(roles[0]), roles=tuple(roles))  # type: ignore[arg-type]
             for mac, roles in out.items()
         ]
 
