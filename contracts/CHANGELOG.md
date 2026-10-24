@@ -25,3 +25,8 @@
 ## [20261024] — v0.2.0 LOT-2 (#16 #21)
 
 - **[CHANGED]** `contracts/http-endpoints.md` — `/api/events` : client en `fetch` streaming avec Bearer (pas `EventSource`), `Last-Event-ID` géré côté client et serveur (tampon 100, sinon événement `state` complet). Mineur, non BREAKING.
+
+## [20261024-b] — v0.2.0 LOT-2 (#20 #21 #16) — arbitrage SSE
+
+- **[CHANGED]** `contracts/models.md` — `PairingWindow` porte `open` ; fermée = objet explicite `{open:false, reason}` (jamais `null`) ; `State.pairing` toujours un objet. Nouvel événement SSE `device.removed` (`DeviceRemoved {mac, adapter}`) après `forget`, suivi d'un `device` placeholder si l'appareil est dans la config ; événement `state` défini. Mineur, non BREAKING (API non encore implémentée).
+- **[CHANGED]** `contracts/http-endpoints.md` — `DELETE /api/pairing` idempotent (204), événements émis par `DELETE /api/pairing` et `forget` précisés.
