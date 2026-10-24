@@ -292,7 +292,7 @@ function renderBanner() {
     h("span", { class: "spacer" }), h("span", { class: "count", "data-restart": "1" }, fmtTime(Math.max(0, Math.ceil((S.restartUntil - Date.now()) / 1000)))));
 }
 
-function startRestart() { S.restartUntil = Date.now() + 15000; }
+function startRestart() { S.restartUntil = Date.now() + 20000; }
 
 function confirmRoles(lines) {
   $("confirm-roles-text").replaceChildren(h("strong", {}, "Appliquer la nouvelle affectation ?"), h("br"),
