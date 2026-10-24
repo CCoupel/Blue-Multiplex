@@ -16,13 +16,16 @@ def _share(tmp_path: Path) -> Path:
     share = tmp_path / "share"
     share.mkdir(exist_ok=True)
     shutil.copy(ROOT / "config" / "config.example.yaml", share)
-    shutil.copy(ROOT / "config" / "dbus" / "btmux.conf.in", share / "dbus-btmux.conf.in")
+    shutil.copy(ROOT / "config" / "dbus" / "btmux.conf.in", share / "btmux.conf.in")
     shutil.copy(ROOT / "config" / "wireplumber" / "51-btmux-no-seat.conf", share)
     shutil.copy(ROOT / "config" / "wireplumber" / "roles.conf", share)
     return share
 
 
-def _configure(tmp_path: Path, user: str = "alice") -> subprocess.CompletedProcess[str]:
+def _configure(
+    tmp_path: Path, user: str = "alice", template: str | None = "keep"
+) -> subprocess.CompletedProcess[str]:
+    """`template` : "keep" = gabarit réel ; None = absent ; autre = contenu imposé."""
     fake_root = tmp_path / "root"
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
@@ -32,8 +35,13 @@ def _configure(tmp_path: Path, user: str = "alice") -> subprocess.CompletedProce
         "BTMUX_UID": "1234",
         "BTMUX_HOME": str(home),
     }
+    share = _share(tmp_path)
+    if template is None:
+        (share / "btmux.conf.in").unlink()
+    elif template != "keep":
+        (share / "btmux.conf.in").write_text(template)
     return subprocess.run(
-        ["sh", str(CONFIGURE), "--user", user, "--share", str(_share(tmp_path))],
+        ["sh", str(CONFIGURE), "--user", user, "--share", str(share)],
         env=env,
         capture_output=True,
         text=True,
@@ -175,3 +183,28 @@ def test_ci_exports_hashed_runtime_lockfile() -> None:
     text = (ROOT / "scripts" / "ci.sh").read_text()
     assert "uv export --no-dev --frozen --hashes --no-emit-project" in text
     assert "dist/requirements.lock.txt" in text
+
+
+def test_configure_fails_cleanly_without_dbus_template(tmp_path: Path) -> None:
+    proc = _configure(tmp_path, template=None)
+    assert proc.returncode != 0
+    assert "btmux.conf.in" in proc.stderr
+    system_d = tmp_path / "root" / "etc" / "dbus-1" / "system.d"
+    assert not (system_d / "btmux.conf").exists()
+    assert not list(system_d.glob(".btmux.conf.*"))  # pas de temporaire résiduel
+
+
+def test_configure_rejects_empty_dbus_template_and_keeps_policy(tmp_path: Path) -> None:
+    assert _configure(tmp_path).returncode == 0
+    policy = tmp_path / "root" / "etc" / "dbus-1" / "system.d" / "btmux.conf"
+    before = policy.read_text()
+    proc = _configure(tmp_path, template="")
+    assert proc.returncode != 0 and "policy D-Bus" in proc.stderr
+    assert policy.read_text() == before and before.strip()
+    assert not list(policy.parent.glob(".btmux.conf.*"))
+
+
+def test_deploy_and_deb_use_the_same_dbus_template_name() -> None:
+    for script in ("deploy.sh", "build-deb.sh", "btmux-configure.sh"):
+        text = (ROOT / "scripts" / script).read_text()
+        assert "btmux.conf.in" in text and "dbus-btmux.conf.in" not in text

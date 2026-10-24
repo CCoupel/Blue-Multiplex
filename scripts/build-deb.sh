@@ -40,7 +40,7 @@ install -m 644 "$LOCK" "$STAGE/usr/share/btmux/requirements.lock.txt"
 install -m 644 systemd/btmuxd.service systemd/btmux-adapters.service "$STAGE/lib/systemd/system/"
 install -m 644 config/config.example.yaml "$STAGE/usr/share/btmux/config.example.yaml"
 install -m 644 config/config.example.yaml "$STAGE/etc/btmux/config.example.yaml"
-install -m 644 config/dbus/btmux.conf.in "$STAGE/usr/share/btmux/dbus-btmux.conf.in"
+install -m 644 config/dbus/btmux.conf.in "$STAGE/usr/share/btmux/btmux.conf.in"
 install -m 644 config/dbus/btmux.conf.default "$STAGE/etc/dbus-1/system.d/btmux.conf"   # utilisateur « ubuntu » ; réécrit par le postinst
 install -m 644 config/wireplumber/51-btmux-no-seat.conf config/wireplumber/roles.conf "$STAGE/usr/share/btmux/wireplumber/"
 for f in btmux-set-user.sh btmux-install-wireplumber.sh btmux-adapters.sh btmux-configure.sh; do

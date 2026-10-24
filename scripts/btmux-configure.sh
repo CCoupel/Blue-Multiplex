@@ -3,7 +3,7 @@
 # config d'exemple (+ config.yaml si absente), policy D-Bus de l'utilisateur de service, jeton d'API 0600 (généré s'il manque),
 # drop-in d'utilisateur, config WirePlumber headless, scripts d'aide sous /usr/lib/btmux, unités (déploiement), systemd.
 # Usage : btmux-configure.sh --user UTILISATEUR --share DIR [--units DIR] [--no-restart]
-#   --share : dossier des fichiers de données (config.example.yaml, dbus-btmux.conf.in, 51-btmux-no-seat.conf, roles.conf),
+#   --share : dossier des fichiers de données (config.example.yaml, btmux.conf.in, 51-btmux-no-seat.conf, roles.conf),
 #             à plat ou avec un sous-dossier wireplumber/ ;
 #   --units : copie btmuxd.service et btmux-adapters.service dans /etc/systemd/system (déploiement ; le .deb les installe lui-même).
 # Variables (tests) : BTMUX_ROOT (préfixe de tous les chemins système ; désactive chown et systemctl), BTMUX_UID, BTMUX_HOME.
@@ -54,8 +54,16 @@ fi
 
 # --- policy D-Bus de l'utilisateur de service -------------------------------------------------------------
 mkdir -p "$ROOT/etc/dbus-1/system.d"
-sed "s/@BTMUX_USER@/$USER_NAME/g" "$(share_file dbus-btmux.conf.in)" > "$ROOT/etc/dbus-1/system.d/btmux.conf"
-chmod 644 "$ROOT/etc/dbus-1/system.d/btmux.conf"
+TEMPLATE="$(share_file btmux.conf.in)" || exit 1   # le `exit` de share_file ne sort que du sous-shell
+POLICY="$ROOT/etc/dbus-1/system.d/btmux.conf"
+POLICY_TMP="$(mktemp "$ROOT/etc/dbus-1/system.d/.btmux.conf.XXXXXX")"
+trap 'rm -f "$POLICY_TMP"' EXIT
+if ! sed "s/@BTMUX_USER@/$USER_NAME/g" "$TEMPLATE" > "$POLICY_TMP" || [ ! -s "$POLICY_TMP" ]; then
+  echo "btmux-configure: rendu de la policy D-Bus vide ou en échec ($TEMPLATE) — $POLICY inchangé" >&2
+  exit 1
+fi
+chmod 644 "$POLICY_TMP"
+mv -f "$POLICY_TMP" "$POLICY"
 
 # --- jeton d'API (0600, propriétaire = utilisateur de service), jamais régénéré s'il existe -------------------
 TOKEN="$ROOT/etc/btmux/token"
