@@ -149,6 +149,18 @@ async def test_device_actions_and_errors(api: _AsyncCtx) -> None:
         assert (await a.req("POST", f"/api/devices/{PHONE_MAC}/connect"))[0] == 502
 
 
+async def test_mac_url_encoded_or_literal(api: _AsyncCtx) -> None:
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True)
+        encoded = PHONE_MAC.replace(":", "%3A")
+        assert (await a.req("POST", f"/api/devices/{encoded}/connect"))[0] == 202
+        assert (await a.req("POST", f"/api/devices/{PHONE_MAC}/disconnect"))[0] == 202
+        status, dev = await a.req(
+            "PATCH", f"/api/devices/{encoded.lower()}", json={"trusted": True}
+        )
+        assert status == 200 and dev["mac"] == PHONE_MAC
+
+
 async def test_pair_endpoint(api: _AsyncCtx) -> None:
     async with api as a:
         status, body = await a.req("POST", f"/api/devices/{HEADSET_MAC}/pair")
