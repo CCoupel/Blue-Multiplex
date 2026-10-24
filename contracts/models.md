@@ -8,6 +8,9 @@ State      { "version": "0.2.0.0", "adapters": [Adapter], "devices": [Device], "
 Controller { "mac": "18:69:45:42:9D:E2", "hci": "hci1", "name": "btmux", "bus": "usb" | "uart" | "unknown",   // #23
              "usb_id": "2357:0604" | null, "role": "sources" | "headsets" | null, "powered": true, "pairable": false,
              "discoverable": false, "connected_devices": 0, "present": true }           // present:false = MAC affectée mais absente ; tout contrôleur présent est affectable (UART compris)
+           // `name` = alias BlueZ courant du contrôleur (= `name` de config/état une fois appliqué ; alias d'origine, ex. "raspberrypi", sans rôle).
+           // present:false ⇒ hci:null, bus:"unknown", usb_id:null, powered/pairable/discoverable:false, connected_devices:0.
+           // `bus`/`usb_id` lus dans sysfs (/sys/class/bluetooth/<hci>/device : idVendor:idProduct → usb ; parent serial/platform → uart) ; "unknown" sinon.
 Roles      { "sources": "MAC" | null, "headsets": "MAC" | null, "source": "state" | "config",             // #23 : provenance de l'affectation
              "pending": false, "restart_expected": false }                              // pending:true + restart_expected:true = état écrit, redémarrage du service imminent (D3)
 RoleChange { "sources": "MAC" | null, "headsets": "MAC" | null, "confirm": false }                        // corps de PUT /api/controllers/roles
@@ -27,7 +30,10 @@ Event (SSE) event: adapter|device|pairing|discovered|device.removed|state|contro
   - `controllers` (#23) : Controller[] complet à chaque apparition/disparition/changement d'un contrôleur (hotplug USB, powered…)
   - `roles` (#23) : Roles `pending:true, restart_expected:true` juste après l'écriture de l'état (dernier événement avant la coupure) ; après le
     redémarrage, le premier événement de toute connexion est un `state` complet (`roles.pending:false`, `source:"state"`). Le compteur `id`
-    repart de 1 au redémarrage : un client qui reçoit un `state` ou un `id` inférieur à son `Last-Event-ID` réinitialise sa vue.
+    repart au redémarrage : le `state` initial porte l'id courant (**0** juste après le démarrage), le premier événement réel porte **1** ;
+    un client qui reçoit un `state` ou un `id` inférieur à son `Last-Event-ID` réinitialise sa vue.
+  - erreurs HTTP : `{ "error": "<code>", "message": "<texte>", "details": [...] }` — `details` optionnel, présent pour `devices_connected`
+    (`[{ "mac", "alias" | null, "name" | null, "adapter": "sources" | "headsets" }]`).
   - `pairing` : PairingWindow complet à chaque transition (ouverture, tick optionnel, fermeture avec `open:false` + `reason`)
   - `device.removed` (après `forget`, ou disparition d'un appareil non appairé) : DeviceRemoved ; le client retire la ligne.
     Si l'appareil est dans `config.yaml`, le serveur émet ensuite un `device` « placeholder » (`in_config:true`, `paired:false`,

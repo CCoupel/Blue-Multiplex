@@ -115,7 +115,9 @@ adapters:
 
 Règles :
 - **Précédence** : si le fichier d'état existe et est valide, sa liste `adapters` **remplace** celle de `config.yaml` (`Roles.source = "state"`) ;
-  sinon `config.yaml` s'applique (`"config"`). `btmuxd --check-config` valide les deux et affiche la liste effective.
+  sinon `config.yaml` s'applique (`"config"`) ; un fichier d'état **invalide** est ignoré avec le journal `state_invalid` (repli config, jamais
+  d'arrêt). `btmuxd --check-config` valide les deux et affiche la liste effective et sa provenance ; `python -m btmux.config adapters
+  [--config …] [--state …]` (utilisé par `btmux-adapters.sh`) imprime la même liste effective (défaut `--state` = `/var/lib/btmux/adapters.yaml`).
 - **Écriture atomique** : fichier temporaire dans le même répertoire, `fsync`, `rename` ; jamais d'écriture dans `/etc/btmux/config.yaml`
   (reste propriété de l'administrateur, lecture seule pour le daemon — `ProtectSystem=strict`).
 - `name` d'un contrôleur nouvellement affecté : repris de `config.yaml` si la MAC y figure, sinon défaut `btmux` (sources) / `btmux-hp` (headsets).

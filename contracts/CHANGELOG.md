@@ -42,3 +42,10 @@
 - **[CHANGED]** `contracts/models.md` — `Controller.assignable` et `RoleChange.force` **retirés** (D5 : l'interne UART est affectable comme les dongles, `bus` reste affiché) ; `Roles.restart_expected` ajouté ; compteur SSE `id` réinitialisé au redémarrage (client : `state` ou `id` inférieur ⇒ resync).
 - **[CHANGED]** `contracts/http-endpoints.md` — `PUT /api/controllers/roles` : plus de 400 « UART sans force » ; application par **redémarrage piloté du service** (202 puis coupure ≈ 10–15 s) ; 409 `change_pending` sur toutes les écritures jusqu'à l'arrêt.
 - **[CHANGED]** `contracts/config-schema.md` — § Affectation : séquence D3 b (`btmux-adapters.path` → `btmux-adapters-reload.service` → `systemctl restart btmuxd`, repli code 4 après 20 s). Statut DRAFT retiré partout. Non BREAKING.
+
+## [20261024-e] — précisions #23 post-WIP (G1–G8 du rapport planner, validées par l'utilisateur le 2026-10-24) — non BREAKING
+
+- **[CHANGED]** `contracts/http-endpoints.md` — `PUT /api/controllers/roles` : corps strict (clé inconnue → 400 `invalid_body`), codes 400 nommés (`invalid_body`, `invalid_confirm`, `invalid_mac`, `unknown_controller`, `same_controller`), **no-op → 200** `Roles` inchangé sans redémarrage, `details` de `devices_connected` = `[{mac, alias, name, adapter}]` ; `change_pending` couvre aussi `DELETE /api/pairing` et `PATCH /api/devices/{mac}` ; champ d'erreur optionnel `details`.
+- **[NEW]** `contracts/http-endpoints.md` — interface `btmuxctl controllers` et `btmuxctl roles set --sources <MAC|none> --headsets <MAC|none> [--confirm]`.
+- **[CHANGED]** `contracts/models.md` — `Controller.name` = alias BlueZ courant ; valeurs d'un contrôleur `present:false` (`hci:null`, `bus:"unknown"`…) ; source sysfs de `bus`/`usb_id` ; compteur SSE : `state` initial à l'id courant (0 au démarrage), premier événement réel à 1 ; forme des erreurs avec `details`.
+- **[CHANGED]** `contracts/config-schema.md` — fichier d'état invalide = repli config + journal `state_invalid` ; `btmuxd --check-config` affiche la provenance ; `python -m btmux.config adapters --state` documenté (liste effective pour `btmux-adapters.sh`).
