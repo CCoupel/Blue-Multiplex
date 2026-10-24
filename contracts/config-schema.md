@@ -101,7 +101,7 @@ quelle que soit la valeur. Rétrocompatible : absence de la clé = défauts.
 de `adapters[]` est introuvable après 30 s), démarre l'API HTTP (#21) et reste en service jusqu'à SIGTERM/SIGINT (code 0).
 `--check-config` est inchangé.
 
-## Affectation des contrôleurs par l'API (#23 — DRAFT, GATE 2 avenant du 2026-10-24)
+## Affectation des contrôleurs par l'API (#23 — validé au GATE 2 avenant du 2026-10-24 : D1 a, D2 a, D3 b, D4 a, D5 b)
 
 **Fichier d'état** `/var/lib/btmux/adapters.yaml` (`StateDirectory=btmux`, propriétaire `BTMUX_USER`, mode 0640), **même schéma**
 que la clé `adapters` de `config.yaml` (liste `{mac, name, roles}`, règles V1–V4, V12) :
@@ -119,10 +119,17 @@ Règles :
 - **Écriture atomique** : fichier temporaire dans le même répertoire, `fsync`, `rename` ; jamais d'écriture dans `/etc/btmux/config.yaml`
   (reste propriété de l'administrateur, lecture seule pour le daemon — `ProtectSystem=strict`).
 - `name` d'un contrôleur nouvellement affecté : repris de `config.yaml` si la MAC y figure, sinon défaut `btmux` (sources) / `btmux-hp` (headsets).
-- **Application sans reboot** : le daemon reconfigure en mémoire (registre d'adaptateurs, agent, inventaire, alias/pairable/discoverable via
-  D-Bus) ; la **classe** (`btmgmt`, root) est réappliquée par `btmux-adapters.service` déclenché par `btmux-adapters.path`
-  (`PathChanged=/var/lib/btmux/adapters.yaml`). Le daemon ne redémarre pas ; si la reconfiguration en mémoire échoue, il sort en code **4**
-  (`RestartForceExitStatus=4`, redémarrage immédiat par systemd) — voir D3 du plan.
+- **Application par redémarrage piloté du service (D3 b)** — séquence :
+  1. `PUT` validé → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → **écriture atomique** de l'état → réponse 202 + événement
+     `roles {pending:true, restart_expected:true}` ; toute écriture ultérieure répond 409 `change_pending`.
+  2. `btmux-adapters.path` (`PathChanged=/var/lib/btmux/adapters.yaml`) déclenche **`btmux-adapters-reload.service`** (root, oneshot) :
+     `btmux-adapters.sh --state … --config …` (alias, classe, fermeture de **tous** les contrôleurs sans rôle, ≈ 4 s) puis
+     `ExecStartPost=systemctl restart --no-block btmuxd.service` → arrêt propre (SIGTERM, code 0) et relance immédiate (pas de `RestartSec`,
+     ce n'est pas un échec ; `StartLimitBurst` inchangé).
+  3. **Repli** : si le daemon n'a pas reçu SIGTERM 20 s après l'écriture (unité path absente/inactive), il sort en code **4**
+     (`RestartForceExitStatus=4` ; `RestartSec=30` s'applique alors — journal `restart_fallback`).
+  Coupure attendue de l'API : ≈ 10–15 s (arrêt ≤ 2 s + démarrage ≈ 5–10 s, mesuré 9,5 s en QUALIF 0.2.0.4) ; les clients SSE
+  reconnectent et reçoivent un `state` complet (`roles.pending:false`, `source:"state"`). `btmux-adapters.service` (démarrage) est inchangé.
 - Un contrôleur configuré mais absent (`present:false`) n'empêche plus le démarrage : le code de sortie 3 (« adaptateur introuvable ») est
   **remplacé** par l'état `role_unassigned` + journal `adapter_missing` (CHANGED — permet de réaffecter via l'API/Web UI).
 - `btmux-adapters.sh` lit la liste effective (état puis config) et ferme (`pairable off`, `discoverable no`) **tous** les autres contrôleurs.

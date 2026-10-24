@@ -31,8 +31,14 @@
 - **[CHANGED]** `contracts/models.md` — `PairingWindow` porte `open` ; fermée = objet explicite `{open:false, reason}` (jamais `null`) ; `State.pairing` toujours un objet. Nouvel événement SSE `device.removed` (`DeviceRemoved {mac, adapter}`) après `forget`, suivi d'un `device` placeholder si l'appareil est dans la config ; événement `state` défini. Mineur, non BREAKING (API non encore implémentée).
 - **[CHANGED]** `contracts/http-endpoints.md` — `DELETE /api/pairing` idempotent (204), événements émis par `DELETE /api/pairing` et `forget` précisés.
 
-## [20261024-c] — v0.2.0 LOT-2 avenant #23 (sélection des contrôleurs) — DRAFT, sous réserve GATE 2 avenant
+## [20261024-c] — v0.2.0 LOT-2 avenant #23 (sélection des contrôleurs) — validé au GATE 2 avenant, amendé par [20261024-d]
 
 - **[NEW]** `contracts/http-endpoints.md` — `GET /api/controllers`, `PUT /api/controllers/roles` (affectation atomique, 400/409 `pairing_open`/`devices_connected`/`change_pending`), fermeture systématique des contrôleurs sans rôle ; 409 `role_unassigned` sur l'appairage d'un rôle non affecté.
 - **[NEW]** `contracts/models.md` — `Controller`, `Roles`, `RoleChange` ; `State.controllers`, `State.roles` ; événements SSE `controllers`, `roles`.
 - **[CHANGED]** `contracts/config-schema.md` — V2 (`adapters` peut être vide), V3 (« exactement un » → « au plus un » par rôle) ; fichier d'état `/var/lib/btmux/adapters.yaml` (même schéma, précédence sur `config.yaml`) ; sortie 3 « adaptateur introuvable » remplacée par l'état `role_unassigned`. Rétrocompatible pour toute configuration valide existante ; **non BREAKING** (comportement de démarrage plus permissif, à noter dans `docs/install-pi.md`).
+
+## [20261024-d] — avenant #23 validé au GATE 2 (2026-10-24 15:35) — remplace [20261024-c]
+
+- **[CHANGED]** `contracts/models.md` — `Controller.assignable` et `RoleChange.force` **retirés** (D5 : l'interne UART est affectable comme les dongles, `bus` reste affiché) ; `Roles.restart_expected` ajouté ; compteur SSE `id` réinitialisé au redémarrage (client : `state` ou `id` inférieur ⇒ resync).
+- **[CHANGED]** `contracts/http-endpoints.md` — `PUT /api/controllers/roles` : plus de 400 « UART sans force » ; application par **redémarrage piloté du service** (202 puis coupure ≈ 10–15 s) ; 409 `change_pending` sur toutes les écritures jusqu'à l'arrêt.
+- **[CHANGED]** `contracts/config-schema.md` — § Affectation : séquence D3 b (`btmux-adapters.path` → `btmux-adapters-reload.service` → `systemctl restart btmuxd`, repli code 4 après 20 s). Statut DRAFT retiré partout. Non BREAKING.
