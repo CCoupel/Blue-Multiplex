@@ -148,7 +148,7 @@ function deviceRow(d) {
     h("td", {},
       tag(d.connected ? "connecté" : "déconnecté", d.connected ? "on" : "off"),
       d.paired ? tag("appairé", "on") : tag("non appairé", "off"),
-      tag(d.trusted ? "confiance" : "non confiance", d.trusted ? "on" : "off"),
+      tag(d.trusted ? "de confiance" : "pas de confiance", d.trusted ? "on" : "off"),
       d.blocked ? tag("bloqué", "off") : null,
       d.in_config ? tag("config", "cfg") : tag("hors config", "off")),
     h("td", { class: "actions" },
@@ -158,7 +158,7 @@ function deviceRow(d) {
       isPending(d.mac) ? pendingTag() : null,
       h("button", { disabled: busy("trust"), onclick: () => act(key("trust"), () => api.patch(d.mac, { trusted: !d.trusted }), { title: "Modification refusée", mac: d.mac }) },
         d.trusted ? "Retirer la confiance" : "Faire confiance"),
-      h("button", { class: "danger", disabled: busy("forget"), onclick: () => onForget(d) }, "Oublier")));
+      d.paired ? h("button", { class: "danger", disabled: busy("forget"), onclick: () => onForget(d) }, "Oublier") : null));
 }
 
 function devicesTable(list) {
