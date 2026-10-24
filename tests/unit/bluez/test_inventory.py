@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from fakes import (
     A2DP_SINK,
@@ -11,6 +12,7 @@ from fakes import (
     PHONE_MAC,
     SRC_PATH,
     FakeBus,
+    adapter_obj,
     device_path,
 )
 
@@ -74,6 +76,11 @@ async def test_device_events_and_models(service: BluezService, bus: FakeBus) -> 
     bus.change(path, "org.bluez.Device1", Connected=True)
     ev2 = sub.queue.get_nowait()
     assert ev2.id == event.id + 1 and ev2.data["connected"] is True and ev2.data["last_seen"]
+    ctrl = sub.queue.get_nowait()  # le compte d'appareils connectés du contrôleur change
+    assert ctrl.kind == "controllers" and {c["hci"]: c["connected_devices"] for c in ctrl.data} == {
+        "hci0": 0,
+        "hci1": 1,
+    }
     bus.change(path, "org.bluez.Device1", RSSI=-50)  # RSSI seul : pas d'évènement
     assert sub.queue.empty()
     bus.remove_device(path)
@@ -121,6 +128,7 @@ async def test_adapter_events_alias_overlay_and_overflow(
     bus.change(SRC_PATH, "org.bluez.Adapter1", Discoverable=True)
     ev = sub.queue.get_nowait()
     assert ev.kind == "adapter" and ev.data["discoverable"] is True
+    assert sub.queue.get_nowait().kind == "controllers"
     path = device_path(SRC_PATH, PHONE_MAC)
     bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True)
     sub.queue.get_nowait()
@@ -151,7 +159,7 @@ async def test_signals_for_unmanaged_objects_are_ignored(
     inv.handle(
         BusSignal("interfaces_removed", "/org/bluez/hci9/dev_x", None, ["org.bluez.Device1"])
     )
-    inv.handle(BusSignal("interfaces_removed", "/org/bluez/hci0", None, ["org.bluez.Adapter1"]))
+    inv.handle(BusSignal("interfaces_removed", "/org/bluez/hci7", None, ["org.bluez.Adapter1"]))
     assert sub.queue.empty()
     assert inv.device_path("DD:DD:DD:DD:DD:01") is None
 
@@ -201,3 +209,123 @@ async def test_forget_of_config_device_emits_removed_then_placeholder(
     assert placeholder.kind == "device" and placeholder.data["name"] is None
     assert placeholder.data["paired"] is False and placeholder.data["in_config"] is True
     assert placeholder.data["uuids"] == [] and placeholder.data["alias"] == "pc-pro"
+
+
+# ----- R-12 (#23) : contrôleurs et rôles -----
+async def test_state_exposes_all_controllers_and_roles(service: BluezService, bus: FakeBus) -> None:
+    await started(service)
+    bus.objects["/org/bluez/hci5"] = adapter_obj("AA:BB:CC:00:00:09", "raspberrypi", Pairable=False)
+    service.inventory.load(bus.objects)  # contrôleur hors config (ex. UART interne)
+    state = service.inventory.state()
+    by_mac = {c["mac"]: c for c in state["controllers"]}
+    assert set(by_mac) == {"AA:BB:CC:00:00:01", "AA:BB:CC:00:00:02", "AA:BB:CC:00:00:09"}
+    extra = by_mac["AA:BB:CC:00:00:09"]
+    assert extra["role"] is None and extra["present"] is True and extra["hci"] == "hci5"
+    assert extra["name"] == "raspberrypi" and extra["bus"] in ("usb", "uart", "unknown")
+    assert state["roles"] == {
+        "sources": "AA:BB:CC:00:00:01",
+        "headsets": "AA:BB:CC:00:00:02",
+        "source": "config",
+        "pending": False,
+        "restart_expected": False,
+    }
+
+
+async def test_assigned_but_absent_controller_is_listed_not_present() -> None:
+    cfg = parse_config(
+        {"adapters": [{"mac": "AA:BB:CC:00:00:01", "name": "btmux", "roles": ["sources"]}]}
+    )
+    svc = BluezService(cfg, FakeBus({}), adapter_wait=0.2)
+    await started(svc)
+    [ctrl] = svc.inventory.state()["controllers"]
+    assert ctrl == {
+        "mac": "AA:BB:CC:00:00:01",
+        "hci": None,
+        "name": "btmux",
+        "bus": "unknown",
+        "usb_id": None,
+        "role": "sources",
+        "powered": False,
+        "pairable": False,
+        "discoverable": False,
+        "connected_devices": 0,
+        "present": False,
+    }
+    roles = svc.inventory.state()["roles"]
+    assert roles["sources"] == "AA:BB:CC:00:00:01" and roles["headsets"] is None
+
+
+async def test_controller_hotplug_emits_controllers_events(
+    service: BluezService, bus: FakeBus
+) -> None:
+    await started(service)
+    sub = service.inventory.subscribe()
+    ifaces = adapter_obj("AA:BB:CC:00:00:09", "raspberrypi")
+    bus.objects["/org/bluez/hci5"] = ifaces
+    bus.emit(BusSignal("interfaces_added", "/org/bluez/hci5", None, ifaces))
+    kinds = [sub.queue.get_nowait().kind for _ in range(sub.queue.qsize())]
+    assert "controllers" in kinds
+    bus.emit(BusSignal("interfaces_removed", "/org/bluez/hci5", None, ["org.bluez.Adapter1"]))
+    removed = sub.queue.get_nowait()
+    while removed.kind != "controllers":
+        removed = sub.queue.get_nowait()
+    assert "AA:BB:CC:00:00:09" not in {c["mac"] for c in removed.data}
+
+
+async def test_assigned_controller_reappearing_becomes_present(
+    service: BluezService, bus: FakeBus
+) -> None:
+    await started(service)
+    bus.emit(BusSignal("interfaces_removed", SRC_PATH, None, ["org.bluez.Adapter1"]))
+    gone = next(c for c in service.inventory.controllers() if c.mac == "AA:BB:CC:00:00:01")
+    assert gone.present is False and gone.hci is None
+    bus.emit(BusSignal("interfaces_added", SRC_PATH, None, adapter_obj("AA:BB:CC:00:00:01")))
+    back = next(c for c in service.inventory.controllers() if c.mac == "AA:BB:CC:00:00:01")
+    assert back.present is True and back.hci == "hci1" and back.role == "sources"
+
+
+async def test_controllers_without_role_are_closed_at_start_and_on_hotplug(
+    service: BluezService, bus: FakeBus
+) -> None:
+    bus.objects["/org/bluez/hci5"] = adapter_obj(
+        "AA:BB:CC:00:00:09", "raspberrypi", Pairable=True, Discoverable=True
+    )
+    await started(service)
+    assert ("/org/bluez/hci5", "org.bluez.Adapter1", "Pairable", False) in bus.sets
+    assert ("/org/bluez/hci5", "org.bluez.Adapter1", "Discoverable", False) in bus.sets
+    assert not any(s[0] == "/org/bluez/hci5" and s[2] == "Powered" for s in bus.sets)
+    hot = adapter_obj("AA:BB:CC:00:00:0A", "usb-dongle", Pairable=True)
+    bus.objects["/org/bluez/hci6"] = hot
+    bus.emit(BusSignal("interfaces_added", "/org/bluez/hci6", None, hot))
+    await asyncio.sleep(0.05)
+    assert ("/org/bluez/hci6", "org.bluez.Adapter1", "Pairable", False) in bus.sets
+    # réouverture sauvage d'un contrôleur sans rôle : refermé
+    bus.sets.clear()
+    bus.change("/org/bluez/hci6", "org.bluez.Adapter1", Discoverable=True)
+    await asyncio.sleep(0.05)
+    assert ("/org/bluez/hci6", "org.bluez.Adapter1", "Discoverable", False) in bus.sets
+
+
+def test_probe_controller_reads_usb_ids_and_uart(tmp_path: Path) -> None:
+    from btmux.bluez.sysfs import probe_controller
+
+    usb = tmp_path / "devices" / "usb1" / "1-1"
+    (usb / "1-1:1.0" / "bluetooth" / "hci1").mkdir(parents=True)
+    (usb / "idVendor").write_text("2357\n")
+    (usb / "idProduct").write_text("0604\n")
+    uart = tmp_path / "devices" / "platform" / "soc" / "fe201000.serial" / "bluetooth" / "hci0"
+    uart.mkdir(parents=True)
+    other = tmp_path / "devices" / "virtual" / "bluetooth" / "hci2"
+    other.mkdir(parents=True)
+    root = tmp_path / "class"
+    root.mkdir()
+    for name, target in (
+        ("hci1", usb / "1-1:1.0" / "bluetooth" / "hci1"),
+        ("hci0", uart),
+        ("hci2", other),
+    ):
+        (root / name).symlink_to(target)
+    assert probe_controller("hci1", root) == ("usb", "2357:0604")
+    assert probe_controller("hci0", root) == ("uart", None)
+    assert probe_controller("hci2", root) == ("unknown", None)
+    assert probe_controller("hci9", root) == ("unknown", None)

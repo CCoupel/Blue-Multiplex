@@ -42,6 +42,27 @@ class AdapterRegistry:
         self._infos = [AdapterInfo(i.mac, i.name, i.roles, by_mac.get(i.mac)) for i in self._infos]
         return [i.mac for i in self._infos if i.path is None]
 
+    def adapter_added(self, path: str, mac: str) -> bool:
+        """Hotplug : un contrôleur apparaît ; vrai s'il correspond à un contrôleur affecté."""
+        mac = mac.upper()
+        hit = any(i.mac == mac for i in self._infos)
+        if hit:
+            self._infos = [
+                AdapterInfo(i.mac, i.name, i.roles, path if i.mac == mac else i.path)
+                for i in self._infos
+            ]
+        return hit
+
+    def adapter_removed(self, path: str) -> bool:
+        """Hotplug : un contrôleur disparaît ; vrai s'il était affecté."""
+        hit = any(i.path == path for i in self._infos)
+        if hit:
+            self._infos = [
+                AdapterInfo(i.mac, i.name, i.roles, None if i.path == path else i.path)
+                for i in self._infos
+            ]
+        return hit
+
     @property
     def infos(self) -> list[AdapterInfo]:
         return list(self._infos)

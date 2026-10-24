@@ -166,6 +166,56 @@ class PairingWindowModel:
 
 
 @dataclass(frozen=True)
+class ControllerModel:
+    """Contrôleur Bluetooth (#23) : présent ou affecté-mais-absent (`present=False`)."""
+
+    mac: str
+    hci: str | None
+    name: str
+    bus: Literal["usb", "uart", "unknown"]
+    usb_id: str | None
+    role: RoleName | None
+    powered: bool
+    pairable: bool
+    discoverable: bool
+    connected_devices: int
+    present: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "mac": self.mac,
+            "hci": self.hci,
+            "name": self.name,
+            "bus": self.bus,
+            "usb_id": self.usb_id,
+            "role": self.role,
+            "powered": self.powered,
+            "pairable": self.pairable,
+            "discoverable": self.discoverable,
+            "connected_devices": self.connected_devices,
+            "present": self.present,
+        }
+
+
+@dataclass(frozen=True)
+class RolesModel:
+    sources: str | None
+    headsets: str | None
+    source: Literal["state", "config"]
+    pending: bool = False
+    restart_expected: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "sources": self.sources,
+            "headsets": self.headsets,
+            "source": self.source,
+            "pending": self.pending,
+            "restart_expected": self.restart_expected,
+        }
+
+
+@dataclass(frozen=True)
 class DeviceRemovedModel:
     mac: str
     adapter: RoleName

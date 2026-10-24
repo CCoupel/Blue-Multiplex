@@ -92,7 +92,14 @@ async def test_locked_api_without_token(service: BluezService) -> None:
 async def test_state_discovered_and_503_when_bluez_down(api: _AsyncCtx) -> None:
     async with api as a:
         status, body = await a.req("GET", "/api/state")
-        assert status == 200 and set(body) == {"version", "adapters", "devices", "pairing"}
+        assert status == 200 and set(body) == {
+            "version",
+            "adapters",
+            "devices",
+            "pairing",
+            "controllers",
+            "roles",
+        }
         assert (await a.req("GET", "/api/discovered"))[1] == []
         a.service.ready.clear()
         status, body = await a.req("GET", "/api/state")

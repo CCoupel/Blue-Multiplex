@@ -14,16 +14,19 @@ from btmux.bluez.adapters import ADAPTER_IFACE, AdapterRegistry
 from btmux.bluez.bus import BusSignal, ManagedObjects, Props
 from btmux.bluez.models import (
     AdapterModel,
+    ControllerModel,
     DeviceModel,
     DeviceRemovedModel,
     DiscoveredModel,
     KindName,
     PairingWindowModel,
     RoleName,
+    RolesModel,
     deduce_kind,
     format_class,
     profiles_from_uuids,
 )
+from btmux.bluez.sysfs import Probe, probe_controller
 from btmux.config import Config
 from btmux.log import kv
 
@@ -68,7 +71,11 @@ class Inventory:
         registry: AdapterRegistry,
         *,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        probe: Probe = probe_controller,
     ) -> None:
+        self._probe = probe
+        self._roles_pending = False
+        self._last_controllers: list[dict[str, Any]] = []
         self._config = config
         self._registry = registry
         self._now = now
@@ -106,13 +113,16 @@ class Inventory:
         for props in self._devices.values():
             if props.get("Connected"):
                 self._last_seen[str(props.get("Address", "")).upper()] = _utc_iso(self._now())
+        self._last_controllers = [c.to_dict() for c in self.controllers()]
 
     def handle(self, signal: BusSignal) -> None:
         if signal.kind == "interfaces_added":
             for iface, props in signal.data.items():
                 if iface == ADAPTER_IFACE:
                     self._adapters[signal.path] = dict(props)
+                    self._registry.adapter_added(signal.path, str(props.get("Address", "")))
                     self._emit_adapter(signal.path)
+                    self._emit_controllers()
                 elif iface == DEVICE_IFACE:
                     self._devices[signal.path] = dict(props)
                     self._device_changed(signal.path, new=True)
@@ -122,12 +132,15 @@ class Inventory:
             for iface in signal.data:
                 if iface == ADAPTER_IFACE:
                     self._adapters.pop(signal.path, None)
+                    self._registry.adapter_removed(signal.path)
+                    self._emit_controllers()
                 elif iface == DEVICE_IFACE:
                     self._device_removed(signal.path)
         elif signal.kind == "properties_changed":
             if signal.interface == ADAPTER_IFACE and signal.path in self._adapters:
                 self._adapters[signal.path].update(signal.data)
                 self._emit_adapter(signal.path)
+                self._emit_controllers()
             elif signal.interface == DEVICE_IFACE and signal.path in self._devices:
                 props = self._devices[signal.path]
                 was_connected = bool(props.get("Connected"))
@@ -136,6 +149,8 @@ class Inventory:
                 if "Connected" in signal.data and bool(props.get("Connected")) != was_connected:
                     self._last_seen[str(props.get("Address", "")).upper()] = _utc_iso(self._now())
                 self._device_changed(signal.path, changed=set(signal.data))
+                if "Connected" in signal.data:
+                    self._emit_controllers()
                 if props.get("Paired") and not was_paired:
                     self._notify_paired(signal.path)
 
@@ -169,6 +184,22 @@ class Inventory:
 
     def emit_pairing(self) -> None:
         self.emit("pairing", self._window().to_dict())
+
+    def _emit_controllers(self) -> None:
+        """Événement `controllers` (liste complète) si elle a changé depuis le dernier envoi."""
+        current = [c.to_dict() for c in self.controllers()]
+        if current != self._last_controllers:
+            self._last_controllers = current
+            self.emit("controllers", current)
+
+    def mark_roles_pending(self) -> None:
+        """Après l'écriture de l'état : `roles {pending, restart_expected}` (dernier événement avant la coupure)."""
+        self._roles_pending = True
+        self.emit("roles", self.roles().to_dict())
+
+    @property
+    def roles_pending(self) -> bool:
+        return self._roles_pending
 
     def _emit_adapter(self, path: str) -> None:
         for model in self._adapter_models(path):
@@ -334,6 +365,69 @@ class Inventory:
                 models[mac] = self._placeholder(mac)
         return sorted(models.values(), key=lambda m: (m.adapter, m.alias or m.name, m.mac))
 
+    def unassigned_adapter_paths(self) -> list[str]:
+        """Contrôleurs BlueZ présents sans rôle (à fermer : ni appairable ni visible)."""
+        assigned = self._registry.paths()
+        return sorted(p for p in self._adapters if p not in assigned)
+
+    def controllers(self) -> list[ControllerModel]:
+        """Tous les contrôleurs présents + les contrôleurs affectés mais absents (`present:false`)."""
+        connected: dict[str, int] = {}
+        for path, props in self._devices.items():
+            if props.get("Connected"):
+                adapter = AdapterRegistry.adapter_of_device(path)
+                connected[adapter] = connected.get(adapter, 0) + 1
+        models: list[ControllerModel] = []
+        for path, props in sorted(self._adapters.items()):
+            info = self._registry.info_for_path(path)
+            hci = path.rsplit("/", 1)[-1]
+            bus, usb_id = self._probe(hci)
+            models.append(
+                ControllerModel(
+                    mac=str(props.get("Address", "")).upper(),
+                    hci=hci,
+                    name=str(props.get("Alias") or (info.name if info else hci)),
+                    bus=bus,
+                    usb_id=usb_id,
+                    role=info.roles[0] if info and info.roles else None,  # type: ignore[arg-type]
+                    powered=bool(props.get("Powered")),
+                    pairable=bool(props.get("Pairable")),
+                    discoverable=bool(props.get("Discoverable")),
+                    connected_devices=connected.get(path, 0),
+                    present=True,
+                )
+            )
+        for info in self._registry.infos:
+            if info.path is None:
+                models.append(
+                    ControllerModel(
+                        mac=info.mac,
+                        hci=None,
+                        name=info.name,
+                        bus="unknown",
+                        usb_id=None,
+                        role=info.roles[0] if info.roles else None,  # type: ignore[arg-type]
+                        powered=False,
+                        pairable=False,
+                        discoverable=False,
+                        connected_devices=0,
+                        present=False,
+                    )
+                )
+        return models
+
+    def roles(self) -> RolesModel:
+        def mac_of(role: str) -> str | None:
+            return next((i.mac for i in self._registry.infos if role in i.roles), None)
+
+        return RolesModel(
+            sources=mac_of("sources"),
+            headsets=mac_of("headsets"),
+            source=self._config.adapters_source,
+            pending=self._roles_pending,
+            restart_expected=self._roles_pending,
+        )
+
     def discovered(self) -> list[DiscoveredModel]:
         return sorted(self._discovered.values(), key=lambda m: (-(m.rssi or -999), m.mac))
 
@@ -343,6 +437,8 @@ class Inventory:
             "adapters": [a.to_dict() for a in self.adapters()],
             "devices": [d.to_dict() for d in self.devices()],
             "pairing": self._window().to_dict(),
+            "controllers": [c.to_dict() for c in self.controllers()],
+            "roles": self.roles().to_dict(),
         }
 
     def device_path(self, mac: str, role: str | None = None) -> str | None:

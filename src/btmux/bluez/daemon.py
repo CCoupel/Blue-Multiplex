@@ -51,6 +51,7 @@ class BluezService:
         self.ready = asyncio.Event()
         self._lost = asyncio.Event()
         self._handlers_installed = False
+        self._guards: set[asyncio.Future[None]] = set()
 
     # ----- démarrage / arrêt -----------------------------------------------------------------
     def _on_signal(self, signal: BusSignal) -> None:
@@ -60,6 +61,37 @@ class BluezService:
                 self._lost.set()
             return
         self.inventory.handle(signal)
+        self._guard_controller(signal)
+
+    def _guard_controller(self, signal: BusSignal) -> None:
+        """Hotplug / réouverture : tout contrôleur sans rôle reste fermé (#23) ; un contrôleur affecté qui
+        apparaît est mis dans l'état sûr (alimenté, appairage et découverte fermés)."""
+        opened = {"Pairable", "Discoverable"} & set(
+            signal.data
+            if signal.kind == "properties_changed" and isinstance(signal.data, dict)
+            else ()
+        )
+        if signal.kind == "interfaces_added" and ADAPTER_IFACE in signal.data:
+            pass
+        elif not (
+            signal.kind == "properties_changed"
+            and signal.interface == ADAPTER_IFACE
+            and opened
+            and self.registry.info_for_path(signal.path) is None
+            and any(signal.data[p] for p in opened)
+        ):
+            return
+        task = asyncio.ensure_future(self._close_controller(signal.path))
+        self._guards.add(task)
+        task.add_done_callback(self._guards.discard)
+
+    async def _close_controller(self, path: str) -> None:
+        assigned = self.registry.info_for_path(path) is not None
+        props = (("Powered", True),) if assigned else ()
+        for prop, value in (*props, ("Pairable", False), ("Discoverable", False)):
+            with contextlib.suppress(DBusCallError, BluezError):
+                await self.bus.set_property(path, ADAPTER_IFACE, prop, "b", value)
+        log.info(kv("controller_closed", path=path, assigned=assigned))
 
     async def _start_once(self) -> list[str]:
         """Connexion + inventaire + agent ; retourne les MAC d'adaptateurs absents (liste vide = OK)."""
@@ -112,15 +144,18 @@ class BluezService:
                 ):
                     with contextlib.suppress(DBusCallError):
                         await self.bus.set_property(info.path, ADAPTER_IFACE, prop, "b", value)
+            for path in self.inventory.unassigned_adapter_paths():  # contrôleurs sans rôle : fermés
+                for prop in ("Pairable", "Discoverable"):
+                    with contextlib.suppress(DBusCallError):
+                        await self.bus.set_property(path, ADAPTER_IFACE, prop, "b", False)
             objects = await self.bus.get_managed_objects()
+            watched = [i.path for i in self.registry.infos if i.path]
+            watched += self.inventory.unassigned_adapter_paths()
             open_ = [
-                info.mac
-                for info in self.registry.infos
-                if info.path
-                and (
-                    objects.get(info.path, {}).get(ADAPTER_IFACE, {}).get("Pairable")
-                    or objects.get(info.path, {}).get(ADAPTER_IFACE, {}).get("Discoverable")
-                )
+                str(objects[path][ADAPTER_IFACE].get("Address", path))
+                for path in watched
+                if objects.get(path, {}).get(ADAPTER_IFACE, {}).get("Pairable")
+                or objects.get(path, {}).get(ADAPTER_IFACE, {}).get("Discoverable")
             ]
             if not open_:
                 return
