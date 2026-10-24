@@ -31,6 +31,13 @@ SCENARIOS = HERE / "scenarios"
 MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 ALIAS_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 ROLES = ("sources", "headsets")
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+}
 
 
 def _iso(dt: datetime) -> str:
@@ -50,9 +57,9 @@ class Clock:
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str) -> None:
+    def __init__(self, status: int, code: str, message: str, details=None) -> None:
         super().__init__(message)
-        self.status, self.code, self.message = status, code, message
+        self.status, self.code, self.message, self.details = status, code, message, details
 
 
 class MockState:
@@ -93,6 +100,19 @@ class MockState:
                 self._open_window(w["adapter"], float(w.get("remaining_s", 60)), emit=False)
             self.buffer = []
             self.event_id = 0
+            # --- #23 : controleurs et affectation des roles
+            self.controllers = [dict(c, mac=c["mac"].upper()) for c in sc.get("controllers", [])]
+            self.roles = {
+                "sources": None,
+                "headsets": None,
+                "source": "config",
+                "pending": False,
+                "restart_expected": False,
+            }
+            self.roles.update(sc.get("roles", {}))
+            self.restart_delay = float(sc.get("restart_delay_s", 3.0))
+            self.restart_outage = float(sc.get("restart_outage_s", 12.0))
+            self.outage = False
 
     @staticmethod
     def _full_device(d: dict) -> dict:
@@ -125,10 +145,14 @@ class MockState:
             for q in list(self.subscribers):
                 q.put(msg)
 
+    def _state_event(self) -> str:
+        return f"event: state\nid: {self.event_id}\ndata: {json.dumps(self.state())}\n\n"
+
     def subscribe(self, last_event_id: str = "") -> queue.Queue:
-        """Abonne un client ; `Last-Event-ID` rejoue le tampon, sinon evenement `state` complet."""
+        """Abonne un client ; `Last-Event-ID` couvert -> rejoue, sinon (et sans id) -> `state`."""
         q: queue.Queue = queue.Queue()
         with self.lock:
+            covered = False
             if last_event_id.isdigit():
                 last = int(last_event_id)
                 ids = [i for i, _, _ in self.buffer]
@@ -137,10 +161,8 @@ class MockState:
                     for i, _, msg in self.buffer:
                         if i > last:
                             q.put(msg)
-                else:
-                    self.event_id += 1
-                    data = json.dumps(self.state())
-                    q.put(f"event: state\nid: {self.event_id}\ndata: {data}\n\n")
+            if not covered:  # premier evenement de la connexion (contrat 3db8c3c)
+                q.put(self._state_event())
             self.subscribers.append(q)
         return q
 
@@ -264,11 +286,27 @@ class MockState:
             "adapters": self.adapters,
             "devices": list(self.devices.values()),
             "pairing": self.pairing_view(),
+            "controllers": self.controllers,
+            "roles": self.roles,
         }
 
     def check_bluez(self) -> None:
         if self.unavailable:
             raise ApiError(503, "bluez_unavailable", "BlueZ indisponible (org.bluez absent du bus)")
+
+    def check_writable(self) -> None:
+        """Ecritures refusees (409) entre l'acceptation d'un changement de roles et l'arret."""
+        if self.roles["pending"]:
+            raise ApiError(
+                409, "change_pending", "changement de roles en cours : le service va redemarrer"
+            )
+
+    def check_role(self, role: str) -> None:
+        """409 role_unassigned quand le role vise n'a pas de controleur affecte/present."""
+        mac = self.roles.get(role)
+        ctrl = next((c for c in self.controllers if c["mac"] == mac), None)
+        if not mac or not ctrl or not ctrl.get("present", True):
+            raise ApiError(409, "role_unassigned", f"aucun controleur affecte au role '{role}'")
 
     def check_mac(self, mac: str) -> str:
         if not MAC_RE.match(mac):
@@ -278,22 +316,27 @@ class MockState:
     # --- actions de l'API -----------------------------------------------------------------
     def open_pairing(self, body: dict) -> dict:
         self.check_bluez()
+        self.check_writable()
         adapter, duration = body.get("adapter"), body.get("duration", 60)
         if adapter not in ROLES:
             raise ApiError(400, "invalid_adapter", "adapter doit etre 'sources' ou 'headsets'")
         if isinstance(duration, bool) or not isinstance(duration, int) or not 1 <= duration <= 300:
             raise ApiError(400, "invalid_duration", "duration doit etre un entier entre 1 et 300")
+        self.check_role(adapter)
         if self.pairing:
             raise ApiError(409, "pairing_open", "une fenetre d'appairage est deja ouverte")
         return self._open_window(adapter, duration)
 
     def close_pairing(self) -> None:
         self.check_bluez()
+        self.check_writable()
         self._close_window()
 
     def pair(self, mac: str) -> None:
         self.check_bluez()
+        self.check_writable()
         mac = self.check_mac(mac)
+        self.check_role("headsets")
         if mac in self.bluez_error:
             raise ApiError(502, "bluez_error", "org.bluez.Error.Failed: Page Timeout")
         if mac in self.stale_bond:
@@ -304,10 +347,14 @@ class MockState:
             raise ApiError(409, "pairing_closed", "ouvrez d'abord une fenetre 'headsets'")
         if mac not in self.discovered:
             raise ApiError(404, "not_discovered", f"{mac} n'a pas ete decouvert")
+        if any(t[1] == "paired" and t[2].get("mac") == mac for t in self.tasks):
+            raise ApiError(409, "operation_in_progress", f"appairage de {mac} deja en cours")
         self.schedule(self.pair_delay, "paired", mac=mac)
 
-    def _known(self, mac: str) -> dict:
+    def _known(self, mac: str, write: bool = True) -> dict:
         self.check_bluez()
+        if write:
+            self.check_writable()
         mac = self.check_mac(mac)
         if mac in self.bluez_error:
             raise ApiError(502, "bluez_error", "org.bluez.Error.Failed: Connection refused")
@@ -318,6 +365,8 @@ class MockState:
 
     def connect(self, mac: str, connected: bool) -> None:
         dev = self._known(mac)
+        if connected:
+            self.check_role(dev["adapter"])
         self.schedule(self.connect_delay, "connected", mac=dev["mac"], connected=connected)
 
     def forget(self, mac: str) -> None:
@@ -352,6 +401,131 @@ class MockState:
         dev.update(body)
         self.emit("device", dev)
         return dev
+
+    # --- #23 : controleurs ------------------------------------------------------------------
+    def controllers_view(self) -> dict:
+        self.check_bluez()
+        return {"controllers": self.controllers, "roles": self.roles}
+
+    def set_roles(self, body) -> tuple[int, dict]:
+        self.check_bluez()
+        self.check_writable()
+        if not isinstance(body, dict) or set(body) - {"sources", "headsets", "confirm"}:
+            raise ApiError(400, "invalid_body", "champs : sources, headsets (MAC ou null), confirm")
+        if not {"sources", "headsets"} <= set(body):
+            raise ApiError(
+                400, "invalid_body", "sources et headsets sont obligatoires (MAC ou null)"
+            )
+        if not isinstance(body.get("confirm", False), bool):
+            raise ApiError(400, "invalid_confirm", "confirm doit etre un booleen")
+        new = {}
+        for role in ROLES:
+            v = body[role]
+            if v is None:
+                new[role] = None
+                continue
+            if not isinstance(v, str):
+                raise ApiError(400, "invalid_mac", f"{role}: MAC attendue ou null")
+            mac = self.check_mac(v)
+            ctrl = next((c for c in self.controllers if c["mac"] == mac), None)
+            if not ctrl or not ctrl.get("present", True):
+                raise ApiError(400, "unknown_controller", f"controleur inconnu ou absent : {mac}")
+            new[role] = mac
+        if new["sources"] is not None and new["sources"] == new["headsets"]:
+            raise ApiError(400, "same_controller", "un controleur ne peut porter qu'un seul role")
+        if self.pairing:
+            raise ApiError(409, "pairing_open", "fermez la fenetre d'appairage avant de changer")
+        affected = [r for r in ROLES if new[r] != self.roles[r]]
+        if not affected:
+            return 200, self.roles
+        connected = [
+            {"mac": d["mac"], "alias": d["alias"], "name": d["name"], "adapter": d["adapter"]}
+            for d in self.devices.values()
+            if d["connected"] and d["adapter"] in affected
+        ]
+        if connected and not body.get("confirm", False):
+            raise ApiError(
+                409,
+                "devices_connected",
+                "des appareils sont connectes : confirm:true pour les deconnecter",
+                details=connected,
+            )
+        for item in connected:  # confirm:true -> le daemon deconnecte d'abord
+            dev = self.devices[item["mac"]]
+            dev["connected"] = False
+            self.emit("device", dev)
+        for c in self.controllers:  # roles, controleurs sans role fermes
+            c["role"] = next((r for r in ROLES if new[r] == c["mac"]), None)
+            if c["role"] is None:
+                c["pairable"] = c["discoverable"] = False
+        self.roles.update(new, source="state", pending=True, restart_expected=True)
+        self.emit("controllers", self.controllers)
+        self.emit("roles", self.roles)
+        self.schedule(self.restart_delay, "begin_outage")
+        self.schedule(self.restart_delay + self.restart_outage, "end_outage")
+        return 202, self.roles
+
+    def _do_begin_outage(self) -> None:
+        """Arret du service : l'API ne repond plus, les flux SSE sont coupes."""
+        self.outage = True
+        for q in list(self.subscribers):
+            q.put(None)
+
+    def _do_end_outage(self) -> None:
+        """Redemarrage termine : ids remis a zero, premier evenement = `state` complet."""
+        self.outage = False
+        self.buffer, self.event_id = [], 0
+        self.roles.update(pending=False, restart_expected=False)
+        old = {a["role"]: a for a in self.adapters}
+        adapters = []
+        for role in ROLES:
+            ctrl = next((c for c in self.controllers if c["mac"] == self.roles[role]), None)
+            if not ctrl or not ctrl.get("present", True):
+                continue
+            base = old.get(role, {"class": "0x6c0404", "powered": True})
+            adapters.append(
+                {
+                    "role": role,
+                    "mac": ctrl["mac"],
+                    "alias": ctrl["name"],
+                    "hci": ctrl["hci"],
+                    "powered": True,
+                    "discoverable": False,
+                    "pairable": False,
+                    "class": base.get("class", "0x6c0404"),
+                }
+            )
+        self.adapters = adapters
+
+    def hotplug(self, body: dict) -> dict:
+        """Pilotage mock : add / remove / update d'un controleur + evenement `controllers`."""
+        action = body.get("action")
+        if action == "add":
+            ctrl = {
+                "role": None,
+                "powered": True,
+                "pairable": False,
+                "discoverable": False,
+                "connected_devices": 0,
+                "present": True,
+                "usb_id": None,
+                "bus": "usb",
+                **body["controller"],
+            }
+            ctrl["mac"] = ctrl["mac"].upper()
+            self.controllers.append(ctrl)
+        elif action == "remove":
+            mac = body["mac"].upper()
+            self.controllers = [c for c in self.controllers if c["mac"] != mac]
+        elif action == "update":
+            mac = body["mac"].upper()
+            for c in self.controllers:
+                if c["mac"] == mac:
+                    c.update(body.get("props", {}))
+        else:
+            raise ApiError(400, "invalid_action", "action : add|remove|update")
+        self.emit("controllers", self.controllers)
+        return {"controllers": self.controllers}
 
     # --- pilotage hors contrat ------------------------------------------------------------
     def incoming(self, body: dict) -> tuple[int, dict]:
@@ -400,6 +574,8 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
                     "Content-Type", f"{ctype}; charset=utf-8" if "json" in ctype else ctype
                 )
             self.send_header("Content-Length", str(len(raw)))
+            for k, v in SECURITY_HEADERS.items():
+                self.send_header(k, v)
             for k, v in (extra or {}).items():
                 self.send_header(k, v)
             self.end_headers()
@@ -407,7 +583,10 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
                 self.wfile.write(raw)
 
         def _error(self, e: ApiError) -> None:
-            self._send(e.status, {"error": e.code, "message": e.message})
+            body = {"error": e.code, "message": e.message}
+            if e.details is not None:
+                body["details"] = e.details
+            self._send(e.status, body)
 
         def _authorized(self, query: dict) -> bool:
             got = self.headers.get("Authorization", "")
@@ -432,6 +611,10 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
                 if path.startswith("/__mock__/"):
                     return self._control(path, query)
                 if path.startswith("/api/"):
+                    if state.outage:  # service arrete : connexion coupee, aucune reponse
+                        self.close_connection = True
+                        self.connection.close()
+                        return None
                     if path != "/api/health" and not self._authorized(query):
                         raise ApiError(401, "unauthorized", "jeton Bearer requis")
                     if path == "/api/events" and self.command == "GET":
@@ -442,7 +625,7 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
             except ApiError as e:
                 self._error(e)
 
-        do_GET = do_POST = do_DELETE = do_PATCH = _dispatch
+        do_GET = do_POST = do_DELETE = do_PATCH = do_PUT = _dispatch
 
         def _api(self, path: str) -> None:
             m, c = self.command, state
@@ -456,6 +639,11 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
             if path == "/api/pairing" and m == "DELETE":
                 c.close_pairing()
                 return self._send(204)
+            if path == "/api/controllers" and m == "GET":
+                return self._send(200, c.controllers_view())
+            if path == "/api/controllers/roles" and m == "PUT":
+                status, body = c.set_roles(self._json_body())
+                return self._send(status, body)
             if path == "/api/discovered" and m == "GET":
                 c.check_bluez()
                 return self._send(200, list(c.discovered.values()))
@@ -535,6 +723,8 @@ def make_handler(state: MockState, token: str, static_dir: Path | None):
                 if path == "/__mock__/incoming":
                     status, out = c.incoming(body)
                     return self._send(status, out)
+                if path == "/__mock__/controllers":
+                    return self._send(200, c.hotplug(body))
                 if path == "/__mock__/discovered-gone":
                     mac = c.check_mac(body.get("mac", ""))
                     if mac not in c.discovered:

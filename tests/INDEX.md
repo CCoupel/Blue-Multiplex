@@ -31,3 +31,4 @@
 | tests/hardware/bluez/pairing/ | hardware | bluez | Appairages sur le Pi reel : fenetre sources, refus hors fenetre, casque initie par le Pi, forget (#20) | feature | hardware |
 | tests/procedures/ui/pairing/ | procedure | webui | Web UI appairages : jeton, fenetre, sources, casques, erreurs, SSE, responsive (#16 #21) | feature | critical |
 | tests/webui/api.test.mjs | unit | webui | Client JS api.js : parsing SSE, Last-Event-ID, 401, retry, ApiError (`node --test`, hors pytest/CI) (#16) | feature | |
+| tests/integration/api/controllers/ | integration | api | Controleurs, affectation des roles, redemarrage pilote, change_pending, role_unassigned (#23) | feature | critical |

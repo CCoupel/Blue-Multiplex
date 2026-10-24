@@ -53,7 +53,7 @@ def test_state_prints_the_api_state_as_json(ctl):
     proc = ctl("state")
     assert proc.returncode == 0, proc.stderr
     st = json.loads(proc.stdout)
-    assert set(st) == {"version", "adapters", "devices", "pairing"}
+    assert set(st) == {"version", "adapters", "devices", "pairing", "controllers", "roles"}
 
 
 def test_pairing_open_then_close(ctl, api):

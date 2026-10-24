@@ -105,5 +105,53 @@
   "bluez_error_macs": [],
   "pair_delay_s": 1.0,
   "connect_delay_s": 0.5,
-  "bluez_unavailable": true
+  "bluez_unavailable": true,
+  "controllers": [
+    {
+      "mac": "B8:27:EB:1A:2E:D6",
+      "hci": "hci2",
+      "name": "raspberrypi",
+      "bus": "uart",
+      "usb_id": null,
+      "role": null,
+      "powered": true,
+      "pairable": false,
+      "discoverable": false,
+      "connected_devices": 0,
+      "present": true
+    },
+    {
+      "mac": "AA:BB:CC:00:00:01",
+      "hci": "hci1",
+      "name": "btmux",
+      "bus": "usb",
+      "usb_id": "2357:0604",
+      "role": "sources",
+      "powered": true,
+      "pairable": false,
+      "discoverable": false,
+      "connected_devices": 1,
+      "present": true
+    },
+    {
+      "mac": "AA:BB:CC:00:00:02",
+      "hci": "hci0",
+      "name": "btmux-hp",
+      "bus": "usb",
+      "usb_id": "2357:0604",
+      "role": "headsets",
+      "powered": true,
+      "pairable": false,
+      "discoverable": false,
+      "connected_devices": 1,
+      "present": true
+    }
+  ],
+  "roles": {
+    "sources": "AA:BB:CC:00:00:01",
+    "headsets": "AA:BB:CC:00:00:02",
+    "source": "config",
+    "pending": false,
+    "restart_expected": false
+  }
 }

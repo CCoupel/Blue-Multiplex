@@ -1,0 +1,74 @@
+{
+  "version": "0.2.0.0",
+  "adapters": [],
+  "devices": [],
+  "discoverable_headsets": [
+    {
+      "mac": "AA:11:22:33:44:55",
+      "name": "Bose QC45",
+      "rssi": -60,
+      "class": "0x240404",
+      "reveal_after_s": 1.0
+    },
+    {
+      "mac": "AA:11:22:33:44:66",
+      "name": "JBL Tune 760",
+      "rssi": -72,
+      "class": "0x240404",
+      "reveal_after_s": 2.5
+    }
+  ],
+  "pairing": null,
+  "stale_bond_macs": [],
+  "bluez_error_macs": [],
+  "pair_delay_s": 1.0,
+  "connect_delay_s": 0.5,
+  "controllers": [
+    {
+      "mac": "B8:27:EB:1A:2E:D6",
+      "hci": "hci2",
+      "name": "raspberrypi",
+      "bus": "uart",
+      "usb_id": null,
+      "role": null,
+      "powered": true,
+      "pairable": false,
+      "discoverable": false,
+      "connected_devices": 0,
+      "present": true
+    },
+    {
+      "mac": "AA:BB:CC:00:00:01",
+      "hci": "hci1",
+      "name": "btmux",
+      "bus": "usb",
+      "usb_id": "2357:0604",
+      "role": null,
+      "powered": true,
+      "pairable": false,
+      "discoverable": false,
+      "connected_devices": 0,
+      "present": true
+    },
+    {
+      "mac": "AA:BB:CC:00:00:02",
+      "hci": "hci0",
+      "name": "btmux-hp",
+      "bus": "usb",
+      "usb_id": "2357:0604",
+      "role": null,
+      "powered": true,
+      "pairable": false,
+      "discoverable": false,
+      "connected_devices": 0,
+      "present": true
+    }
+  ],
+  "roles": {
+    "sources": null,
+    "headsets": null,
+    "source": "state",
+    "pending": false,
+    "restart_expected": false
+  }
+}

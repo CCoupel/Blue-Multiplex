@@ -97,16 +97,27 @@ def test_sse_forget_of_non_config_device_emits_only_device_removed(api):
     assert "event: device.removed" in "".join(lines)
 
 
+def test_sse_first_event_of_a_connection_is_a_full_state(api):
+    _, lines = api.sse(1, keep_state=True)
+    assert lines[0].startswith("event: state")
+    data = next(json.loads(x[6:]) for x in lines if x.startswith("data:"))
+    assert set(data) >= {"version", "adapters", "devices", "pairing"}
+
+
 def test_sse_last_event_id_replays_missed_events(api):
     api.call("POST", "/api/pairing", {"adapter": "sources", "duration": 60})  # ids 1 (adapter), 2
-    _, lines = api.sse(1, headers={"Authorization": "Bearer t0k3n", "Last-Event-ID": "1"})
+    _, lines = api.sse(
+        1, headers={"Authorization": "Bearer t0k3n", "Last-Event-ID": "1"}, keep_state=True
+    )
     text = "".join(lines)
     assert "event: pairing" in text and "event: state" not in text
 
 
 def test_sse_unknown_last_event_id_sends_a_full_state_event(api):
-    _, lines = api.sse(1, headers={"Authorization": "Bearer t0k3n", "Last-Event-ID": "9999"})
+    _, lines = api.sse(
+        1, headers={"Authorization": "Bearer t0k3n", "Last-Event-ID": "9999"}, keep_state=True
+    )
     text = "".join(lines)
     assert "event: state" in text
     data = next(json.loads(x[6:]) for x in lines if x.startswith("data:"))
-    assert set(data) == {"version", "adapters", "devices", "pairing"}
+    assert set(data) >= {"version", "adapters", "devices", "pairing"}

@@ -44,7 +44,15 @@ class Client:
         conn.close()
         return resp.status, (json.loads(raw) if raw else None)
 
-    def sse(self, n_events, trigger=None, headers="default", path="/api/events", timeout=8):
+    def sse(
+        self,
+        n_events,
+        trigger=None,
+        headers="default",
+        path="/api/events",
+        timeout=8,
+        keep_state=False,
+    ):
         """Ouvre le flux SSE, execute `trigger`, lit `n_events` evenements -> (status, lignes)."""
         conn = self._conn(timeout)
         h = {"Authorization": f"Bearer {self.token}"} if headers == "default" else headers
@@ -53,16 +61,25 @@ class Client:
         if resp.status != 200:
             conn.close()
             return resp.status, []
-        out, events = [], 0
+        out, events, first = [], 0, True
         if trigger:
             trigger()
+        block: list[str] = []
         while events < n_events:
             line = resp.fp.readline().decode()
             if not line:
                 break
-            out.append(line)
-            if line == "\n" and any(x.startswith("event:") for x in out[-6:]):
-                events += 1
+            block.append(line)
+            if line != "\n":
+                continue
+            name = next((x[7:].strip() for x in block if x.startswith("event:")), None)
+            if name is not None:
+                drop = first and name == "state" and not keep_state  # State initial (3db8c3c)
+                first = False
+                if not drop:
+                    out.extend(block)
+                    events += 1
+            block = []
         conn.close()
         return resp.status, out
 

@@ -25,7 +25,7 @@ def _open_headsets_and_discover(c, expected=2):
 def test_state_matches_models_contract(api):
     status, st = api.call("GET", "/api/state")
     assert status == 200
-    assert set(st) == {"version", "adapters", "devices", "pairing"}
+    assert set(st) == {"version", "adapters", "devices", "pairing", "controllers", "roles"}
     assert {a["role"] for a in st["adapters"]} == {"sources", "headsets"}
     for a in st["adapters"]:
         assert set(a) == {
@@ -153,6 +153,28 @@ def test_pair_headset_initiated_by_the_pi(api):
             for d in api.call("GET", "/api/state")[1]["devices"]
         )
     )
+
+
+def test_pair_twice_on_same_device_is_409_operation_in_progress(api_factory):
+    c = api_factory("default", time_scale=1.0)
+    c.call("POST", "/api/pairing", HP)
+    assert wait_for(lambda: len(c.call("GET", "/api/discovered")[1]) >= 1, timeout=8)
+    mac = c.call("GET", "/api/discovered")[1][0]["mac"]
+    assert c.call("POST", f"/api/devices/{mac}/pair")[0] == 202
+    status, body = c.call("POST", f"/api/devices/{mac}/pair")
+    assert status == 409 and body["error"] == "operation_in_progress"
+
+
+def test_responses_carry_security_headers(api):
+    conn = api._conn(5)
+    conn.request("GET", "/api/health")
+    r = conn.getresponse()
+    r.read()
+    conn.close()
+    assert r.getheader("X-Content-Type-Options") == "nosniff"
+    assert r.getheader("X-Frame-Options") == "DENY"
+    assert r.getheader("Referrer-Policy") == "no-referrer"
+    assert "default-src" in (r.getheader("Content-Security-Policy") or "")
 
 
 def test_pair_unknown_device_404(api):
