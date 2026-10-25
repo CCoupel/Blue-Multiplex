@@ -36,8 +36,10 @@ add_only() {   # MAC -> ajoutée à ONLY (« MAC1 MAC2 », majuscules, dédoublo
   case " $ONLY " in *" ${1^^} "*) ;; *) ONLY="${ONLY:+$ONLY }${1^^}" ;; esac
 }
 # Requêtes de hotplug (#23) : le répertoire appartient à l'utilisateur de service, la lecture est faite par root. On refuse
-# tout ce qui n'est pas un fichier régulier, puis on vérifie que le descripteur ouvert désigne bien ce fichier (un lien
-# substitué entre le test et l'ouverture est détecté). Jamais de contenu rejeté dans le journal.
+# tout ce qui n'est pas un fichier régulier, puis on exige que le chemin canonique soit identique au chemin donné (aucun
+# lien, ni sur le fichier ni sur un répertoire parent) et que le descripteur ouvert désigne ce fichier. Un lien substitué
+# après cette vérification n'est pas détecté (résiduel accepté : le répertoire appartient au compte de service déjà
+# privilégié sur le daemon, et seules des MAC valides sont exploitables). Jamais de contenu rejeté dans le journal.
 read_requests() {
   local f="$1" mac bad=0 real opened
   notreg() { echo "btmux-adapters: AVERTISSEMENT $f n'est pas un fichier régulier (lien symbolique ou autre) — ignoré" >&2; }
@@ -47,7 +49,7 @@ read_requests() {
   if [ -e /proc/self/fd/3 ]; then
     real="$(readlink -f -- "$f" 2>/dev/null || true)"
     opened="$(readlink /proc/self/fd/3 2>/dev/null || true)"
-    if [ -z "$real" ] || [ "$opened" != "$real" ] || [ ! -f /proc/self/fd/3 ]; then
+    if [ -z "$real" ] || [ "$real" != "$f" ] || [ "$opened" != "$real" ] || [ ! -f /proc/self/fd/3 ]; then
       exec 3<&-; notreg; return 0
     fi
   fi

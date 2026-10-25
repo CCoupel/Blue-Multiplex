@@ -194,6 +194,20 @@ def test_service_ignores_a_symlinked_request(tmp_path: Path) -> None:
     assert "root:x" not in proc.stdout + proc.stderr
 
 
+def test_service_ignores_a_request_reached_through_a_symlinked_directory(tmp_path: Path) -> None:
+    """Chemin canonique = chemin donné : un répertoire parent remplacé par un lien est refusé."""
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    (real_dir / "identity.request").write_text(_req("AA:BB:CC:00:00:02"))
+    (tmp_path / "linked").symlink_to(real_dir)
+    proc, calls = _run(
+        tmp_path, cmd=_service_command(tmp_path, tmp_path / "linked" / "identity.request")
+    )
+    assert proc.returncode == 0
+    assert "n'est pas un fichier régulier" in proc.stderr
+    assert calls == []
+
+
 def test_service_ignores_a_non_regular_request(tmp_path: Path) -> None:
     request = tmp_path / "identity.request"
     request.mkdir()
