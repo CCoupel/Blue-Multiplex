@@ -129,7 +129,8 @@ Règles :
   **affecté** réapparaît sur le bus (`InterfacesAdded` de `org.bluez.Adapter1` — rebranchement, reset USB, énumération tardive au boot), le daemon,
   non root, ne peut pas rétablir la classe : il inscrit la MAC dans **`/var/lib/btmux/identity.request`** (journal `identity_requested hci= mac=`) ;
   `btmux-adapters-identity.path` (`PathChanged=`) déclenche **`btmux-adapters-identity.service`** (root, oneshot) qui rejoue
-  `btmux-adapters.sh --state … --config … --wait 5 --only <MAC>` pour **chaque MAC en attente** : alias et classe du rôle sur les seuls contrôleurs
+  `btmux-adapters.sh --state … --config … --wait 5 --requests /var/lib/btmux/identity.request` (équivalent à un `--only <MAC>` par ligne valide)
+  pour **chaque MAC en attente** : alias et classe du rôle sur les seuls contrôleurs
   réapparus, **sans redémarrage de `btmuxd`** ni coupure de l'API, et **sans toucher aux autres contrôleurs** (une fenêtre d'appairage ouverte
   par le daemon sur un autre contrôleur n'est pas refermée).
   - **Format du fichier** : UTF-8, **une ligne par MAC en attente**, champs séparés par une tabulation, chaque ligne terminée par `\n` :
@@ -137,10 +138,14 @@ Règles :
     `hciN` et l'horodatage sont informatifs. Le daemon **réécrit atomiquement l'ensemble des MAC non encore acquittées** (tmp voisin, fsync, rename ;
     débounce ≤ 1 s autorisé pour grouper une salve) : aucune requête n'est perdue quand deux contrôleurs apparaissent ensemble. Mode 0640,
     propriétaire `BTMUX_USER` ; le fichier **existe dès l'installation** (vide) pour que l'unité `.path` le surveille. Fichier vide = rien à faire.
-  - **Service root** : refuse tout ce qui n'est pas un **fichier régulier** (lien symbolique, répertoire, absent → avertissement, rien n'est traité,
-    code 0) ; lit toutes les lignes, **dédoublonne** les MAC, ignore les lignes invalides (avertissement « ligne invalide » **sans reproduire le
-    contenu**), traite chaque MAC valide par `--only` ; code **0** quoi qu'il arrive (configuration invalide incluse : avertissement, l'unité ne
-    doit jamais échouer ; `StartLimitIntervalSec=0`).
+  - **`--requests <fichier>`** (script, lu en root) : refuse tout ce qui n'est pas un **fichier régulier** (lien symbolique, répertoire, absent →
+    avertissement, rien n'est traité, code 0) ; lecture bornée (4 Kio) ; lit toutes les lignes, **dédoublonne** les MAC, ignore les lignes invalides
+    (avertissement « N ligne(s) invalide(s) » **sans reproduire le contenu**), traite chaque MAC valide comme un `--only`. Rien de valide : code 0.
+  - **Codes de sortie et garantie « l'unité ne doit jamais échouer »** (comportement retenu le 2026-10-25, `infra-20261025-090759`) : le script
+    garde ses codes — **2** sur configuration/état invalides (comme au boot et à l'`ExecStartPre`), **0** sinon (MAC absente, fichier vide ou
+    illisible, `btmgmt` indisponible : avertissements). C'est **l'unité** `btmux-adapters-identity.service` qui porte la garantie :
+    `SuccessExitStatus=2` (une configuration invalide est journalisée mais ne met pas l'unité en échec) et `StartLimitIntervalSec=0` (aucune
+    limite de déclenchements).
   - **`--only <MAC>`** (répétable) : la passe ne traite que ces MAC (alias du rôle, classe, `bondable off`, `discov no` si la MAC est **affectée**
     dans la liste effective). MAC **non affectée** (hors liste) : seulement fermée (`bondable off`, `discov no`), ni alias ni classe — comme tout
     contrôleur sans rôle. MAC **absente** de `btmgmt info` après `--wait` (déjà redébranchée) ou **invalide** : avertissement une ligne, code **0**.

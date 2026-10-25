@@ -73,3 +73,7 @@
 - **[CHANGED]** `contracts/config-schema.md` — `identity.request` **multi-lignes** (une ligne `ISO\thciN\tMAC` par MAC en attente, réécriture atomique de l'ensemble, débounce ≤ 1 s) ; service root : fichier régulier exigé (lien symbolique → ignoré, avertissement), lignes dédoublonnées, lignes invalides ignorées sans reproduire le contenu, `--only` répété, code 0 toujours, `StartLimitIntervalSec=0`.
 - **[NEW]** `contracts/config-schema.md` — acquittement par classe observée ; **vérification différée à +60 s**, 3 tentatives max par contrôleur et par épisode, puis ERROR `identity_giving_up` ; aucune requête pendant `roles.pending`. Remplace « au plus une par contrôleur et par minute ».
 - **[CHANGED]** `contracts/config-schema.md` — limite documentée : nom personnalisé perdu après libération d'un rôle quand l'état prime (contournement indiqué).
+
+## [20261025-c] — alignement sur l'infra livrée `3a9263c` (`infra-20261025-090759` « Décision ») — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : `btmux-adapters-identity.service` appelle `btmux-adapters.sh --requests /var/lib/btmux/identity.request` (option documentée : fichier régulier exigé, lecture bornée 4 Kio, dédoublonnage, lignes invalides comptées sans reproduire le contenu, = un `--only` par MAC valide) ; codes de sortie du script inchangés (2 config invalide, 0 sinon) — la garantie « ne jamais échouer » est portée par l'unité (`SuccessExitStatus=2`, `StartLimitIntervalSec=0`).
