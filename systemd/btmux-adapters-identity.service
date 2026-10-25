@@ -3,8 +3,12 @@ Description=btmux — réapplication de l'identité des contrôleurs après hotp
 Documentation=https://github.com/CCoupel/Blue-Multiplex
 # Déclenchée uniquement par btmux-adapters-identity.path (aucune section d'installation). btmuxd n'est PAS redémarré :
 # API et SSE restent disponibles. Passe idempotente (≈ 4 s) ; une salve de requêtes est coalescée par systemd
-# (unité singleton, le .path re-déclenche une fois si le fichier a changé pendant la passe).
+# (unité singleton, le .path re-déclenche une fois si le fichier a changé pendant la passe) et toutes les MAC en
+# attente sont traitées en une passe.
 After=bluetooth.service btmux-adapters.service
+# Pas de limite de démarrage : un dongle instable (rebranchements répétés) ne doit pas faire passer l'unité en
+# « start-limit-hit », ce qui suspendrait la surveillance jusqu'au prochain reset-failed.
+StartLimitIntervalSec=0
 ConditionPathExists=/etc/btmux/config.yaml
 
 [Service]
@@ -12,8 +16,12 @@ Type=oneshot
 # Journal « passe identité (déclencheur : hotplug) » : distingue cette passe de celles du boot et de l'ExecStartPre.
 Environment=BTMUX_TRIGGER=hotplug
 # --wait 5 : BlueZ a exposé Adapter1 mais btmgmt peut ne pas lister l'index aussitôt (rare).
-# --only : seul le contrôleur réapparu est traité (3e champ de identity.request : « ISO<TAB>hciN<TAB>MAC ») ; les autres
-# ne sont pas touchés (une fenêtre d'appairage ouverte ailleurs reste ouverte). Fichier vide ou MAC invalide : le script
-# avertit et sort en code 0. « $$ » : « $ » littéral pour sh (pas de substitution systemd).
-ExecStart=/bin/sh -c 'exec /usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5 --only "$$(head -n 1 /var/lib/btmux/identity.request | cut -f 3)"'
+# --requests : seuls les contrôleurs réapparus sont traités — une ligne « ISO<TAB>hciN<TAB>MAC » par contrôleur en attente,
+# la MAC fait foi, lignes dédoublonnées (#23). Les autres contrôleurs ne sont pas touchés (une fenêtre d'appairage ouverte
+# ailleurs reste ouverte). Le fichier n'est lu que s'il est un fichier régulier (lien symbolique -> ignoré) ; ligne
+# invalide -> ignorée, contenu jamais reproduit au journal. Fichier absent, vide ou sans MAC valide : avertissement, code 0.
+ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5 --requests /var/lib/btmux/identity.request
+# Code 2 (configuration invalide, déjà journalisée par le script) : l'unité ne doit jamais échouer — la surveillance
+# continue et la prochaine requête rejoue la passe une fois la configuration corrigée.
+SuccessExitStatus=2
 TimeoutStartSec=60

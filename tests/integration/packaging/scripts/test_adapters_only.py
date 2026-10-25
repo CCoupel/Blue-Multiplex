@@ -1,4 +1,6 @@
-"""packaging — `btmux-adapters.sh --only <MAC>` : passe ciblée au hotplug (#23, contrat 28df535).
+"""packaging — `btmux-adapters.sh --only <MAC>` (répétable), `--requests FICHIER` (#23, aa962d0).
+
+Passe ciblée au hotplug.
 
 Seul le contrôleur réapparu est traité : identité s'il est affecté, simple fermeture sinon ;
 les autres ne sont pas touchés (une fenêtre d'appairage ouverte ailleurs reste ouverte).
@@ -127,28 +129,81 @@ def test_without_only_every_controller_is_still_handled(tmp_path: Path) -> None:
 
 
 def _service_command(tmp_path: Path, request: Path) -> list[str]:
-    """ExecStart de l'unité (« $$ » -> « $ » comme systemd), chemins système -> chemins du test."""
+    """ExecStart de l'unité, chemins système -> chemins du test."""
     line = next(x for x in SERVICE.read_text().splitlines() if x.startswith("ExecStart="))
-    script = line.removeprefix("ExecStart=/bin/sh -c '").removesuffix("'").replace("$$", "$")
-    script = (
-        script.replace("/usr/lib/btmux/btmux-adapters.sh", f"bash {SCRIPT}")
-        .replace("/var/lib/btmux/identity.request", str(request))
-        .replace("/etc/btmux/config.yaml", str(tmp_path / "config.yaml"))
-        .replace("--wait 5", "--wait 0")
-    )
-    return ["sh", "-c", script]
+    argv = line.removeprefix("ExecStart=").split()
+    assert argv[0] == "/usr/lib/btmux/btmux-adapters.sh"
+    subst = {
+        "/var/lib/btmux/identity.request": str(request),
+        "/etc/btmux/config.yaml": str(tmp_path / "config.yaml"),
+        "/var/lib/btmux/adapters.yaml": str(tmp_path / "adapters.yaml"),
+    }
+    argv = ["bash", str(SCRIPT), *(subst.get(x, x) for x in argv[1:])]
+    argv[argv.index("--wait") + 1] = "0"
+    return argv
+
+
+def _req(*macs: str) -> str:
+    return "".join(f"2026-10-25T07:12:0{i}Z\thci{i}\t{m}\n" for i, m in enumerate(macs))
 
 
 def test_service_reads_the_mac_from_the_request_file(tmp_path: Path) -> None:
     request = tmp_path / "identity.request"
-    request.write_text("2026-10-25T07:12:03Z\thci2\tAA:BB:CC:00:00:02\n")
+    request.write_text(_req("AA:BB:CC:00:00:02"))
     proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
     assert proc.returncode == 0, proc.stderr
     assert "btmgmt -i 2 class 1 12" in calls
     assert not _touched(calls, "1") and not _touched(calls, "0")
 
 
-@pytest.mark.parametrize("content", [None, "", "garbage\n", "2026-10-25T07:12:03Z\thci2\n"])
+def test_service_handles_every_pending_mac_once(tmp_path: Path) -> None:
+    """Deux dongles réapparus ensemble : aucune MAC perdue, doublon traité 1 fois."""
+    request = tmp_path / "identity.request"
+    request.write_text(_req("AA:BB:CC:00:00:01", "AA:BB:CC:00:00:02", "aa:bb:cc:00:00:01"))
+    proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
+    assert proc.returncode == 0, proc.stderr
+    assert calls.count("btmgmt -i 1 class 4 4") == 1
+    assert calls.count("btmgmt -i 2 class 1 12") == 1
+    assert not _touched(calls, "0")  # contrôleur interne non demandé : intact
+    assert "contrôleurs AA:BB:CC:00:00:01, AA:BB:CC:00:00:02 seuls" in proc.stdout
+
+
+def test_service_skips_invalid_lines_without_echoing_them(tmp_path: Path) -> None:
+    request = tmp_path / "identity.request"
+    secret = "root:$6$secrethash:19000:0:99999:7:::"
+    request.write_text(secret + "\n" + _req("AA:BB:CC:00:00:02") + "x\thci9\tZZ:ZZ\n\n")
+    proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
+    assert proc.returncode == 0, proc.stderr
+    assert "btmgmt -i 2 class 1 12" in calls
+    assert not _touched(calls, "1")
+    assert "2 ligne(s) invalide(s)" in proc.stderr and "MAC invalide" in proc.stderr
+    out = proc.stdout + proc.stderr
+    assert "secrethash" not in out and "ZZ:ZZ" not in out and "root:" not in out
+
+
+def test_service_ignores_a_symlinked_request(tmp_path: Path) -> None:
+    """Répertoire du compte de service : root ne suit jamais un lien (ex. vers /etc/shadow)."""
+    target = tmp_path / "secret"
+    target.write_text("root:x\n" + _req("AA:BB:CC:00:00:02"))
+    request = tmp_path / "identity.request"
+    request.symlink_to(target)
+    proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
+    assert proc.returncode == 0
+    assert "n'est pas un fichier régulier" in proc.stderr
+    assert calls == []
+    assert "root:x" not in proc.stdout + proc.stderr
+
+
+def test_service_ignores_a_non_regular_request(tmp_path: Path) -> None:
+    request = tmp_path / "identity.request"
+    request.mkdir()
+    proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
+    assert proc.returncode == 0
+    assert "n'est pas un fichier régulier" in proc.stderr
+    assert calls == []
+
+
+@pytest.mark.parametrize("content", [None, "", "\n\n", "garbage\n", "2026-10-25T07:12:03Z\thci2\n"])
 def test_service_with_missing_empty_or_invalid_request_exits_0(
     tmp_path: Path, content: str | None
 ) -> None:
@@ -157,5 +212,17 @@ def test_service_with_missing_empty_or_invalid_request_exits_0(
         request.write_text(content)
     proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
     assert proc.returncode == 0
-    assert "MAC vide ou invalide" in proc.stderr
+    assert "aucune MAC valide" in proc.stderr
     assert calls == []
+    assert "garbage" not in proc.stderr
+
+
+def test_only_is_repeatable_and_skips_invalid_values(tmp_path: Path) -> None:
+    proc, calls = _run(
+        tmp_path, "--only", "AA:BB:CC:00:00:01", "--only", "bad", "--only", "B8:27:EB:00:00:09"
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "btmgmt -i 1 class 4 4" in calls
+    assert "btmgmt -i 0 bondable off" in calls
+    assert not _touched(calls, "2")
+    assert "MAC vide ou invalide" in proc.stderr and "bad" not in proc.stderr

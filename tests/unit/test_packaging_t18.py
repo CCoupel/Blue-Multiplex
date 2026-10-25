@@ -384,12 +384,14 @@ def test_identity_path_unit_watches_the_request_file() -> None:
 def test_identity_service_replays_the_identity_pass_without_restarting_btmuxd() -> None:
     unit = _unit("btmux-adapters-identity.service")
     assert "Type=oneshot\n" in unit and "User=" not in unit  # root : btmgmt, busctl set-property
-    # seul le contrôleur réapparu (3e champ de la requête) ; « $$ » = « $ » pour sh (28df535)
+    # seuls les contrôleurs réapparus (3e champ de chaque ligne), lus par le script lui-même (#23)
     assert (
-        "ExecStart=/bin/sh -c 'exec /usr/lib/btmux/btmux-adapters.sh "
-        f"--state {STATE} --config /etc/btmux/config.yaml --wait 5 "
-        f'--only "$$(head -n 1 {REQUEST} | cut -f 3)"\'\n' in unit
+        "ExecStart=/usr/lib/btmux/btmux-adapters.sh "
+        f"--state {STATE} --config /etc/btmux/config.yaml --wait 5 --requests {REQUEST}\n" in unit
     )
+    assert "/bin/sh" not in unit and "head -n" not in unit  # plus de lecture shell dans l'unité
+    assert "StartLimitIntervalSec=0\n" in unit  # un dongle instable ne suspend pas la surveillance
+    assert "SuccessExitStatus=2\n" in unit  # config invalide : journalisée, l'unité n'échoue jamais
     assert unit.count("ExecStart=") == 1 and "--reset" not in unit
     assert "systemctl restart" not in unit  # ni redémarrage de btmuxd, ni coupure de l'API
     assert "After=bluetooth.service" in unit

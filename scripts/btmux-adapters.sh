@@ -7,7 +7,7 @@
 #   - rôle `sources`  -> classe « casque audio » (majeur 4 / mineur 4 ; la classe finale 0x240404 dépend des UUIDs) ;
 #   - rôle `headsets` seul -> classe « ordinateur » (majeur 1 / mineur 12 = portable).
 # Usage : btmux-adapters.sh [--config /etc/btmux/config.yaml] [--state FICHIER] [--dry-run] [--wait SECONDES] [--reset]
-#                          [--only MAC]
+#                          [--only MAC]... [--requests FICHIER]
 #   --state   : fichier d'état des rôles (#23, ex. /var/lib/btmux/adapters.yaml) ; s'il existe et est valide, sa liste
 #               prime sur celle de la config (transmis à `btmux.config adapters --state`). Absent : défaut de btmux.config.
 #   --dry-run : affiche les commandes sans rien modifier (utilisable sans droits root).
@@ -15,16 +15,49 @@
 #               présents — ExecStopPost de btmuxd.
 #   --wait N  : attend jusqu'à N s (défaut 20) que tous les adaptateurs de la config soient énumérés (USB).
 #   --only MAC: ne traite que ce contrôleur (#23 hotplug) : identité s'il est affecté, sinon simple fermeture ; aucun autre
-#               contrôleur n'est touché (une fenêtre d'appairage ouverte ailleurs reste ouverte). MAC vide, invalide ou absente
-#               après --wait : avertissement, code 0 (btmux-adapters-identity.service ne doit jamais échouer).
+#               contrôleur n'est touché (une fenêtre d'appairage ouverte ailleurs reste ouverte). Répétable (MAC dédoublonnées,
+#               casse indifférente). MAC vide ou invalide : ignorée avec avertissement (contenu jamais reproduit) ; aucune MAC
+#               valide, ou MAC absente après --wait : avertissement, code 0 (btmux-adapters-identity.service ne doit jamais
+#               échouer).
+#   --requests F: lit les MAC à traiter dans F (/var/lib/btmux/identity.request, une ligne « ISO<TAB>hciN<TAB>MAC » par
+#               contrôleur en attente ; la MAC du 3e champ fait foi) et les ajoute comme autant de --only. F doit être un
+#               fichier régulier : lien symbolique ou autre type -> ignoré, avertissement. Lignes invalides ignorées
+#               (« N ligne(s) invalide(s) », contenu jamais reproduit). Lecture bornée (4 Kio). Rien de valide : code 0.
 # Idempotent. Sans adaptateur présent : avertissement et code 0 (ne bloque jamais le démarrage). Config invalide : code 2.
 # Variables : BTMUX_PYTHON (défaut /opt/btmux/bin/python, repli python3), BTMUX_BTMGMT, BTMUX_BUSCTL,
 #   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »), BTMUX_ALIAS_WAIT (« 5 » : attente max., en s, que
 #   BlueZ expose /org/bluez/hciN avant de poser l'alias), BTMUX_TRIGGER (unité appelante, journalisée : boot, btmuxd, hotplug).
 set -euo pipefail
 
-CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0 ONLY=""
+CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0 ONLY="" ONLY_SET=0 REQUESTS=""
 MAC_RE='^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$'
+add_only() {   # MAC -> ajoutée à ONLY (« MAC1 MAC2 », majuscules, dédoublonnée) ; code 1 si invalide
+  [[ "$1" =~ $MAC_RE ]] || return 1
+  case " $ONLY " in *" ${1^^} "*) ;; *) ONLY="${ONLY:+$ONLY }${1^^}" ;; esac
+}
+# Requêtes de hotplug (#23) : le répertoire appartient à l'utilisateur de service, la lecture est faite par root. On refuse
+# tout ce qui n'est pas un fichier régulier, puis on vérifie que le descripteur ouvert désigne bien ce fichier (un lien
+# substitué entre le test et l'ouverture est détecté). Jamais de contenu rejeté dans le journal.
+read_requests() {
+  local f="$1" mac bad=0 real opened
+  notreg() { echo "btmux-adapters: AVERTISSEMENT $f n'est pas un fichier régulier (lien symbolique ou autre) — ignoré" >&2; }
+  if [ -L "$f" ] || { [ -e "$f" ] && [ ! -f "$f" ]; }; then notreg; return 0; fi
+  [ -e "$f" ] || return 0   # absent : rien à faire (avertissement global plus bas)
+  exec 3< "$f" || { echo "btmux-adapters: AVERTISSEMENT $f illisible — ignoré" >&2; return 0; }
+  if [ -e /proc/self/fd/3 ]; then
+    real="$(readlink -f -- "$f" 2>/dev/null || true)"
+    opened="$(readlink /proc/self/fd/3 2>/dev/null || true)"
+    if [ -z "$real" ] || [ "$opened" != "$real" ] || [ ! -f /proc/self/fd/3 ]; then
+      exec 3<&-; notreg; return 0
+    fi
+  fi
+  while IFS=$'\t' read -r _ _ mac _; do
+    mac="${mac%$'\r'}"
+    add_only "$mac" || bad=$((bad + 1))
+  done < <(head -c 4096 <&3 | grep -v '^[[:space:]]*$' || true)
+  exec 3<&-
+  [ "$bad" -eq 0 ] || echo "btmux-adapters: AVERTISSEMENT $f : $bad ligne(s) invalide(s) ignorée(s) (MAC invalide)" >&2
+}
 while [ $# -gt 0 ]; do
   case "$1" in
     --config) CONFIG="${2:?chemin}"; shift 2 ;;
@@ -34,16 +67,21 @@ while [ $# -gt 0 ]; do
     --wait) WAIT="${2:?secondes}"; shift 2 ;;
     --only)
       [ $# -ge 2 ] || { echo "btmux-adapters: --only attend une MAC" >&2; exit 2; }
-      if ! [[ "$2" =~ $MAC_RE ]]; then
-        echo "btmux-adapters: AVERTISSEMENT --only : MAC vide ou invalide ('${2//[^0-9A-Za-z:._-]/?}') — rien à faire" >&2
-        exit 0
-      fi
-      ONLY="${2^^}"; shift 2 ;;
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      ONLY_SET=1
+      add_only "$2" || echo "btmux-adapters: AVERTISSEMENT --only : MAC vide ou invalide — ignorée" >&2
+      shift 2 ;;
+    --requests) REQUESTS="${2:?chemin}"; ONLY_SET=1; shift 2 ;;
+    -h|--help) sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "btmux-adapters: option inconnue: $1" >&2; exit 2 ;;
   esac
 done
 [[ "$WAIT" =~ ^[0-9]+$ ]] || { echo "btmux-adapters: --wait attend un entier" >&2; exit 2; }
+[ -z "$REQUESTS" ] || read_requests "$REQUESTS"
+if [ "$ONLY_SET" = 1 ] && [ -z "$ONLY" ]; then
+  echo "btmux-adapters: AVERTISSEMENT aucune MAC valide à traiter (MAC vide ou invalide) — rien à faire" >&2
+  exit 0
+fi
+is_only() { case " $ONLY " in *" $1 "*) return 0 ;; esac; return 1; }   # MAC (majuscules) ciblée par --only ?
 
 PY="${BTMUX_PYTHON:-/opt/btmux/bin/python}"
 [ -x "$PY" ] || PY=python3
@@ -59,7 +97,11 @@ SUDO=""
 
 log() { echo "btmux-adapters: $*"; }
 # Une ligne par passe : preuve QA du déclencheur (btmux-adapters.service, ExecStartPre/ExecStopPost de btmuxd, hotplug #23).
-SCOPE="${ONLY:+, contrôleur $ONLY seul}"
+case "$ONLY" in
+  "") SCOPE="" ;;
+  *" "*) SCOPE=", contrôleurs ${ONLY// /, } seuls" ;;
+  *) SCOPE=", contrôleur $ONLY seul" ;;
+esac
 if [ "$RESET" = 1 ]; then log "passe fermeture (déclencheur : $TRIGGER$SCOPE)"; else log "passe identité (déclencheur : $TRIGGER$SCOPE)"; fi
 FAILED=0
 run() {
@@ -82,9 +124,11 @@ if [ "$rc" -ne 0 ]; then
   exit 2
 fi
 
-# --only : la liste effective est réduite à l'entrée de cette MAC (vide si le contrôleur n'a pas de rôle).
+# --only : la liste effective est réduite aux entrées de ces MAC (vide si aucun n'a de rôle).
 if [ -n "$ONLY" ]; then
-  LIST="$(printf '%s\n' "$LIST" | awk -F '\t' -v mac="$ONLY" 'toupper($1) == mac')"
+  LIST="$(printf '%s\n' "$LIST" | awk -F '\t' -v macs="$ONLY" '
+    BEGIN { n = split(macs, m, " "); for (i = 1; i <= n; i++) want[m[i]] = 1 }
+    toupper($1) in want')"
 fi
 
 MGMT_ERR=0
@@ -136,7 +180,7 @@ while :; do
     [ -n "$(index_of "$mac")" ] || missing=1
   done <<< "$LIST"
   # --only d'une MAC non affectée : on attend quand même son énumération.
-  [ -z "$ONLY" ] || [ -n "$(index_of "$ONLY")" ] || missing=1
+  for mac in $ONLY; do [ -n "$(index_of "$mac")" ] || missing=1; done
   { [ "$missing" = 0 ] || [ "$DRY" = 1 ] || [ "$SECONDS" -ge "$deadline" ]; } && break
   sleep 1
 done
@@ -179,18 +223,20 @@ while IFS=$'\t' read -r mac name roles; do
   }
 done <<< "$LIST"
 
-# Contrôleurs sans rôle (#23) : fermés, classe et alias intacts (--only : ce contrôleur seulement).
-SEEN=0
+# Contrôleurs sans rôle (#23) : fermés, classe et alias intacts (--only : ces contrôleurs seulement).
+SEEN=" "
 while IFS=$'\t' read -r idx mac; do
   [ -n "$idx" ] || continue
-  [ -z "$ONLY" ] || [ "$mac" = "$ONLY" ] || continue
-  SEEN=1
+  [ -z "$ONLY" ] || is_only "$mac" || continue
+  SEEN="$SEEN$mac "
   case "$ASSIGNED" in *" $idx "*) continue ;; esac
   log "$mac -> hci$idx sans rôle : fermeture de l'appairage et de la découverte"
   run mgmt -i "$idx" bondable off
   run mgmt -i "$idx" discov no
 done <<< "$(all_indices)"
-if [ -n "$ONLY" ] && [ "$SEEN" = 0 ] && [ "$DRY" != 1 ]; then
-  echo "btmux-adapters: AVERTISSEMENT contrôleur $ONLY absent — rien à faire" >&2
+if [ "$DRY" != 1 ]; then
+  for mac in $ONLY; do
+    case "$SEEN" in *" $mac "*) ;; *) echo "btmux-adapters: AVERTISSEMENT contrôleur $mac absent — rien à faire" >&2 ;; esac
+  done
 fi
 exit 0
