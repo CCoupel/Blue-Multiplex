@@ -13,7 +13,7 @@ from btmux.config.models import (
 from btmux.config.state import (
     load_effective,
     load_state,
-    write_identity_request,
+    write_identity_requests,
     write_state_atomic,
 )
 
@@ -30,6 +30,6 @@ __all__ = [
     "load_state",
     "parse_adapter_list",
     "parse_config",
-    "write_identity_request",
+    "write_identity_requests",
     "write_state_atomic",
 ]

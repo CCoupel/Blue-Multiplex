@@ -85,6 +85,6 @@ def write_state_atomic(path: str | Path, adapters: Sequence[Adapter]) -> None:
     write_text_atomic(path, HEADER + yaml.safe_dump(document, sort_keys=False, allow_unicode=True))
 
 
-def write_identity_request(path: str | Path, when: str, hci: str, mac: str) -> None:
-    """Requête d'identité : une ligne `horodatage<TAB>hci<TAB>MAC` (déclenche l'unité `.path`)."""
-    write_text_atomic(path, f"{when}\t{hci}\t{mac}\n")
+def write_identity_requests(path: str | Path, entries: Sequence[tuple[str, str, str]]) -> None:
+    """Requêtes d'identité : une ligne `horodatage<TAB>hci<TAB>MAC` par contrôleur en attente."""
+    write_text_atomic(path, "".join(f"{when}\t{hci}\t{mac}\n" for when, hci, mac in entries))

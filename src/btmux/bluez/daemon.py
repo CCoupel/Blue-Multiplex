@@ -6,17 +6,16 @@ import asyncio
 import contextlib
 import logging
 import os
-import time
-from datetime import UTC, datetime
 
 from btmux.bluez.adapters import ADAPTER_IFACE, AdapterRegistry
 from btmux.bluez.agent import AGENT_CAPABILITY, AGENT_PATH, Agent
 from btmux.bluez.bus import Bus, BusSignal, DBusCallError, DBusFastBus
 from btmux.bluez.controllers import RoleManager
 from btmux.bluez.errors import AdaptersNotFound, BluezError
+from btmux.bluez.identity import IdentityRequester
 from btmux.bluez.inventory import Inventory
 from btmux.bluez.pairing import PairingManager
-from btmux.config import Config, write_identity_request
+from btmux.config import Config
 from btmux.log import kv
 
 log = logging.getLogger("btmux.bluez")
@@ -27,11 +26,6 @@ EXIT_RESTART_FALLBACK = (
     4  # redémarrage piloté non reçu : systemd relance (RestartForceExitStatus=4)
 )
 RESTART_TIMEOUT_S = 30.0
-# Classe attendue par rôle (bits majeur/mineur ; les bits « service » varient avec les UUID enregistrés)
-CLASS_MASK = 0x1FFF
-CLASS_SOURCES = 0x0404  # rôle sources : casque audio
-CLASS_HEADSETS = 0x010C  # rôle headsets seul : ordinateur portable
-IDENTITY_RETRY_INTERVAL_S = 60.0
 DEFAULT_ADAPTER_WAIT = 30.0
 ENV_ADAPTER_WAIT = "BTMUX_ADAPTER_WAIT"
 
@@ -69,8 +63,9 @@ class BluezService:
         self._lost = asyncio.Event()
         self._handlers_installed = False
         self._guards: set[asyncio.Future[None]] = set()
-        self._clock = time.monotonic
-        self._identity_last: dict[str, float] = {}
+        self.identity = IdentityRequester(
+            config.identity_request_path, self.registry, self.inventory
+        )
 
     def on_roles_written(self) -> None:
         """L'état des rôles vient d'être écrit : `btmux-adapters.path` doit relancer le service (SIGTERM) ;
@@ -121,19 +116,13 @@ class BluezService:
         task.add_done_callback(self._guards.discard)
 
     def _check_class(self, signal: BusSignal) -> None:
-        """Classe observée ≠ celle du rôle sur un contrôleur affecté (la passe a échoué, reset du dongle) :
-        nouvelle requête d'identité, au plus une par contrôleur et par minute (pas de boucle)."""
+        """`Class` d'un contrôleur affecté : correcte → acquittement ; incorrecte → épisode (requête d'identité)."""
         info = self.registry.info_for_path(signal.path)
         if info is None or not isinstance(signal.data, dict) or "Class" not in signal.data:
             return
-        expected = CLASS_SOURCES if "sources" in info.roles else CLASS_HEADSETS
-        if (int(signal.data["Class"]) & CLASS_MASK) == expected:
-            return
-        task = asyncio.ensure_future(
-            self._request_identity(info.hci or signal.path, info.mac, retry=True)
+        self.identity.class_observed(
+            info.hci or signal.path, info.mac, int(signal.data["Class"]), info.roles
         )
-        self._guards.add(task)
-        task.add_done_callback(self._guards.discard)
 
     async def _close_controller(self, path: str, *, request_identity: bool = False) -> None:
         info = self.registry.info_for_path(path)
@@ -146,24 +135,7 @@ class BluezService:
         if (
             request_identity and info is not None
         ):  # seulement à l'apparition d'un contrôleur affecté
-            await self._request_identity(info.hci or path, info.mac)
-
-    async def _request_identity(self, hci: str, mac: str, *, retry: bool = False) -> None:
-        """Le daemon n'est pas root : il demande à `btmux-adapters-identity.path` de rejouer l'identité
-        (alias + classe). Jamais fatal : l'échec est journalisé, l'identité sera rétablie au prochain démarrage."""
-        now = self._clock()
-        last = self._identity_last.get(mac)
-        if retry and last is not None and now - last < IDENTITY_RETRY_INTERVAL_S:
-            return  # borné : une réémission par contrôleur et par minute
-        self._identity_last[mac] = now
-        target = self.config.identity_request_path
-        when = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        try:
-            await asyncio.to_thread(write_identity_request, target, when, hci, mac)
-        except OSError as exc:
-            log.warning(kv("identity_request_failed", hci=hci, mac=mac, error=exc.strerror or exc))
-            return
-        log.info(kv("identity_requested", hci=hci, mac=mac))
+            self.identity.hotplug(info.hci or path, info.mac)
 
     async def _start_once(self) -> list[str]:
         """Connexion + inventaire + agent ; retourne les MAC d'adaptateurs absents (liste vide = OK)."""
@@ -236,6 +208,7 @@ class BluezService:
         log.error(kv("adapter_not_closed", adapters=",".join(open_)))
 
     async def _teardown(self) -> None:
+        self.identity.reset()
         with contextlib.suppress(Exception):
             await self.pairing.cancel_pending()
         with contextlib.suppress(Exception):

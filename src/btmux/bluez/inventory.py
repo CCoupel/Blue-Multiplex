@@ -368,6 +368,14 @@ class Inventory:
                 models[mac] = self._placeholder(mac)
         return sorted(models.values(), key=lambda m: (m.adapter, m.alias or m.name, m.mac))
 
+    def adapter_class(self, mac: str) -> int | None:
+        """Classe BlueZ (`Class`) observée du contrôleur `mac`, `None` si absent ou inconnue."""
+        for props in self._adapters.values():
+            if str(props.get("Address", "")).upper() == mac.upper():
+                value = props.get("Class")
+                return value if isinstance(value, int) else None
+        return None
+
     def unassigned_adapter_paths(self) -> list[str]:
         """Contrôleurs BlueZ présents sans rôle (à fermer : ni appairable ni visible)."""
         assigned = self._registry.paths()
