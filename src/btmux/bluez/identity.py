@@ -59,6 +59,8 @@ class IdentityRequester:
         self._verifiers: dict[str, asyncio.Task[None]] = {}
         self._flusher: asyncio.Task[None] | None = None
         self._dirty = False
+        self._written: set[str] = set()  # MAC présentes dans le fichier tel qu'écrit
+        self._to_log: set[str] = set()  # requêtes (ré)émises pas encore journalisées
 
     # ----- API ----------------------------------------------------------------------------------
     def hotplug(self, hci: str, mac: str) -> None:
@@ -82,6 +84,8 @@ class IdentityRequester:
         self._pending.clear()
         self._attempts.clear()
         self._dirty = False
+        self._written.clear()
+        self._to_log.clear()
 
     # ----- interne ------------------------------------------------------------------------------
     def _request(self, hci: str, mac: str) -> None:
@@ -91,6 +95,7 @@ class IdentityRequester:
         self._pending[mac] = (hci, self._now().strftime("%Y-%m-%dT%H:%M:%SZ"))
         self._drop_verifier(mac)
         self._verifiers[mac] = asyncio.ensure_future(self._verify(hci, mac))
+        self._to_log.add(mac)
         self._dirty = True
         if self._flusher is None or self._flusher.done():
             self._flusher = asyncio.ensure_future(self._flush())
@@ -101,18 +106,24 @@ class IdentityRequester:
             task.cancel()
 
     def _ack(self, mac: str) -> None:
+        """Acquittement (classe correcte ou abandon) : la MAC quitte le fichier à la prochaine réécriture,
+        qui le vide quand plus rien n'est en attente."""
         self._pending.pop(mac, None)
         self._attempts.pop(mac, None)
         self._drop_verifier(mac)
+        if mac in self._written:  # le fichier la contient : le réécrire
+            self._dirty = True
+            if self._flusher is None or self._flusher.done():
+                self._flusher = asyncio.ensure_future(self._flush())
 
     async def _flush(self) -> None:
-        """Réécrit atomiquement l'ensemble des MAC en attente (un seul fichier, aucune MAC perdue)."""
+        """Réécrit atomiquement l'ensemble des MAC en attente (fichier vide s'il n'y en a plus)."""
         await asyncio.sleep(self.debounce)
         while self._dirty:
             self._dirty = False
             entries = [(when, hci, mac) for mac, (hci, when) in self._pending.items()]
-            if not entries:
-                return
+            if not entries and not self._written:
+                return  # acquitté avant la 1re écriture : le fichier n'a rien à perdre
             try:
                 await asyncio.to_thread(write_identity_requests, self._target, entries)
             except (
@@ -123,7 +134,10 @@ class IdentityRequester:
                         kv("identity_request_failed", hci=hci, mac=mac, error=exc.strerror or exc)
                     )
                 return
-            for _, hci, mac in entries:
+            fresh = [e for e in entries if e[2] in self._to_log]
+            self._to_log -= {mac for _, _, mac in entries}
+            self._written = {mac for _, _, mac in entries}
+            for _, hci, mac in fresh:
                 log.info(kv("identity_requested", hci=hci, mac=mac))
 
     async def _verify(self, hci: str, mac: str) -> None:

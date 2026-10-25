@@ -70,10 +70,10 @@ async def test_hotplug_of_assigned_controller_writes_one_line(config, bus, tmp_p
     assert (hci, mac) == ("hci1", SRC) and when.endswith("Z")
     assert oct(request.stat().st_mode & 0o777) == "0o640"
     assert [p for p in tmp_path.iterdir() if p.name.endswith(".tmp")] == []
-    request.unlink()  # une propriété qui change (alias, classe correcte) ne redemande rien
+    # classe correcte observée : acquittement, le fichier est vidé (aucune nouvelle requête)
     bus.change(SRC_PATH, "org.bluez.Adapter1", Alias="btmux", Class=OK_SOURCES)
-    await asyncio.sleep(0.2)
-    assert not request.exists() and count(caplog, "identity_requested") == 1
+    await wait_until(lambda: request.read_text() == "")
+    assert count(caplog, "identity_requested") == 1
 
 
 async def test_two_simultaneous_hotplugs_lose_no_mac(config, bus, tmp_path):
@@ -231,3 +231,69 @@ async def test_teardown_cancels_pending_verification(config, bus, tmp_path, capl
     await service._teardown()
     await asyncio.sleep(0.9)
     assert count(caplog, "identity_requested") == 1
+
+
+# ----- fichier vidé après acquittement -----
+async def test_file_is_emptied_once_the_class_is_acknowledged(config, bus, tmp_path, caplog):
+    caplog.set_level(logging.INFO)
+    service, request = make(config, bus, tmp_path)
+    service.identity.verify_delay = 5.0
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    await wait_until(lambda: request.exists() and lines(request))
+    bus.change(SRC_PATH, "org.bluez.Adapter1", Class=OK_SOURCES)  # acquittement
+    await wait_until(lambda: request.read_text() == "")
+    assert count(caplog, "identity_requested") == 1  # l'écriture de vidage n'est pas une requête
+    bus.change(
+        SRC_PATH, "org.bluez.Adapter1", Class=OK_SOURCES
+    )  # déjà acquitté : pas de réécriture
+    mtime = request.stat().st_mtime_ns
+    await asyncio.sleep(0.2)
+    assert request.stat().st_mtime_ns == mtime
+
+
+async def test_ack_of_one_mac_keeps_the_other_pending(config, bus, tmp_path):
+    service, request = make(config, bus, tmp_path)
+    service.identity.verify_delay = 5.0
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    replug(bus, HP_PATH, HP, Class=0x0)
+    await wait_until(lambda: request.exists() and len(lines(request)) == 2)
+    bus.change(HP_PATH, "org.bluez.Adapter1", Class=OK_HEADSETS)
+    await wait_until(lambda: [ln[2] for ln in lines(request)] == [SRC])
+    bus.change(SRC_PATH, "org.bluez.Adapter1", Class=OK_SOURCES)
+    await wait_until(lambda: request.read_text() == "")
+
+
+async def test_file_is_emptied_after_giving_up(config, bus, tmp_path, caplog):
+    service, request = make(config, bus, tmp_path)
+    service.identity.verify_delay = 0.1
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    await wait_until(lambda: count(caplog, "identity_giving_up") == 1)
+    await wait_until(lambda: request.read_text() == "")
+
+
+async def test_deferred_check_acknowledges_and_empties(config, bus, tmp_path):
+    service, request = make(config, bus, tmp_path)
+    service.identity.verify_delay = 0.2
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    await wait_until(lambda: request.exists() and lines(request))
+    service.inventory._adapters[SRC_PATH]["Class"] = (
+        OK_SOURCES  # lue par la vérification (sans signal)
+    )
+    await wait_until(lambda: request.read_text() == "")
+
+
+async def test_ack_before_the_file_was_written_writes_nothing(config, bus, tmp_path):
+    service, request = make(config, bus, tmp_path)
+    service.identity.debounce = 0.3
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    await wait_until(
+        lambda: service.identity._pending
+    )  # requête enregistrée, écriture différée (débounce)
+    bus.change(SRC_PATH, "org.bluez.Adapter1", Class=OK_SOURCES)  # acquitté avant l'écriture
+    await asyncio.sleep(0.6)
+    assert not request.exists() or request.read_text() == ""
