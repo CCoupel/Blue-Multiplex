@@ -125,29 +125,39 @@ Règles :
   (unique par V3), sinon défaut **`btmux`** (sources) / **`btmux-hp`** (headsets) ; un contrôleur portant les deux rôles prend le nom du rôle
   `sources`. Après une permutation, le nouveau contrôleur `sources` s'annonce donc `btmux` quel que soit son MAC. `Controller.name`
   (API) reste l'alias BlueZ courant et reflète ce nom une fois l'identité appliquée.
-- **Identité réappliquée au hotplug** (décision utilisateur du 2026-10-24) : quand un contrôleur **affecté** réapparaît sur le bus
-  (`InterfacesAdded` de `org.bluez.Adapter1` — rebranchement, reset USB, énumération tardive au boot), le daemon, non root, ne peut pas
-  rétablir la classe : il écrit atomiquement **`/var/lib/btmux/identity.request`** (journal `identity_requested hci= mac=`) ;
+- **Identité réappliquée au hotplug** (décision utilisateur du 2026-10-24 ; révision du 2026-10-25 après revue) : quand un contrôleur
+  **affecté** réapparaît sur le bus (`InterfacesAdded` de `org.bluez.Adapter1` — rebranchement, reset USB, énumération tardive au boot), le daemon,
+  non root, ne peut pas rétablir la classe : il inscrit la MAC dans **`/var/lib/btmux/identity.request`** (journal `identity_requested hci= mac=`) ;
   `btmux-adapters-identity.path` (`PathChanged=`) déclenche **`btmux-adapters-identity.service`** (root, oneshot) qui rejoue
-  `btmux-adapters.sh --state … --config … --wait 5 --only "$(cut -f3 /var/lib/btmux/identity.request)"` : alias et classe du rôle sur **le seul
-  contrôleur réapparu**, **sans redémarrage de `btmuxd`** ni coupure de l'API, et **sans toucher aux autres contrôleurs** (une fenêtre d'appairage
-  ouverte par le daemon sur l'autre contrôleur n'est pas refermée — décision utilisateur du 2026-10-25).
-  - **Format du fichier** (une seule ligne, UTF-8, champs séparés par une tabulation, terminée par `\n`) :
-    `<horodatage ISO-8601 UTC>\t<hciN>\t<MAC majuscules>` — ex. `2026-10-25T07:12:03Z\thci1\t18:69:45:42:B5:54`. **La MAC (3e champ) fait foi** ; `hciN` et l'horodatage sont informatifs (journal, diagnostic). Écriture atomique (tmp voisin,
-    fsync, rename), mode 0640, propriétaire `BTMUX_USER` ; le fichier **existe dès l'installation** (vide) pour que l'unité `.path` le surveille.
-    Deux apparitions rapprochées : le fichier est réécrit ; l'unité `.path` coalesce et une seule passe est rejouée sur la **dernière** MAC écrite —
-    le daemon réémet alors une requête pour tout contrôleur affecté dont la classe n'est pas celle du rôle (`PropertiesChanged Class` observé
-    ≠ attendu → nouvelle requête, au plus une par contrôleur et par minute).
-  - **`--only <MAC>`** : la passe ne traite que cette MAC (alias du rôle, classe, `bondable off`, `discov no` si elle est **affectée** dans la liste
-    effective). MAC **non affectée** (hors liste) : seulement fermée (`bondable off`, `discov no`), ni alias ni classe — comme tout contrôleur
-    sans rôle. MAC **absente** de `btmgmt info` après `--wait` (déjà redébranchée) ou **invalide**/fichier vide : avertissement une ligne, code **0**
-    (jamais d'échec de l'unité). Sans `--only`, le comportement complet (tous les contrôleurs) est inchangé (boot, `ExecStartPre`).
+  `btmux-adapters.sh --state … --config … --wait 5 --only <MAC>` pour **chaque MAC en attente** : alias et classe du rôle sur les seuls contrôleurs
+  réapparus, **sans redémarrage de `btmuxd`** ni coupure de l'API, et **sans toucher aux autres contrôleurs** (une fenêtre d'appairage ouverte
+  par le daemon sur un autre contrôleur n'est pas refermée).
+  - **Format du fichier** : UTF-8, **une ligne par MAC en attente**, champs séparés par une tabulation, chaque ligne terminée par `\n` :
+    `<horodatage ISO-8601 UTC>\t<hciN>\t<MAC majuscules>` — ex. `2026-10-25T07:12:03Z\thci1\t18:69:45:42:B5:54`. **La MAC (3e champ) fait foi** ;
+    `hciN` et l'horodatage sont informatifs. Le daemon **réécrit atomiquement l'ensemble des MAC non encore acquittées** (tmp voisin, fsync, rename ;
+    débounce ≤ 1 s autorisé pour grouper une salve) : aucune requête n'est perdue quand deux contrôleurs apparaissent ensemble. Mode 0640,
+    propriétaire `BTMUX_USER` ; le fichier **existe dès l'installation** (vide) pour que l'unité `.path` le surveille. Fichier vide = rien à faire.
+  - **Service root** : refuse tout ce qui n'est pas un **fichier régulier** (lien symbolique, répertoire, absent → avertissement, rien n'est traité,
+    code 0) ; lit toutes les lignes, **dédoublonne** les MAC, ignore les lignes invalides (avertissement « ligne invalide » **sans reproduire le
+    contenu**), traite chaque MAC valide par `--only` ; code **0** quoi qu'il arrive (configuration invalide incluse : avertissement, l'unité ne
+    doit jamais échouer ; `StartLimitIntervalSec=0`).
+  - **`--only <MAC>`** (répétable) : la passe ne traite que ces MAC (alias du rôle, classe, `bondable off`, `discov no` si la MAC est **affectée**
+    dans la liste effective). MAC **non affectée** (hors liste) : seulement fermée (`bondable off`, `discov no`), ni alias ni classe — comme tout
+    contrôleur sans rôle. MAC **absente** de `btmgmt info` après `--wait` (déjà redébranchée) ou **invalide** : avertissement une ligne, code **0**.
+    Sans `--only`, le comportement complet (tous les contrôleurs) est inchangé (boot, `ExecStartPre`).
+  - **Acquittement et vérification différée** (daemon) : une MAC est acquittée (retirée du fichier à la prochaine réécriture) quand la classe
+    observée (`PropertiesChanged Class`) est celle du rôle. Après chaque requête, le daemon **contrôle `Class` à +60 s** ; si elle diffère encore
+    du rôle, il réémet une requête — **3 tentatives au plus par contrôleur et par épisode** (un épisode = une apparition), puis journal **ERROR
+    `identity_giving_up hci= mac= attempts=3`** et abandon jusqu'à la prochaine apparition ou au prochain démarrage du daemon. **Aucune requête ni
+    vérification pendant `roles.pending`** (le redémarrage piloté applique l'identité via l'`ExecStartPre`).
   Le daemon ferme lui-même (`Pairable/Discoverable=false`, `Powered=true`) le contrôleur dès son apparition, avant même la passe d'identité.
   Délai attendu rebranchement → classe rétablie : **≤ 10 s**. Garanties : la passe est idempotente ; aucune requête n'est émise au chargement
-  initial ni pour un contrôleur non affecté ; pas de boucle (la passe modifie Alias/Class/Pairable, aucune requête n'est émise sur ces
-  `PropertiesChanged` sauf classe ≠ rôle, bornée) ; un hotplug pendant un redémarrage piloté peut produire une passe supplémentaire, sans
-  effet. Sans l'unité `.path` (absente/inactive), l'identité n'est rétablie qu'au prochain démarrage du daemon (journal
-  `identity_request_failed` si l'écriture échoue — jamais fatal).
+  initial ni pour un contrôleur non affecté ; pas de boucle (la passe modifie Alias/Class/Pairable ; seule la vérification différée bornée peut
+  réémettre) ; un hotplug pendant un redémarrage piloté est couvert par l'`ExecStartPre`. Sans l'unité `.path` (absente/inactive), l'identité
+  n'est rétablie qu'au prochain démarrage du daemon (journal `identity_request_failed` si l'écriture échoue — jamais fatal).
+  - **Limite documentée** (revue du 2026-10-25, acceptée) : le nom du rôle est lu dans la liste **effective** ; après un `PUT` qui **libère** un
+    rôle, l'état ne porte plus d'entrée pour ce rôle et une réaffectation ultérieure reprend le défaut `btmux` / `btmux-hp`, pas le nom
+    personnalisé de `config.yaml`. Contournement : supprimer `/var/lib/btmux/adapters.yaml` puis redémarrer, ou nommer les rôles par défaut.
 - **Application par redémarrage piloté du service (D3 b)** — séquence :
   1. `PUT` validé (no-op → 200 sans suite) → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, rien n'est
      déconnecté, `pending` reste faux) → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → réponse 202 + événement
