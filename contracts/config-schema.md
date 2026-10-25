@@ -144,8 +144,12 @@ Règles :
     **Relecture en fin de passe** (écart QA `qa-20261025-100508` 1) : l'unité `.path` ne relance pas un service déjà actif ; une MAC écrite
     **pendant** la passe (dongles réapparus à quelques secondes d'écart) serait sinon traitée au rattrapage +60 s. Le script relit donc le fichier
     à la fin de chaque passe et, s'il contient des MAC **non encore traitées** dans cette exécution, refait une passe limitée à celles-ci —
-    **3 relectures au plus** par exécution (jamais de boucle), MAC déjà traitées ignorées ; délai attendu pour une MAC arrivée en cours de passe :
-    **≤ ~10 s** après son écriture.
+    **3 relectures au plus** par exécution (jamais de boucle), MAC déjà traitées **dans cette exécution** ignorées ; délai attendu pour une MAC
+    arrivée en cours de passe : **≤ ~10 s** après son écriture (fin de la passe en cours ≈ 4 s + `--wait 5` au plus). **Aucun état persistant
+    côté root** (arbitrage du 2026-10-25, `infra-20261025-104500`) : une nouvelle exécution ne garde aucune mémoire des précédentes ; si le
+    fichier réécrit par le daemon contient encore une MAC en attente, elle est **rejouée une fois** (passe idempotente ≈ 4 s) — le script
+    **n'écrit jamais le fichier**, il ne peut donc pas s'auto-déclencher : pas de boucle. `TimeoutStartSec=60` : 4 passes typiques ≈ 16–36 s ;
+    pire cas théorique (`btmgmt` plafonné à 10 s par appel à chaque passe) 60 s atteints → unité interrompue, identité déjà posée conservée.
   - **Codes de sortie et garantie « l'unité ne doit jamais échouer »** (comportement retenu le 2026-10-25, `infra-20261025-090759`) : le script
     garde ses codes — **2** sur configuration/état invalides (comme au boot et à l'`ExecStartPre`), **0** sinon (MAC absente, fichier vide ou
     illisible, `btmgmt` indisponible : avertissements). C'est **l'unité** `btmux-adapters-identity.service` qui porte la garantie :
@@ -157,8 +161,9 @@ Règles :
     Sans `--only`, le comportement complet (tous les contrôleurs) est inchangé (boot, `ExecStartPre`).
   - **Acquittement et vérification différée** (daemon) : une MAC est acquittée quand la classe observée (`PropertiesChanged Class`) est celle
     du rôle, ou abandonnée (voir ci-dessous). **À chaque acquittement ou abandon, le daemon réécrit atomiquement `identity.request` avec les
-    seules MAC encore en attente — fichier vide si aucune** (écart QA 2). Cette réécriture déclenche l'unité `.path` : un fichier vide ou sans
-    MAC nouvelle fait sortir le script en code 0 sans rien faire (pas de passe inutile, pas de boucle). Après chaque requête, le daemon **contrôle `Class` à +60 s** ; si elle diffère encore
+    seules MAC encore en attente — fichier vide si aucune** (écart QA 2). Cette réécriture déclenche l'unité `.path` : un fichier **vide** fait
+    sortir le script en code 0 sans rien faire ; un fichier qui contient encore des MAC en attente provoque un rejeu idempotent unique de
+    celles-ci (voir `--requests`), sans boucle. Après chaque requête, le daemon **contrôle `Class` à +60 s** ; si elle diffère encore
     du rôle, il réémet une requête — **3 tentatives au plus par contrôleur et par épisode** (un épisode = une apparition), puis journal **ERROR
     `identity_giving_up hci= mac= attempts=3`** et abandon jusqu'à la prochaine apparition ou au prochain démarrage du daemon. **Aucune requête ni
     vérification pendant `roles.pending`** (le redémarrage piloté applique l'identité via l'`ExecStartPre`).

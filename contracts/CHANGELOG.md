@@ -81,3 +81,7 @@
 ## [20261025-d] — écarts QA Pi 0.2.0.6 (`qa-20261025-100508` 1 et 2), décision utilisateur du 2026-10-25 — non BREAKING
 
 - **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : **relecture de `identity.request` en fin de passe** par `btmux-adapters.sh --requests` (MAC nouvelles traitées dans la foulée, 3 relectures max par exécution, MAC déjà traitées ignorées ; ≤ ~10 s après écriture) ; le daemon **réécrit le fichier sans les MAC acquittées ou abandonnées** (vide quand rien n'est en attente) — la réécriture déclenche le `.path` mais un fichier vide/sans nouveauté se termine en code 0 sans passe.
+
+## [20261025-e] — arbitrage rejeu idempotent (`infra-20261025-104500` § Conformité) — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : « MAC déjà traitées ignorées » s'entend **au sein d'une exécution** ; aucun état persistant côté root — une exécution déclenchée par la réécriture du daemon peut **rejouer une fois** une MAC encore en attente (passe idempotente ≈ 4 s, le script n'écrit jamais le fichier → pas de boucle) ; `TimeoutStartSec=60` et pire cas `btmgmt` (10 s/appel) notés.
