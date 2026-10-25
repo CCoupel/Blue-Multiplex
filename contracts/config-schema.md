@@ -133,7 +133,7 @@ Règles :
   contrôleur réapparu**, **sans redémarrage de `btmuxd`** ni coupure de l'API, et **sans toucher aux autres contrôleurs** (une fenêtre d'appairage
   ouverte par le daemon sur l'autre contrôleur n'est pas refermée — décision utilisateur du 2026-10-25).
   - **Format du fichier** (une seule ligne, UTF-8, champs séparés par une tabulation, terminée par `\n`) :
-    `<horodatage ISO-8601 UTC>\t<hciN>\t<MAC majuscules>` — ex. `2026-10-25T07:12:03Z\thci1\t18:69:45:42:B5:54`. Écriture atomique (tmp voisin,
+    `<horodatage ISO-8601 UTC>\t<hciN>\t<MAC majuscules>` — ex. `2026-10-25T07:12:03Z\thci1\t18:69:45:42:B5:54`. **La MAC (3e champ) fait foi** ; `hciN` et l'horodatage sont informatifs (journal, diagnostic). Écriture atomique (tmp voisin,
     fsync, rename), mode 0640, propriétaire `BTMUX_USER` ; le fichier **existe dès l'installation** (vide) pour que l'unité `.path` le surveille.
     Deux apparitions rapprochées : le fichier est réécrit ; l'unité `.path` coalesce et une seule passe est rejouée sur la **dernière** MAC écrite —
     le daemon réémet alors une requête pour tout contrôleur affecté dont la classe n'est pas celle du rôle (`PropertiesChanged Class` observé
