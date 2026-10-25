@@ -392,3 +392,61 @@ async def test_identity_request_write_failure_is_logged_not_fatal(
     assert "event=identity_request_failed" in caplog.text
     assert ("/org/bluez/hci1", "org.bluez.Adapter1", "Pairable", False) in bus.sets
     assert service.inventory.state()["controllers"]
+
+
+async def test_wrong_class_triggers_bounded_identity_rerequest(config, bus, tmp_path) -> None:
+    service, request = _identity_service(config, bus, tmp_path)
+    clock = [1000.0]
+    service._clock = lambda: clock[0]
+    await started(service)
+    mac = "AA:BB:CC:00:00:01"
+
+    async def class_changed(value: int) -> None:
+        bus.change(SRC_PATH, "org.bluez.Adapter1", Class=value)
+        await asyncio.sleep(0.05)
+
+    await class_changed(0x6C0404)  # sources attendu 0x0404 (bits service ignorés) : rien
+    await class_changed(0x240404)
+    assert not request.exists()
+    await class_changed(0x00000000)  # classe remise à zéro (reset du dongle) : requête
+    assert request.read_text().split("\t")[2].strip() == mac
+    request.unlink()
+    clock[0] += 30
+    await class_changed(0x0)  # dans la minute : rien
+    assert not request.exists()
+    clock[0] += 31
+    await class_changed(0x0)  # plus d'une minute : réémise
+    assert request.exists()
+    # headsets seul : attendu 0x010c
+    request.unlink()
+    clock[0] += 120
+    bus.change(HP_PATH, "org.bluez.Adapter1", Class=0x6C010C)
+    await asyncio.sleep(0.05)
+    assert not request.exists()
+    bus.change(HP_PATH, "org.bluez.Adapter1", Class=0x6C0404)
+    await asyncio.sleep(0.05)
+    assert request.read_text().split("\t")[2].strip() == "AA:BB:CC:00:00:02"
+
+
+async def test_hotplug_request_counts_toward_the_rerequest_limit(config, bus, tmp_path) -> None:
+    service, request = _identity_service(config, bus, tmp_path)
+    await started(service)
+    ifaces = adapter_obj("AA:BB:CC:00:00:01")
+    bus.emit(BusSignal("interfaces_removed", SRC_PATH, None, ["org.bluez.Adapter1"]))
+    bus.objects[SRC_PATH] = ifaces
+    bus.emit(BusSignal("interfaces_added", SRC_PATH, None, ifaces))
+    await asyncio.sleep(0.05)
+    first = request.read_text()
+    request.unlink()
+    bus.change(SRC_PATH, "org.bluez.Adapter1", Class=0x0)  # BlueZ remet la classe par défaut
+    await asyncio.sleep(0.05)
+    assert first and not request.exists()  # pas de doublon immédiat
+
+
+async def test_wrong_class_on_unassigned_controller_requests_nothing(config, bus, tmp_path):
+    service, request = _identity_service(config, bus, tmp_path)
+    bus.objects["/org/bluez/hci5"] = adapter_obj("AA:BB:CC:00:00:09", "raspberrypi")
+    await started(service)
+    bus.change("/org/bluez/hci5", "org.bluez.Adapter1", Class=0x0)
+    await asyncio.sleep(0.05)
+    assert not request.exists()

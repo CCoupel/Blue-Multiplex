@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import time
 from datetime import UTC, datetime
 
 from btmux.bluez.adapters import ADAPTER_IFACE, AdapterRegistry
@@ -26,6 +27,11 @@ EXIT_RESTART_FALLBACK = (
     4  # redémarrage piloté non reçu : systemd relance (RestartForceExitStatus=4)
 )
 RESTART_TIMEOUT_S = 30.0
+# Classe attendue par rôle (bits majeur/mineur ; les bits « service » varient avec les UUID enregistrés)
+CLASS_MASK = 0x1FFF
+CLASS_SOURCES = 0x0404  # rôle sources : casque audio
+CLASS_HEADSETS = 0x010C  # rôle headsets seul : ordinateur portable
+IDENTITY_RETRY_INTERVAL_S = 60.0
 DEFAULT_ADAPTER_WAIT = 30.0
 ENV_ADAPTER_WAIT = "BTMUX_ADAPTER_WAIT"
 
@@ -63,6 +69,8 @@ class BluezService:
         self._lost = asyncio.Event()
         self._handlers_installed = False
         self._guards: set[asyncio.Future[None]] = set()
+        self._clock = time.monotonic
+        self._identity_last: dict[str, float] = {}
 
     def on_roles_written(self) -> None:
         """L'état des rôles vient d'être écrit : `btmux-adapters.path` doit relancer le service (SIGTERM) ;
@@ -95,6 +103,8 @@ class BluezService:
             if signal.kind == "properties_changed" and isinstance(signal.data, dict)
             else ()
         )
+        if signal.kind == "properties_changed" and signal.interface == ADAPTER_IFACE:
+            self._check_class(signal)
         if signal.kind == "interfaces_added" and ADAPTER_IFACE in signal.data:
             pass
         elif not (
@@ -107,6 +117,21 @@ class BluezService:
             return
         added = signal.kind == "interfaces_added"
         task = asyncio.ensure_future(self._close_controller(signal.path, request_identity=added))
+        self._guards.add(task)
+        task.add_done_callback(self._guards.discard)
+
+    def _check_class(self, signal: BusSignal) -> None:
+        """Classe observée ≠ celle du rôle sur un contrôleur affecté (la passe a échoué, reset du dongle) :
+        nouvelle requête d'identité, au plus une par contrôleur et par minute (pas de boucle)."""
+        info = self.registry.info_for_path(signal.path)
+        if info is None or not isinstance(signal.data, dict) or "Class" not in signal.data:
+            return
+        expected = CLASS_SOURCES if "sources" in info.roles else CLASS_HEADSETS
+        if (int(signal.data["Class"]) & CLASS_MASK) == expected:
+            return
+        task = asyncio.ensure_future(
+            self._request_identity(info.hci or signal.path, info.mac, retry=True)
+        )
         self._guards.add(task)
         task.add_done_callback(self._guards.discard)
 
@@ -123,9 +148,14 @@ class BluezService:
         ):  # seulement à l'apparition d'un contrôleur affecté
             await self._request_identity(info.hci or path, info.mac)
 
-    async def _request_identity(self, hci: str, mac: str) -> None:
+    async def _request_identity(self, hci: str, mac: str, *, retry: bool = False) -> None:
         """Le daemon n'est pas root : il demande à `btmux-adapters-identity.path` de rejouer l'identité
         (alias + classe). Jamais fatal : l'échec est journalisé, l'identité sera rétablie au prochain démarrage."""
+        now = self._clock()
+        last = self._identity_last.get(mac)
+        if retry and last is not None and now - last < IDENTITY_RETRY_INTERVAL_S:
+            return  # borné : une réémission par contrôleur et par minute
+        self._identity_last[mac] = now
         target = self.config.identity_request_path
         when = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
