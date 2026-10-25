@@ -91,14 +91,18 @@
 
 | Étape | Action | Résultat attendu | Obtenu | OK ? |
 |-------|--------|------------------|--------|------|
-| 1 | Relever `systemctl show btmuxd -p MainPID` ; ouvrir `GET /api/events` (curl avec jeton) ; lancer en parallèle un sondage `while sleep 1; do curl -fsS -m 2 -H "Authorization: Bearer $T" .../api/health; done` | Premier événement : `state` complet (6 clés) ; sondage 200 | | |
+| 1 | `btmuxctl pairing open sources 60` (fenêtre sur l'**autre** contrôleur `$SRC`, à rouvrir si elle expire pendant le scénario) ; relever `systemctl show btmuxd -p MainPID` ; ouvrir `GET /api/events` (curl avec jeton) ; lancer en parallèle un sondage `while sleep 1; do curl -fsS -m 2 -H "Authorization: Bearer $T" .../api/health; done` | Premier événement : `state` complet (6 clés) ; sondage 200 ; `pairing.open=true` (sources) | | |
 | 2 | `unbind` du dongle `$HP` (rôle affecté) | Événement `controllers` : `present=false` ; `PUT roles` vers ce MAC → 400 `unknown_controller` | | |
 | 3 | `bind`, chronométrer jusqu'à la classe rétablie | Événement `controllers` : `present=true` ; le daemon ferme le contrôleur aussitôt (`Pairable/Discoverable no`) | | |
-| 4 | Journal ≤ 10 s après `bind` | `identity_requested hci=… mac=…` (une fois) ; `btmux-adapters-identity.service` : `systemctl show -p Result btmux-adapters-identity.service` = `success` | | |
+| 4 | Journal ≤ 10 s après `bind` ; `cat /var/lib/btmux/identity.request` | `identity_requested hci=… mac=…` (une fois) ; fichier : `<ISO UTC>\t<hciN>\t<MAC de $HP en majuscules>`, mode 640 ; l'unité exécute `btmux-adapters.sh … --only <MAC de $HP>` (visible dans `systemctl status`/journal) ; `btmux-adapters-identity.service` : `systemctl show -p Result btmux-adapters-identity.service` = `success` | | |
 | 5 | `bluetoothctl show $HP` | Classe `0x6c0404` (sources) ou `0x6c010c` (headsets) selon le rôle ; alias du rôle (`btmux` / `btmux-hp`) ; `Pairable: no`, `Discoverable: no` | | |
 | 6 | `systemctl show btmuxd -p MainPID` + sondage de l'étape 1 | **Même PID** (aucun redémarrage de `btmuxd`) ; l'API n'a jamais été coupée (aucun échec du sondage) | | |
 | 7 | Rejouer étapes 2–3 avec un contrôleur **sans rôle** (ou après `roles set … none`) | Aucune ligne `identity_requested` ; contrôleur fermé (`Pairable/Discoverable no`) | | |
 | 8 | Après étape 3, aucune nouvelle ligne `identity_requested` (pas de boucle alias/classe → requête) | Une seule requête par réapparition | | |
+| 9 | **Autre contrôleur épargné** : `bluetoothctl show $SRC` + `btmuxctl state` juste après la passe d'identité de `$HP` | `$SRC` : toujours `Pairable: yes`, `Discoverable: yes` (BlueZ), cohérent avec l'API (`pairing.open=true`, `adapter=sources`, `controllers[$SRC].pairable/discoverable=true`) ; la fenêtre n'a pas été refermée par la passe (le journal ne montre aucune fermeture de `$SRC`) | | |
+| 10 | **Réémission bornée** : altérer la classe de `$HP` hors rôle (`sudo btmgmt --index <N> class 1 1`) ; attendre ≤ 10 s | Nouvelle ligne `identity_requested` (classe observée ≠ rôle) puis classe du rôle rétablie par la passe | | |
+| 11 | Re-altérer la classe de `$HP` **moins d'une minute** après l'étape 10 | **Pas** de nouvelle requête (au plus 1 par contrôleur et par minute) ; la classe reste altérée jusqu'à la minute écoulée, puis une requête est réémise au changement suivant | | |
+| 12 | Rétablir : `sudo systemctl start btmux-adapters-identity.service` ou attendre la réémission ; fermer la fenêtre `btmuxctl pairing close` | Classe du rôle sur `$HP`, aucune fenêtre ouverte | | |
 
 **Verdict** : [ ] PASS  [ ] FAIL
 
@@ -125,6 +129,7 @@
 - [ ] Aucune écriture acceptée pendant `change_pending`
 - [ ] Aucun contrôleur sans rôle ne reste appairable/découvrable
 - [ ] Hotplug d'un contrôleur affecté : identité rétablie ≤ 10 s, `btmuxd` non redémarré (même PID), API jamais coupée
+- [ ] Hotplug d'un contrôleur : l'autre contrôleur (fenêtre d'appairage ouverte) n'est pas refermé ; réémission bornée à 1 requête/contrôleur/minute
 - [ ] L'alias suit le rôle après permutation (`btmux` sources, `btmux-hp` headsets)
 
 ## Notes QA
