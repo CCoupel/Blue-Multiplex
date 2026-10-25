@@ -77,3 +77,7 @@
 ## [20261025-c] — alignement sur l'infra livrée `3a9263c` (`infra-20261025-090759` « Décision ») — non BREAKING
 
 - **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : `btmux-adapters-identity.service` appelle `btmux-adapters.sh --requests /var/lib/btmux/identity.request` (option documentée : fichier régulier exigé, lecture bornée 4 Kio, dédoublonnage, lignes invalides comptées sans reproduire le contenu, = un `--only` par MAC valide) ; codes de sortie du script inchangés (2 config invalide, 0 sinon) — la garantie « ne jamais échouer » est portée par l'unité (`SuccessExitStatus=2`, `StartLimitIntervalSec=0`).
+
+## [20261025-d] — écarts QA Pi 0.2.0.6 (`qa-20261025-100508` 1 et 2), décision utilisateur du 2026-10-25 — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : **relecture de `identity.request` en fin de passe** par `btmux-adapters.sh --requests` (MAC nouvelles traitées dans la foulée, 3 relectures max par exécution, MAC déjà traitées ignorées ; ≤ ~10 s après écriture) ; le daemon **réécrit le fichier sans les MAC acquittées ou abandonnées** (vide quand rien n'est en attente) — la réécriture déclenche le `.path` mais un fichier vide/sans nouveauté se termine en code 0 sans passe.
