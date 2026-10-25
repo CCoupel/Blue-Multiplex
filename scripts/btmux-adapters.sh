@@ -7,19 +7,24 @@
 #   - rôle `sources`  -> classe « casque audio » (majeur 4 / mineur 4 ; la classe finale 0x240404 dépend des UUIDs) ;
 #   - rôle `headsets` seul -> classe « ordinateur » (majeur 1 / mineur 12 = portable).
 # Usage : btmux-adapters.sh [--config /etc/btmux/config.yaml] [--state FICHIER] [--dry-run] [--wait SECONDES] [--reset]
+#                          [--only MAC]
 #   --state   : fichier d'état des rôles (#23, ex. /var/lib/btmux/adapters.yaml) ; s'il existe et est valide, sa liste
 #               prime sur celle de la config (transmis à `btmux.config adapters --state`). Absent : défaut de btmux.config.
 #   --dry-run : affiche les commandes sans rien modifier (utilisable sans droits root).
 #   --reset   : ne fait que refermer appairage et découverte (bondable off, discov no) de tous les contrôleurs
 #               présents — ExecStopPost de btmuxd.
 #   --wait N  : attend jusqu'à N s (défaut 20) que tous les adaptateurs de la config soient énumérés (USB).
+#   --only MAC: ne traite que ce contrôleur (#23 hotplug) : identité s'il est affecté, sinon simple fermeture ; aucun autre
+#               contrôleur n'est touché (une fenêtre d'appairage ouverte ailleurs reste ouverte). MAC vide, invalide ou absente
+#               après --wait : avertissement, code 0 (btmux-adapters-identity.service ne doit jamais échouer).
 # Idempotent. Sans adaptateur présent : avertissement et code 0 (ne bloque jamais le démarrage). Config invalide : code 2.
 # Variables : BTMUX_PYTHON (défaut /opt/btmux/bin/python, repli python3), BTMUX_BTMGMT, BTMUX_BUSCTL,
 #   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »), BTMUX_ALIAS_WAIT (« 5 » : attente max., en s, que
 #   BlueZ expose /org/bluez/hciN avant de poser l'alias), BTMUX_TRIGGER (unité appelante, journalisée : boot, btmuxd, hotplug).
 set -euo pipefail
 
-CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0
+CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0 ONLY=""
+MAC_RE='^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$'
 while [ $# -gt 0 ]; do
   case "$1" in
     --config) CONFIG="${2:?chemin}"; shift 2 ;;
@@ -27,7 +32,14 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1; shift ;;
     --reset) RESET=1; shift ;;
     --wait) WAIT="${2:?secondes}"; shift 2 ;;
-    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --only)
+      [ $# -ge 2 ] || { echo "btmux-adapters: --only attend une MAC" >&2; exit 2; }
+      if ! [[ "$2" =~ $MAC_RE ]]; then
+        echo "btmux-adapters: AVERTISSEMENT --only : MAC vide ou invalide ('${2//[^0-9A-Za-z:._-]/?}') — rien à faire" >&2
+        exit 0
+      fi
+      ONLY="${2^^}"; shift 2 ;;
+    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "btmux-adapters: option inconnue: $1" >&2; exit 2 ;;
   esac
 done
@@ -47,7 +59,8 @@ SUDO=""
 
 log() { echo "btmux-adapters: $*"; }
 # Une ligne par passe : preuve QA du déclencheur (btmux-adapters.service, ExecStartPre/ExecStopPost de btmuxd, hotplug #23).
-if [ "$RESET" = 1 ]; then log "passe fermeture (déclencheur : $TRIGGER)"; else log "passe identité (déclencheur : $TRIGGER)"; fi
+SCOPE="${ONLY:+, contrôleur $ONLY seul}"
+if [ "$RESET" = 1 ]; then log "passe fermeture (déclencheur : $TRIGGER$SCOPE)"; else log "passe identité (déclencheur : $TRIGGER$SCOPE)"; fi
 FAILED=0
 run() {
   if [ "$DRY" = 1 ]; then echo "DRY-RUN: $*"; elif ! "$@"; then FAILED=1; echo "btmux-adapters: AVERTISSEMENT commande en échec: $*" >&2; fi
@@ -67,6 +80,11 @@ if [ "$rc" -ne 0 ]; then
     echo "btmux-adapters: impossible d'exécuter 'btmux.config' avec $PY (code $rc) — venv /opt/btmux absent ou btmux non installé ? (BTMUX_PYTHON)" >&2
   fi
   exit 2
+fi
+
+# --only : la liste effective est réduite à l'entrée de cette MAC (vide si le contrôleur n'a pas de rôle).
+if [ -n "$ONLY" ]; then
+  LIST="$(printf '%s\n' "$LIST" | awk -F '\t' -v mac="$ONLY" 'toupper($1) == mac')"
 fi
 
 MGMT_ERR=0
@@ -117,6 +135,8 @@ while :; do
     [ -n "$mac" ] || continue
     [ -n "$(index_of "$mac")" ] || missing=1
   done <<< "$LIST"
+  # --only d'une MAC non affectée : on attend quand même son énumération.
+  [ -z "$ONLY" ] || [ -n "$(index_of "$ONLY")" ] || missing=1
   { [ "$missing" = 0 ] || [ "$DRY" = 1 ] || [ "$SECONDS" -ge "$deadline" ]; } && break
   sleep 1
 done
@@ -159,12 +179,18 @@ while IFS=$'\t' read -r mac name roles; do
   }
 done <<< "$LIST"
 
-# Contrôleurs sans rôle (#23) : fermés, classe et alias intacts.
+# Contrôleurs sans rôle (#23) : fermés, classe et alias intacts (--only : ce contrôleur seulement).
+SEEN=0
 while IFS=$'\t' read -r idx mac; do
   [ -n "$idx" ] || continue
+  [ -z "$ONLY" ] || [ "$mac" = "$ONLY" ] || continue
+  SEEN=1
   case "$ASSIGNED" in *" $idx "*) continue ;; esac
   log "$mac -> hci$idx sans rôle : fermeture de l'appairage et de la découverte"
   run mgmt -i "$idx" bondable off
   run mgmt -i "$idx" discov no
 done <<< "$(all_indices)"
+if [ -n "$ONLY" ] && [ "$SEEN" = 0 ] && [ "$DRY" != 1 ]; then
+  echo "btmux-adapters: AVERTISSEMENT contrôleur $ONLY absent — rien à faire" >&2
+fi
 exit 0

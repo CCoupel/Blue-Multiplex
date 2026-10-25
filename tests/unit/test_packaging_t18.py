@@ -384,9 +384,11 @@ def test_identity_path_unit_watches_the_request_file() -> None:
 def test_identity_service_replays_the_identity_pass_without_restarting_btmuxd() -> None:
     unit = _unit("btmux-adapters-identity.service")
     assert "Type=oneshot\n" in unit and "User=" not in unit  # root : btmgmt, busctl set-property
+    # seul le contrôleur réapparu (3e champ de la requête) ; « $$ » = « $ » pour sh (28df535)
     assert (
-        f"ExecStart=/usr/lib/btmux/btmux-adapters.sh --state {STATE} "
-        "--config /etc/btmux/config.yaml --wait 5\n" in unit
+        "ExecStart=/bin/sh -c 'exec /usr/lib/btmux/btmux-adapters.sh "
+        f"--state {STATE} --config /etc/btmux/config.yaml --wait 5 "
+        f'--only "$$(head -n 1 {REQUEST} | cut -f 3)"\'\n' in unit
     )
     assert unit.count("ExecStart=") == 1 and "--reset" not in unit
     assert "systemctl restart" not in unit  # ni redémarrage de btmuxd, ni coupure de l'API

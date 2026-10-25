@@ -12,5 +12,8 @@ Type=oneshot
 # Journal « passe identité (déclencheur : hotplug) » : distingue cette passe de celles du boot et de l'ExecStartPre.
 Environment=BTMUX_TRIGGER=hotplug
 # --wait 5 : BlueZ a exposé Adapter1 mais btmgmt peut ne pas lister l'index aussitôt (rare).
-ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5
+# --only : seul le contrôleur réapparu est traité (3e champ de identity.request : « ISO<TAB>hciN<TAB>MAC ») ; les autres
+# ne sont pas touchés (une fenêtre d'appairage ouverte ailleurs reste ouverte). Fichier vide ou MAC invalide : le script
+# avertit et sort en code 0. « $$ » : « $ » littéral pour sh (pas de substitution systemd).
+ExecStart=/bin/sh -c 'exec /usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5 --only "$$(head -n 1 /var/lib/btmux/identity.request | cut -f 3)"'
 TimeoutStartSec=60
