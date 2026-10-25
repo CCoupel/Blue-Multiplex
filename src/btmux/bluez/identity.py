@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -34,6 +34,14 @@ def expected_class(roles: tuple[str, ...]) -> int:
     return CLASS_SOURCES if "sources" in roles else CLASS_HEADSETS
 
 
+Sleep = Callable[[float], Awaitable[None]]
+Writer = Callable[[Path, Sequence[tuple[str, str, str]]], Awaitable[None]]
+
+
+async def _write_in_thread(path: Path, entries: Sequence[tuple[str, str, str]]) -> None:
+    await asyncio.to_thread(write_identity_requests, path, entries)
+
+
 class IdentityRequester:
     def __init__(
         self,
@@ -45,7 +53,12 @@ class IdentityRequester:
         debounce: float = DEBOUNCE_S,
         max_attempts: int = MAX_ATTEMPTS,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        sleep: Sleep = asyncio.sleep,
+        write: Writer = _write_in_thread,
     ) -> None:
+        # `sleep` et `write` sont injectables : les tests pilotent le temps et les écritures sans horloge réelle
+        self.sleep = sleep
+        self.write = write
         self._target = target
         self._registry = registry
         self._inventory = inventory
@@ -118,30 +131,34 @@ class IdentityRequester:
 
     async def _flush(self) -> None:
         """Réécrit atomiquement l'ensemble des MAC en attente (fichier vide s'il n'y en a plus)."""
-        await asyncio.sleep(self.debounce)
+        await self.sleep(self.debounce)
         while self._dirty:
             self._dirty = False
             entries = [(when, hci, mac) for mac, (hci, when) in self._pending.items()]
             if not entries and not self._written:
                 return  # acquitté avant la 1re écriture : le fichier n'a rien à perdre
+            # Requêtes que CETTE écriture porte (instantané avant l'écriture) : une requête (ré)émise pendant
+            # l'écriture reste à journaliser et sera écrite par le tour suivant (sinon elle serait perdue du journal).
+            carried = self._to_log & {mac for _, _, mac in entries}
+            self._to_log -= carried
             try:
-                await asyncio.to_thread(write_identity_requests, self._target, entries)
+                await self.write(self._target, entries)
             except (
                 OSError
             ) as exc:  # jamais fatal : les MAC restent en attente pour la prochaine écriture
+                self._to_log |= carried
                 for _, hci, mac in entries:
                     log.warning(
                         kv("identity_request_failed", hci=hci, mac=mac, error=exc.strerror or exc)
                     )
                 return
-            fresh = [e for e in entries if e[2] in self._to_log]
-            self._to_log -= {mac for _, _, mac in entries}
             self._written = {mac for _, _, mac in entries}
-            for _, hci, mac in fresh:
-                log.info(kv("identity_requested", hci=hci, mac=mac))
+            for _, hci, mac in entries:
+                if mac in carried:
+                    log.info(kv("identity_requested", hci=hci, mac=mac))
 
     async def _verify(self, hci: str, mac: str) -> None:
-        await asyncio.sleep(self.verify_delay)
+        await self.sleep(self.verify_delay)
         info = next((i for i in self._registry.infos if i.mac == mac), None)
         observed = self._inventory.adapter_class(mac)
         if info is None or info.path is None:
