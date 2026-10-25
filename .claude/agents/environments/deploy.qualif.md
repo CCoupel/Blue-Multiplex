@@ -126,6 +126,8 @@ scripts/deploy.sh qualif "$WHEEL"          # lockfile trouve a cote de la wheel
 # 4a bis. Redemarrage pilote (#23) : le watcher d'identite des adaptateurs doit etre arme
 "${SSH[@]}" "systemctl is-enabled btmux-adapters.path && systemctl is-active btmux-adapters.path"
 # attendu : enabled puis active (sinon repli code 4 apres 30 s non declenche automatiquement)
+# Identite au hotplug (0.2.0.6) : watcher + requete vide 0640 proprietaire = utilisateur du service
+"${SSH[@]}" "systemctl is-enabled btmux-adapters-identity.path && systemctl is-active btmux-adapters-identity.path && ls -l /var/lib/btmux/identity.request"
 
 # 4b. Dependances = lockfile (aucune dependance hors lockfile, environnement coherent)
 "${SSH[@]}" "/opt/btmux/bin/pip check"
