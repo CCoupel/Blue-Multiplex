@@ -2,9 +2,9 @@
 Description=btmux — réapplication de l'identité des contrôleurs après hotplug (alias, classe, découverte fermée, #23)
 Documentation=https://github.com/CCoupel/Blue-Multiplex
 # Déclenchée uniquement par btmux-adapters-identity.path (aucune section d'installation). btmuxd n'est PAS redémarré :
-# API et SSE restent disponibles. Passe idempotente (≈ 4 s) ; une salve de requêtes est coalescée par systemd
-# (unité singleton, le .path re-déclenche une fois si le fichier a changé pendant la passe) et toutes les MAC en
-# attente sont traitées en une passe.
+# API et SSE restent disponibles. Passe idempotente (≈ 4 s) ; toutes les MAC en attente sont traitées en une passe.
+# Le .path ne relance pas l'unité tant qu'elle est active : le script relit donc identity.request en fin de passe et
+# traite aussitôt les MAC arrivées entre-temps (3 relectures au plus, MAC déjà traitées ignorées — contrat 20261025-d).
 After=bluetooth.service btmux-adapters.service
 # Pas de limite de démarrage : un dongle instable (rebranchements répétés) ne doit pas faire passer l'unité en
 # « start-limit-hit », ce qui suspendrait la surveillance jusqu'au prochain reset-failed.

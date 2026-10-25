@@ -240,3 +240,118 @@ def test_only_is_repeatable_and_skips_invalid_values(tmp_path: Path) -> None:
     assert "btmgmt -i 0 bondable off" in calls
     assert not _touched(calls, "2")
     assert "MAC vide ou invalide" in proc.stderr and "bad" not in proc.stderr
+
+
+# --- Requête arrivée pendant la passe (QA Pi 0.2.0.6, écart 1) : relecture bornée ---
+
+
+def _append_on_class(tmp_path: Path, request: Path, lines: list[str]) -> None:
+    """Faux btmgmt : à chaque `class`, ajoute la ligne suivante à la requête (dongle réapparu)."""
+    queue = tmp_path / "queue"
+    queue.write_text("".join(lines))
+    hook = tmp_path / "fakebin" / "btmgmt"
+    hook.parent.mkdir(exist_ok=True)
+    (tmp_path / "hook.sh").write_text(
+        f'case "$*" in *" class "*)\n'
+        f'  if [ -s "{queue}" ]; then head -n 1 "{queue}" >> "{request}";'
+        f' tail -n +2 "{queue}" > "{queue}.n"; mv "{queue}.n" "{queue}"; fi;;\nesac\n'
+    )
+
+
+def _run_with_hook(
+    tmp_path: Path, request: Path, env_extra: dict[str, str] | None = None
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """Comme _run, mais le faux btmgmt exécute hook.sh (écriture concurrente de la requête)."""
+    bindir = tmp_path / "fakebin"
+    bindir.mkdir(exist_ok=True)
+    log = tmp_path / "fake.log"
+    (tmp_path / "btmgmt.out").write_text(BTMGMT_THREE)
+    (tmp_path / "listing").write_text(BOTH)
+    _exe(
+        bindir / "btmgmt",
+        f'case "$*" in info) cat "{tmp_path / "btmgmt.out"}"; exit 0;; esac\n'
+        f'echo "btmgmt $*" >> "{log}"\n'
+        f'. "{tmp_path / "hook.sh"}"\n',
+    )
+    _exe(
+        bindir / "busctl",
+        'case "$1" in get-property) echo \'s "old"\'; exit 0;; esac\n'
+        f'echo "busctl $*" >> "{log}"\n',
+    )
+    _exe(bindir / "sudo", 'while [ "${1:-}" = "-n" ]; do shift; done\nexec "$@"\n')
+    _exe(bindir / "python", f'cat "{tmp_path / "listing"}"\n')
+    env = {
+        **{k: v for k, v in os.environ.items() if k != "BTMUX_TRIGGER"},
+        "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
+        "BTMUX_BTMGMT": str(bindir / "btmgmt"),
+        "BTMUX_BUSCTL": str(bindir / "busctl"),
+        "BTMUX_PYTHON": str(bindir / "python"),
+        "BTMUX_ALIAS_WAIT": "0",
+        **(env_extra or {}),
+    }
+    proc = subprocess.run(
+        _service_command(tmp_path, request),
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=tmp_path,
+        timeout=30,
+        check=False,
+    )
+    calls = log.read_text().splitlines() if log.exists() else []
+    return proc, calls
+
+
+def test_service_handles_a_request_written_during_the_pass(tmp_path: Path) -> None:
+    """2e dongle réapparu ≈3 s après le 1er : traité tout de suite, pas au rattrapage +60 s."""
+    request = tmp_path / "identity.request"
+    request.write_text(_req("AA:BB:CC:00:00:01"))
+    _append_on_class(tmp_path, request, [_req("AA:BB:CC:00:00:02").replace("hci0", "hci2")])
+    proc, calls = _run_with_hook(tmp_path, request)
+    assert proc.returncode == 0, proc.stderr
+    assert calls.count("btmgmt -i 1 class 4 4") == 1  # MAC déjà traitée : pas rejouée
+    assert calls.count("btmgmt -i 2 class 1 12") == 1
+    assert not _touched(calls, "0")
+    assert "relecture 1/3" in proc.stdout
+    assert proc.stdout.count("passe identité (déclencheur : ") == 2
+    assert "contrôleur AA:BB:CC:00:00:02 seul" in proc.stdout
+
+
+def test_service_reread_ignores_unchanged_or_already_handled_macs(tmp_path: Path) -> None:
+    """Même MAC réécrite (en attente d'acquittement) : aucune passe en plus."""
+    request = tmp_path / "identity.request"
+    request.write_text(_req("AA:BB:CC:00:00:02"))
+    _append_on_class(tmp_path, request, [_req("aa:bb:cc:00:00:02")])
+    proc, calls = _run_with_hook(tmp_path, request)
+    assert proc.returncode == 0, proc.stderr
+    assert calls.count("btmgmt -i 2 class 1 12") == 1
+    assert "relecture" not in proc.stdout
+    assert proc.stdout.count("passe identité") == 1
+
+
+def test_service_reread_is_bounded(tmp_path: Path) -> None:
+    """Une MAC nouvelle à chaque passe : au plus N relectures, jamais de boucle."""
+    request = tmp_path / "identity.request"
+    request.write_text(_req("AA:BB:CC:00:00:01"))
+    _append_on_class(
+        tmp_path,
+        request,
+        [_req("AA:BB:CC:00:00:02"), _req("B8:27:EB:00:00:09"), _req("AA:BB:CC:00:00:07")],
+    )
+    (tmp_path / "hook.sh").write_text(
+        (tmp_path / "hook.sh").read_text().replace('*" class "*', '*" class "*|*" bondable "*')
+    )
+    proc, calls = _run_with_hook(tmp_path, request, {"BTMUX_REQUESTS_REREAD": "1"})
+    assert proc.returncode == 0, proc.stderr
+    assert "relecture 1/1" in proc.stdout and "relecture 2/" not in proc.stdout
+    assert proc.stdout.count("passe identité") == 2
+    assert "borne de 1 relecture(s) atteinte" in proc.stderr
+
+
+def test_service_reread_does_not_repeat_invalid_line_warnings(tmp_path: Path) -> None:
+    request = tmp_path / "identity.request"
+    request.write_text("garbage\n" + _req("AA:BB:CC:00:00:02"))
+    _append_on_class(tmp_path, request, [])
+    proc, _ = _run_with_hook(tmp_path, request)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stderr.count("ligne(s) invalide(s)") == 1
