@@ -127,15 +127,27 @@ Règles :
   (API) reste l'alias BlueZ courant et reflète ce nom une fois l'identité appliquée.
 - **Identité réappliquée au hotplug** (décision utilisateur du 2026-10-24) : quand un contrôleur **affecté** réapparaît sur le bus
   (`InterfacesAdded` de `org.bluez.Adapter1` — rebranchement, reset USB, énumération tardive au boot), le daemon, non root, ne peut pas
-  rétablir la classe : il écrit atomiquement **`/var/lib/btmux/identity.request`** (une ligne : horodatage ISO, `hci`, MAC ; journal
-  `identity_requested`) ; `btmux-adapters-identity.path` (`PathChanged=`) déclenche **`btmux-adapters-identity.service`** (root, oneshot) qui
-  rejoue `btmux-adapters.sh --state … --config … --wait 5` : alias et classe du rôle sur les contrôleurs affectés, fermeture de tous les autres,
-  **sans redémarrage de `btmuxd`** ni coupure de l'API. Le daemon ferme lui-même (`Pairable/Discoverable=false`, `Powered=true`) le contrôleur dès
-  son apparition, avant même la passe d'identité. Délai attendu rebranchement → classe rétablie : **≤ 10 s**. Garanties : la passe est
-  idempotente (une exécution par salve, l'unité `.path` coalesce) ; aucune requête n'est émise au chargement initial ni sur
-  `PropertiesChanged` (pas de boucle alias/classe → requête) ; un hotplug pendant un redémarrage piloté peut produire une passe
-  supplémentaire, sans effet. Sans l'unité `.path` (absente/inactive), l'identité n'est rétablie qu'au prochain démarrage du daemon
-  (journal `identity_request_failed` si l'écriture échoue — jamais fatal).
+  rétablir la classe : il écrit atomiquement **`/var/lib/btmux/identity.request`** (journal `identity_requested hci= mac=`) ;
+  `btmux-adapters-identity.path` (`PathChanged=`) déclenche **`btmux-adapters-identity.service`** (root, oneshot) qui rejoue
+  `btmux-adapters.sh --state … --config … --wait 5 --only "$(cut -f3 /var/lib/btmux/identity.request)"` : alias et classe du rôle sur **le seul
+  contrôleur réapparu**, **sans redémarrage de `btmuxd`** ni coupure de l'API, et **sans toucher aux autres contrôleurs** (une fenêtre d'appairage
+  ouverte par le daemon sur l'autre contrôleur n'est pas refermée — décision utilisateur du 2026-10-25).
+  - **Format du fichier** (une seule ligne, UTF-8, champs séparés par une tabulation, terminée par `\n`) :
+    `<horodatage ISO-8601 UTC>\t<hciN>\t<MAC majuscules>` — ex. `2026-10-25T07:12:03Z\thci1\t18:69:45:42:B5:54`. Écriture atomique (tmp voisin,
+    fsync, rename), mode 0640, propriétaire `BTMUX_USER` ; le fichier **existe dès l'installation** (vide) pour que l'unité `.path` le surveille.
+    Deux apparitions rapprochées : le fichier est réécrit ; l'unité `.path` coalesce et une seule passe est rejouée sur la **dernière** MAC écrite —
+    le daemon réémet alors une requête pour tout contrôleur affecté dont la classe n'est pas celle du rôle (`PropertiesChanged Class` observé
+    ≠ attendu → nouvelle requête, au plus une par contrôleur et par minute).
+  - **`--only <MAC>`** : la passe ne traite que cette MAC (alias du rôle, classe, `bondable off`, `discov no` si elle est **affectée** dans la liste
+    effective). MAC **non affectée** (hors liste) : seulement fermée (`bondable off`, `discov no`), ni alias ni classe — comme tout contrôleur
+    sans rôle. MAC **absente** de `btmgmt info` après `--wait` (déjà redébranchée) ou **invalide**/fichier vide : avertissement une ligne, code **0**
+    (jamais d'échec de l'unité). Sans `--only`, le comportement complet (tous les contrôleurs) est inchangé (boot, `ExecStartPre`).
+  Le daemon ferme lui-même (`Pairable/Discoverable=false`, `Powered=true`) le contrôleur dès son apparition, avant même la passe d'identité.
+  Délai attendu rebranchement → classe rétablie : **≤ 10 s**. Garanties : la passe est idempotente ; aucune requête n'est émise au chargement
+  initial ni pour un contrôleur non affecté ; pas de boucle (la passe modifie Alias/Class/Pairable, aucune requête n'est émise sur ces
+  `PropertiesChanged` sauf classe ≠ rôle, bornée) ; un hotplug pendant un redémarrage piloté peut produire une passe supplémentaire, sans
+  effet. Sans l'unité `.path` (absente/inactive), l'identité n'est rétablie qu'au prochain démarrage du daemon (journal
+  `identity_request_failed` si l'écriture échoue — jamais fatal).
 - **Application par redémarrage piloté du service (D3 b)** — séquence :
   1. `PUT` validé (no-op → 200 sans suite) → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, rien n'est
      déconnecté, `pending` reste faux) → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → réponse 202 + événement

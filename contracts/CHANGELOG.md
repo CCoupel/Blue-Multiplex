@@ -63,3 +63,7 @@
 
 - **[CHANGED]** `contracts/config-schema.md` — § Affectation : **l'alias suit le rôle** (`name` écrit dans l'état = nom du rôle : entrée `config.yaml` portant le rôle, sinon `btmux` / `btmux-hp` ; mono-rôle double → nom `sources`), au lieu d'être repris par MAC.
 - **[NEW]** `contracts/config-schema.md` — § Affectation : **identité réappliquée au hotplug** — le daemon écrit `/var/lib/btmux/identity.request` à l'apparition (`InterfacesAdded`) d'un contrôleur affecté ; `btmux-adapters-identity.path` → `btmux-adapters-identity.service` (root, oneshot) rejoue `btmux-adapters.sh --wait 5` sans redémarrer `btmuxd` (≤ 10 s) ; journaux `identity_requested` / `identity_request_failed`. Mesures QUALIF 0.2.0.5 de la coupure (16,9–18,3 s) notées.
+
+## [20261025-a] — identité au hotplug ciblée (`infra-20261024-211455` point 1, décision utilisateur du 2026-10-25) — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § Affectation « identité réappliquée au hotplug » : `btmux-adapters-identity.service` rejoue `btmux-adapters.sh --only <MAC>` lue dans `identity.request` (3e champ) et ne traite que le contrôleur réapparu — une fenêtre d'appairage ouverte sur l'autre contrôleur n'est plus refermée. Format du fichier figé (`ISO\thciN\tMAC`, 0640, atomique, existe vide à l'installation) ; comportement de `--only` pour une MAC non affectée (fermée seulement), absente ou invalide (avertissement, code 0) ; requêtes rapprochées coalescées, le daemon réémet si la classe observée ≠ rôle (au plus une par contrôleur et par minute).
