@@ -280,7 +280,7 @@ function renderControllers() {
     changed() ? h("div", { class: "pair" },
       h("span", { class: "status info" }, "Modification en attente : ", draftSummary()),
       h("button", { disabled: locked, onclick: () => { S.draft = null; render(); } }, "Annuler"),
-      h("button", { class: "primary", disabled: locked || S.busy.has("roles"), onclick: () => applyRoles(false) }, "Appliquer")) : null,
+      h("button", { class: "primary", disabled: locked || S.busy.has("roles"), onclick: () => applyRoles(false) }, S.busy.has("roles") ? "Application en cours… (déconnexion des appareils, jusqu'à ~5 s par appareil)" : "Appliquer")) : null,
   ].filter(Boolean));
 }
 
@@ -327,6 +327,9 @@ async function applyRoles(confirm) {
       pushError(new ApiError(409, e.code, "Fermez d'abord la fenêtre d'appairage, puis réessayez."), { title: "Affectation refusée" });
     } else if (e instanceof ApiError && e.status === 409 && e.code === "change_pending") {
       pushError(new ApiError(409, e.code, "Un changement d'affectation est déjà en cours, patientez."), { title: "Affectation refusée" });
+    } else if (e instanceof ApiError && e.status === 502 && e.code === "disconnect_failed") {
+      const list = Array.isArray(e.details) ? e.details.map(detailLabel).join(", ") : "";
+      pushError(new ApiError(502, e.code, `Impossible de déconnecter${list ? ` : ${list}` : " certains appareils"}. Rien n'a été modifié, aucun redémarrage : réessayez.`), { title: "Affectation non appliquée" });
     } else pushError(e, { title: "Affectation refusée" });
   } finally { S.busy.delete("roles"); render(); }
 }
