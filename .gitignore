@@ -79,3 +79,4 @@ htmlcov/
 # Les preuves publiées passent par spikes/common/mask_evidence.py puis docs/spikes/.
 spikes/*/out/
 *.snoop
+.claude/workflow/

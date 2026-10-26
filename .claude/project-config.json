@@ -8,8 +8,8 @@
   "initialized_at": "2026-10-13T10:30:00+02:00",
   "initialized_from": "workshop",
   "template_version": {
-    "tag": "v3.26.0",
-    "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de"
+    "tag": "v3.27.0",
+    "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf"
   },
   "src_dir": "src",
   "version_file": "pyproject.toml",
@@ -201,38 +201,38 @@
       {
         "name": "cdp",
         "source": "agents/cdp.md",
-        "tag": "v3.26.0",
-        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
-        "sha256": "295f16df7bd0eb0afd044dda340e2cbc8988d431b52812999d503d00cfc4d480"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "30da29c70a547aae940c27e00604f5806964ab05498c8ad380a095e353247e25"
       },
       {
         "name": "code-reviewer",
         "source": "agents/code-reviewer.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "2159bea9068780fff433e46bb7df04b9548524bf151d98a967714ce805ed6c92"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "6db56bbdc6483602b9284348bb1f2653fa1bc541ef31681697b6bbf98920b5fe"
       },
       {
         "name": "deploy",
         "source": "agents/deploy.md",
-        "tag": "v3.26.0",
-        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
-        "sha256": "bf101fa474095d636795fe6aaab6ae454418c1720718358cdd189868d5346228"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "8060486767f4ba0d4536c9cc195ac6f38554a35dde7ded76d68ff4245b895f27"
       },
       {
         "name": "dev-backend",
         "source": "templates/dev-backend-python.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "980d7eddb66204d177ef5417d6636b41c76f888baeea3b8e6596f3640b4197cc",
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "5f669ba544c172815cf4d19de96f9507b88fc1c81e2ba546790668ec33211443",
         "role": "Backend (Python 3.12 asyncio, dbus-fast, PipeWire)"
       },
       {
         "name": "dev-frontend",
         "source": "templates/dev-generic.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "e727e467126690efb37ebb3a0609a245d951c84620012d2edbcb2f36c9525fb9",
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "5ef9f4825c636a524f64cddf51c5c4fd3876167bade7706f0793bca061244b19",
         "role": "Frontend (HTML/CSS/JS vanilla, Web UI minimale)",
         "paths": [
           "src/btmux/api/static/**"
@@ -241,72 +241,72 @@
       {
         "name": "doc-updater",
         "source": "agents/doc-updater.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "4538a44097f7425c85364ca242bac4a53f2103b5170c1186fd15ad9906b40dfc"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "dd2b57b3cdba9c649295d5bd86bea4539728aadce0416c5bfb40275f223baab8"
       },
       {
         "name": "generic",
         "source": "agents/generic.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "b75d20a266c43ce85865e3e1c9350040d2ad167ffdea108c9f2ddd9f290feed5"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "4157f75529762528a54afbfcc50630d772ca8734c8ab693c913bb0d8933f6be7"
       },
       {
         "name": "implementation-planner",
         "source": "agents/implementation-planner.md",
-        "tag": "v3.26.0",
-        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
-        "sha256": "2c71da89ba3131c613751c6a206bd149c50669e43bc9f983f63e556936a2f664"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "aaa506eddb0a237da081ec9735f7ef42e616a5bac27479326c8f75bce3f26261"
       },
       {
         "name": "infra",
         "source": "agents/infra.md",
-        "tag": "v3.26.0",
-        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
-        "sha256": "5fdd23850c026d42325ee587d365a404ceacb6bcf1c4722d82003196f97a7ff5"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "81f8f8de43a2b331e7e1266fce60ac35ef97bbc2f1e62eee6a807d7613f533e7"
       },
       {
         "name": "marketing-release",
         "source": "agents/marketing-release.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "86bde88ab29a2292b98bbf9ad80dc290121485cb756a5b87bf7677b06aa46903"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "d73e32b7001792a9829f5cafc66175a807a564593425b0f13a66e21ac887be9a"
       },
       {
         "name": "pr-reviewer",
         "source": "agents/pr-reviewer.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "91f233a61cd8efab23c949c160a878a6a7d047c47f6a19855f3feaef665db186"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "399fb28b4180b86be96dbb6dab0c483c287a2a660c403adc0a357977d2acb24b"
       },
       {
         "name": "qa",
         "source": "agents/qa.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "5c4cb032e22d2fd875a3dd19a8f8de523c329bc39e409a72ad619e47040a67cf"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "0e22c6afb97c592cf8b0c561d1978371963a61a51929deb22130fda62cf56c6c"
       },
       {
         "name": "security",
         "source": "agents/security.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "65bedfdf40295d956bd440cf9073a358e411c0ab3f6b2abf44e8822638123f8f"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "c92fc9d89ba987149dee4e7a7442cae784267ff15e43100bc0e357e21547bc54"
       },
       {
         "name": "teamleader",
         "source": "agents/teamleader.md",
-        "tag": "v3.23.3",
-        "commit": "d2a1e1aa0345db19c3b21d43c41e9f2ade5203ec",
-        "sha256": "bb58ff9c09e1c8cecea275bb8f88bf6d355a5724df176e74c55fd58f5968a00e"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "98d0f3b9c9a9661dc2d32599a9237fb9eeba83bd35afa286c0ae2b37f0a3b223"
       },
       {
         "name": "test-writer",
         "source": "agents/test-writer.md",
-        "tag": "v3.26.0",
-        "commit": "1d51b1cd45ebeb412368aa0468c4bae2e988e8de",
-        "sha256": "9cbdc9e2139ca755e07a4075b82bf3c9e2e29958eb950927dde95c2966a3faaf"
+        "tag": "v3.27.0",
+        "commit": "2ca467df6ab3786c4e6949c1bce43f25c869a5bf",
+        "sha256": "5b4b6fc94d68be1f4c6e050c801afdbdac21fe77c7ea87a37a98440cd074f53c"
       }
     ]
   },
