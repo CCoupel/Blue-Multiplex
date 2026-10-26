@@ -41,10 +41,6 @@
 - Schema config `adapters` en liste `{mac, name, roles}` (une entree en v0.1.0, deux en v0.2.0, contrat V4 à lever) — diverge du cadrage §4.6, à aligner en #11.
 - Daemon fonctionnel, routage, MQTT, GPIO : hors v0.1.0 ; daemon en v0.3.0, MQTT/GPIO en v0.4.0. Agent BlueZ (#20), API HTTP (#21) et Web UI (#16) en v0.2.0.
 
-## Points de contexte pour la prochaine session
-
-- L'adresse `main` est refusee par SendMessage : les teammates repondent a `team-lead` — sans impact.
-
 ## Regles critiques
 
 - Règles permanentes, conventions de spike et branches réécrites : voir `.claude/agents/context/PROJECT_CONTEXT.md`

@@ -2,7 +2,7 @@
 
 > **Repo** : `CCoupel/Blue-Multiplex`
 > **Branche principale** : `main`
-> **Versionnement** : `X.Y.Z.a` en dev / `X.Y.Z` en prod — voir `.claude/commands/context/COMMON.md` section 5
+> **Versionnement** : `X.Y.Z.a` en dev / `X.Y.Z` en prod — voir `.claude/commands/context/COMMON.template.md` section 5
 
 ---
 
@@ -96,7 +96,7 @@ et exécutés sur le Pi de qualif, jamais en CI.
 > **ponctuel** = spawné à la demande par la commande dédiée, fermé après DONE.
 
 > Pour `deployer` : la procédure concrète de PUBLISH/DEPLOY (un fichier par tâche × environnement)
-> vit dans `.claude/agents/environments/{publish,deploy}.<env>.md` — voir `agents/deploy.md`
+> vit dans `.claude/agents/environments/{publish,deploy}.<env>.md` — voir `agents/deploy.template.md`
 > section "Fichiers d'Environnement".
 
 ---
