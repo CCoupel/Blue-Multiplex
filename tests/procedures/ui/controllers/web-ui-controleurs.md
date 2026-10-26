@@ -40,6 +40,7 @@ Scénarios mock : `default`, `swap-ready`, `unassigned`, `uart-only`, `restart-p
 | 3.2 | « Annuler » | Dialogue fermé, aucune modification appliquée ; le brouillon reste affiché | ✔ | ✔ | | |
 | 3.3 | Recommencer puis « Déconnecter et appliquer » | Second `PUT` avec `confirm:true` → 202 ; appareils déconnectés (journal `device`) puis bandeau de redémarrage comme en 2.2 | ✔ | ✔ | | |
 | 3.4 | Fenêtre d'appairage ouverte, tenter d'appliquer | Erreur 409 `pairing_open` affichée dans la page (« Fermez d'abord la fenêtre… »), jamais d'`alert()` | ✔ | ✔ | | |
+| 3.5 | Simuler une déconnexion impossible (502 `disconnect_failed`), puis « Déconnecter et appliquer » | Erreur 502 affichée avec les appareils encore connectés (`details`) ; aucun bandeau de redémarrage ; rôles affichés inchangés (rien n'a été écrit) ; réessayer possible | ✔ | ✔ | | |
 
 ## S4 — Bandeau de redémarrage et coupure (`restart-pending`)
 

@@ -51,8 +51,9 @@
 |-------|--------|------------------|--------|------|
 | 1 | Connecter une source et un casque (appairés) | `btmuxctl state` : `connected=true` | | |
 | 2 | `btmuxctl roles set --sources $HP --headsets $SRC` | Code 1, 409 `devices_connected`, `details` listant les appareils ; fichier d'état inchangé | | |
-| 3 | Même commande avec `--confirm` | Code 0 ; les appareils sont déconnectés **avant** l'écriture ; redémarrage comme au scénario 1 | | |
+| 3 | Même commande avec `--confirm` | Code 0 ; les appareils sont déconnectés **avant** l'écriture (contrat `4d79aba`) ; redémarrage comme au scénario 1 | | |
 | 4 | Après retour | Aucun appareil connecté sur les rôles affectés ; rétablir l'affectation initiale | | |
+| 5 | Échec de déconnexion simulé (appareil qui ne confirme pas `Connected=false` sous 5 s, ou bus D-Bus fermé) puis `--confirm` | 502 `disconnect_failed` avec `details` ; `btmuxctl state` : `Roles` inchangé, `pending:false` ; fichier d'état inchangé ; aucun redémarrage de `btmuxd` ; les appareils déjà déconnectés le restent (ils peuvent se reconnecter seuls) | | |
 
 **Verdict** : [ ] PASS  [ ] FAIL
 
