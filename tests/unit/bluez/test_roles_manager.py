@@ -238,7 +238,7 @@ async def test_serve_returns_4_on_restart_fallback(
     assert await asyncio.wait_for(task, 5) == 4
 
 
-async def test_confirm_write_failure_disconnects_nothing(api: _AsyncCtx, tmp_path: Path) -> None:
+async def test_confirm_write_failure_is_500_without_pending(api: _AsyncCtx, tmp_path: Path) -> None:
     async with api as a:
         a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
         blocker = tmp_path / "file"
@@ -248,21 +248,69 @@ async def test_confirm_write_failure_disconnects_nothing(api: _AsyncCtx, tmp_pat
         )
         status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
         assert (status, body["error"]) == (500, "state_write_failed")
-        assert not a.bus.calls_to("Disconnect") and not a.service.inventory.roles_pending
+        assert not a.service.inventory.roles_pending
 
 
-async def test_confirm_writes_state_before_disconnecting(api: _AsyncCtx, state_file: Path):
+async def test_confirm_disconnects_and_confirms_before_writing_state(
+    api: _AsyncCtx, state_file: Path
+):
+    """S3 : Disconnect → Connected=false confirmé → ENSUITE écriture des rôles (et redémarrage)."""
     async with api as a:
-        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
-        seen: list[bool] = []
+        path = a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        seen: dict[str, bool] = {}
 
-        async def disconnect(path: str, body: list[Any]) -> list[Any]:
-            seen.append(state_file.exists())
+        async def disconnect(p: str, body: list[Any]) -> list[Any]:
+            seen["state_written_at_disconnect"] = state_file.exists()
+            await asyncio.sleep(0.1)  # BlueZ confirme avec un léger retard
+            a.bus.change(p, "org.bluez.Device1", Connected=False)
             return []
 
         a.bus.handlers[("org.bluez.Device1", "Disconnect")] = disconnect
+        written_at_confirm: list[bool] = []
+        orig = a.service.roles._wait_disconnected
+
+        async def spy(mac: str) -> bool:
+            ok = await orig(mac)
+            written_at_confirm.append(state_file.exists())
+            return ok
+
+        a.service.roles._wait_disconnected = spy  # type: ignore[method-assign]
         status, _ = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
-        assert status == 202 and seen == [True]
+        assert status == 202
+        assert seen == {"state_written_at_disconnect": False}
+        assert written_at_confirm == [False] and state_file.exists()
+        assert a.bus.objects[path]["org.bluez.Device1"]["Connected"] is False
+
+
+async def test_confirm_disconnect_error_writes_nothing(api: _AsyncCtx, state_file: Path):
+    from btmux.bluez.bus import DBusCallError
+
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        a.bus.errors[("org.bluez.Device1", "Disconnect")] = DBusCallError(
+            "org.bluez.Error.Failed", "boom"
+        )
+        status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert (status, body["error"]) == (502, "disconnect_failed")
+        assert [d["mac"] for d in body["details"]] == [PHONE_MAC]
+        assert not state_file.exists() and not a.service.inventory.roles_pending
+
+
+async def test_confirm_disconnect_timeout_writes_nothing(api: _AsyncCtx, state_file: Path):
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        a.bus.handlers[("org.bluez.Device1", "Disconnect")] = lambda p, b: []  # reste connecté
+        a.service.roles.disconnect_timeout = 0.2
+        a.service.roles.disconnect_poll = 0.02
+        status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert (status, body["error"]) == (502, "disconnect_failed")
+        assert not state_file.exists() and not a.service.inventory.roles_pending
+
+
+async def test_confirm_without_connected_devices_keeps_the_path(api: _AsyncCtx, state_file: Path):
+    async with api as a:
+        status, _ = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert status == 202 and state_file.exists() and not a.bus.calls_to("Disconnect")
 
 
 async def test_noop_wins_over_open_pairing_window(api: _AsyncCtx, state_file: Path) -> None:

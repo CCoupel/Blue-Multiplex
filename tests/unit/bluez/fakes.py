@@ -132,6 +132,10 @@ class FakeBus:
             raise error
         handler = self.handlers.get((interface, member))
         if handler is None:
+            if (
+                member == "Disconnect" and path in self.objects
+            ):  # BlueZ : l'appareil passe Connected=false
+                self.change(path, interface, Connected=False)
             return []
         result = handler(path, list(body))
         if asyncio.iscoroutine(result):

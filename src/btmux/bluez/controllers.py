@@ -13,6 +13,7 @@ from btmux.bluez.errors import (
     ChangePending,
     ControllerError,
     DevicesConnected,
+    DisconnectFailed,
     StateWriteFailed,
     WindowOpen,
 )
@@ -25,6 +26,8 @@ from btmux.log import kv
 log = logging.getLogger("btmux.controllers")
 ROLES = ("sources", "headsets")
 DEFAULT_NAMES = {"sources": "btmux", "headsets": "btmux-hp"}
+DISCONNECT_TIMEOUT_S = 5.0  # attente bornée de `Connected=false` après `Disconnect` (par appareil)
+DISCONNECT_POLL_S = 0.05
 _MAC = re.compile(r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}")
 
 
@@ -43,6 +46,43 @@ class RoleManager:
         self._pairing = pairing
         self._on_written = on_written
         self._lock = asyncio.Lock()
+        self.disconnect_timeout = DISCONNECT_TIMEOUT_S
+        self.disconnect_poll = DISCONNECT_POLL_S
+
+    async def _disconnect_all(self, connected: list[Any]) -> None:
+        """Déconnecte chaque appareil et attend `Connected=false` (délai borné) : AVANT toute écriture, le bus
+        étant encore ouvert (le redémarrage le fermerait). Échec ou délai → `DisconnectFailed`, rien n'est écrit."""
+        failed: list[dict[str, object]] = []
+        for device in connected:
+            info = {
+                "mac": device.mac,
+                "alias": device.alias,
+                "name": device.name,
+                "adapter": device.adapter,
+            }
+            try:
+                await self._pairing.disconnect(device.mac)
+            except BluezError as exc:
+                log.warning(kv("disconnect_failed", mac=device.mac, error=exc))
+                failed.append(info)
+                continue
+            if not await self._wait_disconnected(device.mac):
+                log.warning(kv("disconnect_failed", mac=device.mac, error="timeout"))
+                failed.append(info)
+        if failed:
+            raise DisconnectFailed(
+                "cannot disconnect all devices: roles unchanged, nothing written", failed
+            )
+
+    async def _wait_disconnected(self, mac: str) -> bool:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.disconnect_timeout
+        while True:
+            if not any(d.mac == mac and d.connected for d in self._inventory.devices()):
+                return True
+            if loop.time() >= deadline:
+                return False
+            await asyncio.sleep(self.disconnect_poll)
 
     def check_writable(self) -> None:
         if self._inventory.roles_pending:
@@ -117,8 +157,12 @@ class RoleManager:
                         for d in connected
                     ],
                 )
+            if (
+                connected
+            ):  # confirm:true — d'abord les déconnexions (bus ouvert), échec → rien d'écrit
+                await self._disconnect_all(connected)
             path = self._config.state_path
-            try:  # l'état d'abord : en cas d'échec, aucune déconnexion et pas de `pending`
+            try:  # puis l'état : en cas d'échec, pas de `pending`
                 await asyncio.to_thread(write_state_atomic, path, self._adapters_for(wanted))
             except OSError as exc:
                 log.error(kv("state_write_failed", file=path, error=exc.strerror or exc))
@@ -129,9 +173,4 @@ class RoleManager:
             log.info(kv("roles_written", sources=wanted["sources"], headsets=wanted["headsets"]))
             if self._on_written is not None:
                 self._on_written()
-            for device in connected:  # le redémarrage les coupera de toute façon : au mieux
-                try:
-                    await self._pairing.disconnect(device.mac)
-                except BluezError as exc:
-                    log.warning(kv("disconnect_failed", mac=device.mac, error=exc))
             return 202, self._inventory.roles()

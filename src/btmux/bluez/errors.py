@@ -74,6 +74,13 @@ class DevicesConnected(ApiError):
     status = 409
 
 
+class DisconnectFailed(ApiError):
+    """Déconnexion des appareils impossible ou non confirmée à temps : rien n'est écrit — HTTP 502."""
+
+    code = "disconnect_failed"
+    status = 502
+
+
 class StateWriteFailed(ApiError):
     """Écriture du fichier d'état impossible (droits, disque) : rien n'est appliqué — HTTP 500."""
 
