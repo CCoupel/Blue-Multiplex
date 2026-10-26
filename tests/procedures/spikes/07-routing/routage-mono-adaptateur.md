@@ -73,7 +73,9 @@ Cocher une colonne par contrôle effectivement joué ; un `⏭` non joué n'est 
 ## 6. Revalidation UB500 bi — critère 1 complet (séance S1, `revalidation-ub500/`)
 
 Topologie : `hci-src` (rôle `sources`) porte PC + téléphone (A2DP sink) ; `hci-hp` (rôle `headsets`) porte le casque (A2DP source).
-Plus de limite à 2 liens ACL : `link_guard.py` plafonne **par adaptateur**. Config bi, `BTMUX_BT_MODE=dongle`, Ethernet + `disable-wifi`.
+Plus de limite à 2 liens ACL : `link_guard.py` plafonne **par adaptateur**, cohérent avec le garde-fou de `btmuxd` (pas de double `block`).
+Config bi, `BTMUX_BT_MODE=dongle`, Pi 4, `btmuxd` résident (fenêtres via `btmuxctl`), **Wi-Fi actif** (D2, consigné), sous-tension via hwmon `rpi_volt`.
+Codecs : SBC + aptX (AAC indisponible sur Ubuntu 26.04). La latence bout en bout est **retirée** de ce périmètre (D3 → #28, v0.3.0).
 
 | # | Contrôle | Preuve attendue | OK UB500 bi |
 |---|----------|-----------------|-------------|
@@ -82,7 +84,7 @@ Plus de limite à 2 liens ACL : `link_guard.py` plafonne **par adaptateur**. Con
 | 6.3 | Tenue 10 min avec 2 flux | 0 `xrun`, 0 erreur HCI (`watch_hci.sh` ×2), aucune déconnexion | |
 | 6.4 | Bascule avec formats **FL/FR** (canaux) correcte | Pas d'inversion de canaux ni de silence, relevé `pw-dump` | |
 | 6.5 | `systemctl --user restart pipewire wireplumber` **avec BT connecté** (3 liens) | Liens reconstruits, durée relevée, appareils non reconnectés (ou délai noté) | |
-| 6.6 | Conditions consignées : Ethernet, `disable-wifi`, hub USB 2.0 partagé, codec A2DP | Dans le rapport § « Revalidation UB500 » | |
+| 6.6 | Conditions consignées : **Wi-Fi actif** (D2), hub USB 2.0 interne du Pi 4 partagé, codec A2DP (aptX/SBC) | Dans le rapport § « Revalidation UB500 » | |
 | 6.7 | Rapport `docs/spikes/07-routing.md` § « Revalidation UB500 » : statut provisoire **levé ou maintenu**, motivé ; mesures opposables | | |
 
 ## Critères de validation

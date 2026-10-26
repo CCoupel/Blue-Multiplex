@@ -77,12 +77,17 @@ cette checklist **valide les preuves et le rapport** après la séance. Scripts 
 
 Colonne « UB500 bi » : PC + téléphone sur `hci-src` simultanément, puis casque sur `hci-hp` (= 3 liens ACL répartis sur 2 radios).
 
+**Conditions (LOT-3)** : pi-qualif = **Pi 4**, `btmuxd` résident (fenêtres d'appairage **uniquement** via `btmuxctl pairing open|close`,
+jamais l'agent des spikes) ; **Wi-Fi actif** (D2, consigné comme condition de mesure) ; sous-tension surveillée via hwmon `rpi_volt`
+(`in0_lcrit_alarm` = 0, `vcgencmd` indisponible). Acquis #23 non rejoués ici (identité, alias/classe par rôle, débranchement) :
+voir `tests/procedures/install/pi-qualif/` et `campagne-ub500.md`. **AAC indisponible** (Ubuntu 26.04) : codecs relevés = SBC + aptX.
+
 | # | Contrôle | Preuve attendue | OK UB500 bi |
 |---|----------|-----------------|-------------|
-| 6.1 | PC **et** téléphone connectés simultanément à `btmux` (`hci-src`) | `bluetoothctl devices Connected` : 2 sources ; chacun voit **un seul** casque `btmux` | |
+| 6.1 | PC **et** téléphone connectés simultanément à `btmux` (`hci-src`) ; appairage PC fait via fenêtre `sources` ouverte par `btmuxctl` (jamais fait en #23) | `bluetoothctl devices Connected` : 2 sources ; chacun voit **un seul** casque `btmux` ; codec négocié relevé (aptX/SBC) | |
 | 6.2 | Casque connecté par le Pi sur `hci-hp` pendant que les 2 sources sont connectées | 3 liens ACL, aucun `tx timeout` ; le casque voit `btmux-hp` (source) | |
 | 6.3 | Audio 5 min : source → Pi → casque | Aucune coupure | |
-| 6.4 | Reboot : appairages (`Paired`/`Trusted`) conservés, reconnexion automatique, **alias et classe de chaque adaptateur restaurés** par `btmux-adapters.service` | `reboot_check.sh` ×2 | |
+| 6.4 | Reboot : appairages (`Paired`/`Trusted`) conservés, **alias et classe de chaque adaptateur restaurés** par `btmux-adapters.service` (acquis #23, contrôle de cohérence) ; reconnexion **pilotée** (`btmuxctl device connect`) du casque et du PC | `reboot_check.sh` ×2 ; `GET /api/controllers` | |
 | 6.5 | Rapport `docs/spikes/05-exposure.md` § « Revalidation UB500 » : statut provisoire **levé ou maintenu**, preuves masquées (5.11) | | |
 
 ## Critères de validation

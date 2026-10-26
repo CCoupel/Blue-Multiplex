@@ -71,6 +71,10 @@
 
 Topologie : PC (Teams) en HFP sur `hci-src` (rôle **HF** côté `btmux`) ; casque en HFP **AG** sur `hci-hp`. 1 SCO par radio.
 
+**Conditions (LOT-3)** : Pi 4, `btmuxd` résident (fenêtres via `btmuxctl` uniquement), **Wi-Fi actif** (D2, consigné), sous-tension
+surveillée via hwmon `rpi_volt`. Décision **D6** : oFono peut être installé sur pi-qualif **uniquement en S2** si l'inventaire natif
+est insuffisant, puis **retiré** en fin de séance (état d'origine vérifié). Corps de l'issue #6 amendé (bi-adaptateur ; mono = repli non éprouvé).
+
 | # | Contrôle | Preuve attendue | OK UB500 bi |
 |---|----------|-----------------|-------------|
 | 6.1 | Voix bout en bout **PC ↔ casque** via lien PipeWire manuel, deux SCO simultanés | Voix dans les deux sens ; deux liens SCO (`btmon`, un par `hciN`) | |
@@ -79,8 +83,8 @@ Topologie : PC (Teams) en HFP sur `hci-src` (rôle **HF** côté `btmux`) ; casq
 | 6.4 | eSCO mSBC (`hci-hp`) + A2DP sortant simultanés sur le même `hci-hp` | Comportement observé et consigné (R1) | |
 | 6.5 | Stabilité ≥ 10 min en HFP | 0 coupure, 0 erreur HCI | |
 | 6.6 | 5 bascules A2DP ↔ HFP déclenchées par Windows (micro Teams) | Journal des 5 transitions, durées | |
-| 6.7 | Inventaire API téléphonie complété (indicateurs d'appel, AT) ; **oFono** testé si l'inventaire natif est insuffisant | `out/inventory.*` ; décision | |
-| 6.8 | Rapport `docs/spikes/06-hfp-dual-role.md` : **décision backend définitive** (natif / oFono / hybride) ou provisoire maintenue, motivée ; § bi-adaptateur (#15) | | |
+| 6.7 | Inventaire API téléphonie complété (indicateurs d'appel, AT), à vide puis pendant l'appel ; **oFono** (D6) testé **seulement** si l'inventaire natif est insuffisant, puis **désinstallé** (`dpkg -l ofono` vide) | `out/inventory.*` ; décision ; état Pi restauré | |
+| 6.8 | Rapport `docs/spikes/06-hfp-dual-role.md` : **décision backend définitive** (natif / oFono / hybride) ou provisoire maintenue, motivée ; suites reportées en **v0.3.0** (ex-#15 remplacé par #19) | | |
 
 ## Critères de validation
 
