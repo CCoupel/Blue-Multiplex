@@ -8,7 +8,8 @@ OUT="${1:-/dev/stdout}"
   for h in $(hciconfig 2>/dev/null | awk -F: '/^hci/ {print $1}'); do
     echo "## $h"
     hciconfig -a "$h" 2>/dev/null | grep -E "Bus|BD Address|Class|HCI Version"
-    echo "# UUIDs annoncés (bluetoothctl show, contrôleur par défaut uniquement)"
+    echo "# UUIDs annoncés par ce contrôleur (Adapter1.UUIDs)"
+    busctl get-property org.bluez "/org/bluez/$h" org.bluez.Adapter1 UUIDs 2>/dev/null | grep -o '"[0-9a-f-]*"' | tr -d '"' | tr '\n' ' '; echo
   done
   timeout 8 bluetoothctl list </dev/null
   echo "## cartes PipeWire (profil actif / profils disponibles)"
