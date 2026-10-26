@@ -31,8 +31,12 @@
 #   --rearm U   : contrôle post-sortie (ExecStopPost de btmux-adapters-identity.service) : relit F, et si F contient une MAC
 #               valide absente de D (requête écrite après la dernière relecture : le .path ne relance pas une unité encore
 #               active), lance `systemctl start --no-block U` — une seule fois ; le job attend la fin de l'arrêt de U puis
-#               rejoue la passe. F inchangé ou sans MAC nouvelle : rien. D absent : avertissement, pas de relance. Aucune
-#               commande btmgmt/busctl, aucune lecture de config. Toujours code 0.
+#               rejoue la passe. F inchangé ou sans MAC nouvelle : rien. D absent : avertissement, pas de relance. U doit
+#               correspondre à ^[A-Za-z0-9@:_.-]+\.service$, sans tiret initial (sinon avertissement, aucun systemctl).
+#               Aucune commande btmgmt/busctl, aucune lecture de config. Code 0 (2 si --requests/--done-file manquent).
+#               Fenêtre réduite, pas supprimée : une écriture après la lecture de ce contrôle et avant l'inactivité de
+#               l'unité (quelques ms) dépend du .path, dont le comportement en « stop-post » n'est pas prouvé ; elle est
+#               alors rattrapée par la réémission de btmuxd (+60 s).
 # Idempotent. Sans adaptateur présent : avertissement et code 0 (ne bloque jamais le démarrage). Config invalide : code 2.
 # Variables : BTMUX_PYTHON (défaut /opt/btmux/bin/python, repli python3), BTMUX_BTMGMT, BTMUX_BUSCTL,
 #   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »), BTMUX_ALIAS_WAIT (« 5 » : attente max., en s, que
@@ -40,7 +44,7 @@
 #   BTMUX_REQUESTS_REREAD (« 3 » : nombre max. de relectures de --requests en fin de passe), BTMUX_SYSTEMCTL (--rearm).
 set -euo pipefail
 
-CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0 ONLY="" ONLY_SET=0 REQUESTS="" DONE_FILE="" REARM=""
+CONFIG=/etc/btmux/config.yaml STATE="" DRY=0 WAIT=20 RESET=0 ONLY="" ONLY_SET=0 REQUESTS="" DONE_FILE="" REARM="" REARM_SET=0
 MAC_RE='^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$'
 add_only() {   # MAC -> ajoutée à ONLY (« MAC1 MAC2 », majuscules, dédoublonnée) ; code 1 si invalide
   [[ "$1" =~ $MAC_RE ]] || return 1
@@ -85,16 +89,23 @@ while [ $# -gt 0 ]; do
       shift 2 ;;
     --requests) REQUESTS="${2:?chemin}"; ONLY_SET=1; shift 2 ;;
     --done-file) DONE_FILE="${2:?chemin}"; shift 2 ;;
-    --rearm) REARM="${2:?unité}"; shift 2 ;;
-    -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --rearm) [ "$#" -ge 2 ] || { echo "btmux-adapters: --rearm attend un nom d'unité" >&2; exit 2; }
+      REARM="$2" REARM_SET=1; shift 2 ;;
+    -h|--help) sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "btmux-adapters: option inconnue: $1" >&2; exit 2 ;;
   esac
 done
 [[ "$WAIT" =~ ^[0-9]+$ ]] || { echo "btmux-adapters: --wait attend un entier" >&2; exit 2; }
-# Contrôle post-sortie (#23, QA 0.2.0.8 écart 1) : ferme la fenêtre entre la dernière relecture et la sortie de l'unité.
-if [ -n "$REARM" ]; then
+# Contrôle post-sortie (#23, QA 0.2.0.8 écart 1) : réduit à quelques ms la fenêtre entre la dernière relecture et la sortie
+# de l'unité (reste : écriture après la lecture ci-dessous et avant l'inactivité -> réémission de btmuxd à +60 s).
+if [ "$REARM_SET" = 1 ]; then
   if [ -z "$REQUESTS" ] || [ -z "$DONE_FILE" ]; then
     echo "btmux-adapters: --rearm exige --requests et --done-file" >&2; exit 2
+  fi
+  # Nom d'unité borné (jamais reproduit au journal) ; tiret initial refusé : systemctl le lirait comme une option.
+  if ! [[ "$REARM" =~ ^[A-Za-z0-9@:_.-]+\.service$ ]] || [ "${REARM:0:1}" = - ]; then
+    echo "btmux-adapters: AVERTISSEMENT --rearm : nom d'unité invalide — pas de relance" >&2
+    exit 0
   fi
   if [ -L "$DONE_FILE" ] || [ ! -f "$DONE_FILE" ]; then
     echo "btmux-adapters: AVERTISSEMENT $DONE_FILE absent — pas de relance (la prochaine requête rejouera la passe)" >&2

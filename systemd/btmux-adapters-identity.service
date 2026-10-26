@@ -5,8 +5,9 @@ Documentation=https://github.com/CCoupel/Blue-Multiplex
 # API et SSE restent disponibles. Passe idempotente (≈ 4 s) ; toutes les MAC en attente sont traitées en une passe.
 # Le .path ne relance pas l'unité tant qu'elle est active : le script relit donc identity.request en fin de passe et
 # traite aussitôt les MAC arrivées entre-temps (3 relectures au plus, MAC déjà traitées ignorées — contrat 20261025-d).
-# Reste une fenêtre entre la dernière relecture et la sortie de l'unité (QA 0.2.0.8, écart 1) : l'ExecStopPost la ferme
-# (voir plus bas) ; une écriture plus tardive (unité en arrêt) met le start du .path en attente de la fin de l'arrêt.
+# Reste une fenêtre entre la dernière relecture et la sortie de l'unité (QA 0.2.0.8, écart 1) : l'ExecStopPost la réduit à
+# quelques ms (voir plus bas), sans la supprimer : une écriture après sa lecture et avant l'inactivité de l'unité dépend
+# du .path, dont le comportement en « stop-post » n'est pas prouvé ; elle est rattrapée par la réémission de btmuxd (+60 s).
 After=bluetooth.service btmux-adapters.service
 # Pas de limite de démarrage : un dongle instable (rebranchements répétés) ne doit pas faire passer l'unité en
 # « start-limit-hit », ce qui suspendrait la surveillance jusqu'au prochain reset-failed.
