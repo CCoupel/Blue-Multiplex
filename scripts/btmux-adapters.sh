@@ -26,6 +26,10 @@
 #               En fin de passe, F est relu : les MAC apparues pendant la passe (absentes de toutes les passes précédentes)
 #               font l'objet d'une passe complémentaire limitée à ces MAC, au plus BTMUX_REQUESTS_REREAD fois (défaut 3) —
 #               jamais de boucle. Les MAC déjà traitées et encore en attente d'acquittement par btmuxd sont ignorées.
+#               Limite (#23, QA Pi 0.2.0.9) : une requête écrite après la dernière relecture (fin de passe, unité encore
+#               active : le .path ne la relance pas) n'est pas traitée par cette exécution ; le fichier n'est jamais
+#               consommé ici, la ligne reste en attente et la réémission btmuxd (+60 s) déclenche la passe suivante.
+#               Consigne d'exploitation : rebrancher un dongle à la fois (attendre son identité avant le suivant).
 # Idempotent. Sans adaptateur présent : avertissement et code 0 (ne bloque jamais le démarrage). Config invalide : code 2.
 # Variables : BTMUX_PYTHON (défaut /opt/btmux/bin/python, repli python3), BTMUX_BTMGMT, BTMUX_BUSCTL,
 #   BTMUX_CLASS_SOURCES (« 4 4 »), BTMUX_CLASS_HEADSETS (« 1 12 »), BTMUX_ALIAS_WAIT (« 5 » : attente max., en s, que

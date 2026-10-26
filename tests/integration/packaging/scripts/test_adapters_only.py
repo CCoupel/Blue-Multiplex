@@ -355,3 +355,22 @@ def test_service_reread_does_not_repeat_invalid_line_warnings(tmp_path: Path) ->
     proc, _ = _run_with_hook(tmp_path, request)
     assert proc.returncode == 0, proc.stderr
     assert proc.stderr.count("ligne(s) invalide(s)") == 1
+
+
+def test_request_arriving_after_the_last_reread_is_left_for_btmuxd(tmp_path: Path) -> None:
+    """Limite documentée (#23, QA Pi 0.2.0.9).
+
+    Une requête écrite après la dernière relecture n'est pas traitée par cette
+    exécution (systemd ne relance pas l'unité depuis son ExecStopPost). Le script
+    ne consomme jamais le fichier : la ligne reste en attente et la réémission
+    btmuxd (+60 s) déclenche la passe suivante.
+    """
+    request = tmp_path / "identity.request"
+    request.write_text(_req("AA:BB:CC:00:00:01"))
+    late = _req("AA:BB:CC:00:00:02").replace("hci0", "hci2")
+    _append_on_class(tmp_path, request, [late])
+    proc, calls = _run_with_hook(tmp_path, request, {"BTMUX_REQUESTS_REREAD": "0"})
+    assert proc.returncode == 0, proc.stderr
+    assert not _touched(calls, "2")  # non traitée par cette exécution
+    assert "laissée(s) à la requête suivante" in proc.stderr
+    assert late in request.read_text()  # toujours en attente pour la réémission btmuxd
