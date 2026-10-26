@@ -176,10 +176,10 @@ Port USB d'un contrôleur : `readlink -f /sys/class/bluetooth/hciN/device` (chem
 
 - **Consigne** : brancher (ou rebrancher) **un dongle à la fois** et attendre **≈ 10 s** que son identité soit posée
   (nom `btmux` / `btmux-hp`, classe) avant de brancher le suivant.
-- Si deux dongles apparaissent à quelques secondes d'écart, le second peut recevoir son identité **≈ 60 s plus tard**
+- Si deux dongles apparaissent à quelques secondes d'écart, le second peut recevoir son identité **≈ 60–70 s plus tard**
   au lieu de quelques secondes. Rien n'est perdu : la correction est automatique, il suffit d'attendre.
 - **Cas non maîtrisable** : une réinitialisation USB (par exemple une sous-tension) qui fait réapparaître les deux dongles
-  d'un coup → rattrapage automatique en **≈ 60 s**. Utiliser une alimentation suffisante pour l'éviter.
+  d'un coup → rattrapage automatique en **≈ 60–70 s**. Utiliser une alimentation suffisante pour l'éviter.
 
 ## 7. Vérifications PipeWire / BlueZ
 
