@@ -176,9 +176,17 @@ Règles :
     rôle, l'état ne porte plus d'entrée pour ce rôle et une réaffectation ultérieure reprend le défaut `btmux` / `btmux-hp`, pas le nom
     personnalisé de `config.yaml`. Contournement : supprimer `/var/lib/btmux/adapters.yaml` puis redémarrer, ou nommer les rôles par défaut.
 - **Application par redémarrage piloté du service (D3 b)** — séquence :
-  1. `PUT` validé (no-op → 200 sans suite) → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, rien n'est
-     déconnecté, `pending` reste faux) → fenêtre d'appairage fermée, appareils déconnectés si `confirm` → réponse 202 + événement
-     `roles {pending:true, restart_expected:true}` ; toute écriture ultérieure répond 409 `change_pending`.
+  1. `PUT` validé (no-op → 200 sans suite) → **déconnexion des appareils connectés** sur les rôles modifiés si `confirm` (S3, révision du
+     2026-10-26 : `qa-20261026-141000` §3) : pour chaque appareil, `Device1.Disconnect` puis **attente de `Connected=false`** (délai borné,
+     **5 s par appareil**) — **avant** toute écriture, le bus D-Bus étant encore ouvert (après l'écriture, l'arrêt du daemon le ferme et la
+     déconnexion échouait : `disconnect_failed error="system bus not connected"`, le téléphone restant rattaché au dongle devenu `headsets`).
+     Échec D-Bus ou délai dépassé pour **au moins un** appareil → **502 `disconnect_failed`** (`details: [{mac, alias, name, adapter}]` des
+     appareils encore connectés), **rien n'est écrit**, `Roles` inchangé, `pending` reste faux, aucun redémarrage — le client peut réessayer ;
+     les appareils déjà déconnectés le restent (effet de bord accepté : ils peuvent se reconnecter d'eux-mêmes, l'affectation n'a pas changé).
+     → **écriture atomique** de l'état (échec → 500 `state_write_failed`, séquence abandonnée, `pending` reste faux ; les appareils ont déjà été
+     déconnectés — effet de bord accepté, voir ci-dessus) → réponse 202 + événement `roles {pending:true, restart_expected:true}` ; toute
+     écriture ultérieure répond 409 `change_pending`. Sans appareil connecté (ou sans rôle modifié portant une connexion) : chemin inchangé.
+     Délai de réponse du `PUT` avec `confirm` : jusqu'à ≈ 5 s × N appareils (client : délai HTTP ≥ 30 s).
   2. `btmux-adapters.path` (`PathChanged=/var/lib/btmux/adapters.yaml`) déclenche **`btmux-adapters-reload.service`** (root, oneshot), qui ne
      fait que `systemctl restart --no-block btmuxd.service` → arrêt propre (SIGTERM, code 0 ; `ExecStopPost` referme appairage et découverte)
      et relance immédiate (pas de `RestartSec`, ce n'est pas un échec ; `StartLimitBurst` inchangé). L'**identité des contrôleurs** (alias,

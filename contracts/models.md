@@ -32,7 +32,7 @@ Event (SSE) event: adapter|device|pairing|discovered|device.removed|state|contro
     redémarrage, le premier événement de toute connexion est un `state` complet (`roles.pending:false`, `source:"state"`). Le compteur `id`
     repart au redémarrage : le `state` initial porte l'id courant (**0** juste après le démarrage), le premier événement réel porte **1** ;
     un client qui reçoit un `state` ou un `id` inférieur à son `Last-Event-ID` réinitialise sa vue.
-  - erreurs HTTP : `{ "error": "<code>", "message": "<texte>", "details": [...] }` — `details` optionnel, présent pour `devices_connected`
+  - erreurs HTTP : `{ "error": "<code>", "message": "<texte>", "details": [...] }` — `details` optionnel, présent pour `devices_connected` et `disconnect_failed` (#23)
     (`[{ "mac", "alias" | null, "name" | null, "adapter": "sources" | "headsets" }]`).
   - `pairing` : PairingWindow complet à chaque transition (ouverture, tick optionnel, fermeture avec `open:false` + `reason`)
   - `device.removed` (après `forget`, ou disparition d'un appareil non appairé) : DeviceRemoved ; le client retire la ligne.
