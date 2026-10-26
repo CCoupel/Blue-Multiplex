@@ -6,7 +6,7 @@
 ## Prérequis
 
 - [ ] Poste de dev : `uv`, `jq`, `dpkg-deb` disponibles ; branche `milestone/v0.1.0` à jour, CI verte
-- [ ] Pi de qualif (Ubuntu Server 26.04 LTS arm64) provisionné (`tests/procedures/install/pi-qualif/` PASS), utilisateur de service `$U` (défaut `ubuntu`) avec linger ; `.claude/agents/environments/qualif.env` renseigné (`SSH_KEY_PATH`, `DEPLOY_HOST=<utilisateur>@btmux-qualif.local`, `BTMUX_USER` optionnel)
+- [ ] Pi de qualif (Ubuntu Server 26.04 LTS arm64) provisionné (`tests/procedures/install/pi-qualif/` PASS), utilisateur de service `$U` (défaut `ubuntu`) avec linger ; `.claude/agents/environments/qualif.env` renseigné (`SSH_KEY_PATH`, `DEPLOY_HOST=<utilisateur>@pi-qualif.local`, `BTMUX_USER` optionnel)
 - [ ] Wheel candidate : `build/candidate_v0.1.0/btmux-<X.Y.Z.a>-py3-none-any.whl` (`<X.Y.Z.a>` = version courante `0.1.0.a`)
 
 ## Scénario 1 — Paquet `.deb` local
@@ -36,7 +36,7 @@
 | Étape | Action | Résultat attendu | Obtenu | OK ? |
 |-------|--------|------------------|--------|------|
 | 1 | `scripts/deploy.sh qualif build/qualif_v0.1.0/btmux-<X.Y.Z.a>-py3-none-any.whl` | Code 0 ; scp de la wheel, venv `/opt/btmux` créé/mis à jour, `daemon-reload`, `restart btmuxd` | | |
-| 2 | `ssh $U@btmux-qualif.local 'ls -l /etc/systemd/system/btmuxd.service /etc/systemd/system/btmuxd.service.d/user.conf /etc/btmux/'` | Unité installée ; drop-in `user.conf` généré pour `$U` (`BTMUX_USER`, sinon utilisateur de `DEPLOY_HOST`, sinon `ubuntu`) ; `config.example.yaml` présent ; `config.yaml` créé **uniquement s'il était absent** | | |
+| 2 | `ssh $U@pi-qualif.local 'ls -l /etc/systemd/system/btmuxd.service /etc/systemd/system/btmuxd.service.d/user.conf /etc/btmux/'` | Unité installée ; drop-in `user.conf` généré pour `$U` (`BTMUX_USER`, sinon utilisateur de `DEPLOY_HOST`, sinon `ubuntu`) ; `config.example.yaml` présent ; `config.yaml` créé **uniquement s'il était absent** | | |
 | 3 | Modifier `/etc/btmux/config.yaml` (ajouter un commentaire), relancer l'étape 1 | Code 0 ; `config.yaml` **non écrasé** (commentaire conservé) | | |
 | 4 | `ssh … 'systemctl is-active btmuxd'` | `active` | | |
 | 5 | `ssh … '/opt/btmux/bin/btmuxd --version'` | `btmuxd 0.1.0.<a>` | | |

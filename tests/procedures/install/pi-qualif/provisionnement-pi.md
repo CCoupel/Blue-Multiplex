@@ -2,11 +2,11 @@
 
 **Version** : 0.1.0.x · **Date** : ____ · **Testeur** : QA (ou dev-backend en T1.8)
 **Cible** : Ubuntu Server 26.04 LTS arm64 (codename `resolute`) · Référence : `docs/install-pi.md`
-**Accès** : `ssh -i $SSH_KEY_PATH <utilisateur>@btmux-qualif.local` — `<utilisateur>` = `BTMUX_USER` (défaut `ubuntu`, UID 1000)
+**Accès** : `ssh -i $SSH_KEY_PATH <utilisateur>@pi-qualif.local` — `<utilisateur>` = `BTMUX_USER` (défaut `ubuntu`, UID 1000)
 
 ## Prérequis
 
-- [ ] Pi flashé avec Raspberry Pi Imager (Ubuntu Server 26.04 LTS 64 bits) ; personnalisation **cloud-init** : hostname `btmux-qualif`, utilisateur, clé SSH publique, mot de passe SSH désactivé, pas de Wi-Fi ; Ethernet branché
+- [ ] Pi flashé avec Raspberry Pi Imager (Ubuntu Server 26.04 LTS 64 bits) ; personnalisation **cloud-init** : hostname `pi-qualif`, utilisateur, clé SSH publique, mot de passe SSH désactivé, pas de Wi-Fi ; Ethernet branché
 - [ ] **Variante Bluetooth** choisie et notée (`BTMUX_BT_MODE`, défaut `dongle`) :
   - `dongle` (cible) : dongle USB RTL8761B branché sur rallonge USB, loin des ports USB 3 ; `dtoverlay=disable-bt` posé
   - `dongle-bi` (cible v0.2.0, `docs/install-pi.md` §6) : **deux** dongles TP-Link UB500 (RTL8761BU, `2357:0604`), `BTMUX_BT_MODE=dongle` ; jouer le **scénario 7**
@@ -19,12 +19,12 @@
 
 | Étape | Action | Résultat attendu | Obtenu | OK ? |
 |-------|--------|------------------|--------|------|
-| 1 | `ssh $U@btmux-qualif.local hostname` | `btmux-qualif` ; connexion par clé, sans mot de passe (cloud-init) | | |
+| 1 | `ssh $U@pi-qualif.local hostname` | `pi-qualif` ; connexion par clé, sans mot de passe (cloud-init) | | |
 | 2 | `. /etc/os-release; echo $VERSION_CODENAME $VERSION_ID; uname -m` | `resolute 26.04` ; `aarch64` | | |
 | 3 | `cloud-init status` | `status: done` | | |
 | 4 | `grep -E 'disable-(bt\|wifi)' /boot/firmware/config.txt` | *(dongle)* `dtoverlay=disable-bt` et `dtoverlay=disable-wifi` présents (section `[all]`) — *(internal)* `disable-bt` **absent** ; `disable-wifi` facultatif | | |
 | 5 | `ls /etc/netplan/ ; grep -l wifis /etc/netplan/* \|\| echo aucun` | *(dongle)* Aucun bloc `wifis:` ; `ip -br link` sans interface `wlan*` ; Ethernet actif — *(internal)* Wi-Fi toléré (SSH possible par Wi-Fi) mais coexistence 2,4 GHz à consigner | | |
-| 6 | `systemctl is-active avahi-daemon` ; depuis le poste : `ping btmux-qualif.local` | `active` ; le nom `.local` se résout | | |
+| 6 | `systemctl is-active avahi-daemon` ; depuis le poste : `ping pi-qualif.local` | `active` ; le nom `.local` se résout | | |
 | 7 | `timeout 8 bluetoothctl list </dev/null` (le `timeout` est obligatoire : `bluetoothctl list` attend indéfiniment sans contrôleur) | **Un seul** contrôleur — *(dongle)* le dongle, le Bluetooth intégré est absent — *(internal)* `hci0` intégré | | |
 
 **Verdict** : [ ] PASS [ ] FAIL
@@ -109,7 +109,7 @@
 
 | Étape | Action | Résultat attendu | Obtenu | OK ? |
 |-------|--------|------------------|--------|------|
-| 1 | `ssh -i $SSH_KEY_PATH $U@btmux-qualif.local true` | Code 0, sans invite | | |
+| 1 | `ssh -i $SSH_KEY_PATH $U@pi-qualif.local true` | Code 0, sans invite | | |
 | 2 | `git check-ignore .claude/agents/environments/qualif.env` | Fichier ignoré | | |
 | 3 | `README.md` | Contient un lien vers `docs/install-pi.md` | | |
 

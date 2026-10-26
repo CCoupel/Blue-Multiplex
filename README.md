@@ -116,7 +116,7 @@ Le paquet `btmux_<X.Y.Z>_all.deb` est produit par `scripts/build-deb.sh` (aucune
 
 Déploiement sur le Pi de qualification depuis une wheel déjà construite : `scripts/deploy.sh <env> <wheel>`.
 Le fichier d'environnement `.claude/agents/environments/<env>.env` (modèle : `qualif.env.example` dans le même
-répertoire) fournit `SSH_KEY_PATH`, `DEPLOY_HOST` (`ubuntu@btmux-qualif.local`) et, en option, `BTMUX_USER` (utilisateur de service
+répertoire) fournit `SSH_KEY_PATH`, `DEPLOY_HOST` (`ubuntu@pi-qualif.local`) et, en option, `BTMUX_USER` (utilisateur de service
 de `btmuxd`, défaut = partie utilisateur de `DEPLOY_HOST`). Le script est idempotent et ne remplace jamais une
 configuration existante. Prérequis côté Pi : l'utilisateur SSH doit pouvoir lancer `sudo` **sans mot de passe**
 (`NOPASSWD`, `BatchMode=yes` interdit toute invite) et le Pi doit avoir accès à `apt` et à PyPI (installation de

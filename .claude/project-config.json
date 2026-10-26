@@ -51,7 +51,7 @@
         },
         "deploy": {
           "mechanism": "vps",
-          "target": "ubuntu@btmux-qualif.local:/opt/btmux",
+          "target": "ubuntu@pi-qualif.local:/opt/btmux",
           "notes": "Pi de qualification — scripts/deploy.sh : scp de la wheel, uv pip install, unites systemd, restart"
         },
         "access": {
