@@ -96,6 +96,8 @@ class IdentityRequester:
         (aucune MAC en attente dans CE processus) est vidé par le flush habituel (débounce, écriture
         atomique) ; aucune passe, aucune vérification, aucune boucle n'est déclenchée. Les MAC réellement
         en attente (hotplug survenu pendant le démarrage) sont portées par le même flush."""
+        if self._written:
+            return  # ce processus a déjà écrit le fichier (hotplug flushé) : rien d'inconnu à réconcilier
         try:
             residual = self._target.stat().st_size > 0
         except OSError:
@@ -167,6 +169,8 @@ class IdentityRequester:
                 OSError
             ) as exc:  # jamais fatal : les MAC restent en attente pour la prochaine écriture
                 self._to_log |= carried
+                if not entries:  # vidage en échec : pas de MAC à nommer, pas de retry (reprise à la prochaine écriture)
+                    log.warning(kv("identity_request_failed", error=exc.strerror or exc))
                 for _, hci, mac in entries:
                     log.warning(
                         kv("identity_request_failed", hci=hci, mac=mac, error=exc.strerror or exc)

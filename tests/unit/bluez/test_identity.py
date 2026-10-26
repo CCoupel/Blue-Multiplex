@@ -422,3 +422,42 @@ async def test_startup_keeps_a_really_pending_request(config, bus, tmp_path):
     await clock.advance(DEBOUNCE)
     [[_, hci, mac]] = lines(request)
     assert (hci, mac) == ("hci1", SRC)
+
+
+async def test_startup_does_not_rewrite_what_this_process_already_flushed(config, bus, tmp_path):
+    """Réserve 1 : un hotplug déjà écrit avant la réconciliation n'est pas réécrit à l'identique."""
+    service, request, clock = make(config, bus, tmp_path)
+    writes: list[int] = []
+
+    async def counting_write(path: Path, entries: Sequence[tuple[str, str, str]]) -> None:
+        writes.append(len(entries))
+        write_identity_requests(path, entries)
+
+    service.identity.write = counting_write
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    await clock.advance(DEBOUNCE)
+    assert writes == [1]
+    service.identity.reconcile_startup()
+    await clock.advance(DEBOUNCE)
+    assert writes == [1] and [ln[2] for ln in lines(request)] == [SRC]
+
+
+async def test_failed_emptying_is_logged_without_retry_loop(config, bus, tmp_path, caplog):
+    """Réserve 2 : échec du vidage journalisé (sans MAC), non rejoué en boucle."""
+    caplog.set_level(logging.INFO)
+    service, request, clock = make(config, bus, tmp_path)
+    request.write_text(RESIDUE)
+    attempts = 0
+
+    async def failing_write(path: Path, entries: Sequence[tuple[str, str, str]]) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise PermissionError(13, "Permission denied")
+
+    service.identity.write = failing_write
+    await start(service)
+    await clock.advance(10 * VERIFY)
+    assert attempts == 1 and count(caplog, "identity_request_failed") == 1
+    assert "mac=" not in caplog.text.split("identity_request_failed")[1].splitlines()[0]
+    assert request.read_text() == RESIDUE
