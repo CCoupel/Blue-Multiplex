@@ -128,21 +128,18 @@ def test_without_only_every_controller_is_still_handled(tmp_path: Path) -> None:
     assert all(_touched(calls, idx) for idx in ("0", "1", "2"))
 
 
-def _service_command(tmp_path: Path, request: Path, key: str = "ExecStart=") -> list[str]:
-    """ExecStart (ou ExecStopPost) de l'unité, chemins système -> chemins du test."""
-    line = next(x for x in SERVICE.read_text().splitlines() if x.startswith(key))
-    argv = line.removeprefix(key).split()
+def _service_command(tmp_path: Path, request: Path) -> list[str]:
+    """ExecStart de l'unité, chemins système -> chemins du test."""
+    line = next(x for x in SERVICE.read_text().splitlines() if x.startswith("ExecStart="))
+    argv = line.removeprefix("ExecStart=").split()
     assert argv[0] == "/usr/lib/btmux/btmux-adapters.sh"
-    (tmp_path / "run").mkdir(exist_ok=True)  # RuntimeDirectory=btmux-identity
     subst = {
         "/var/lib/btmux/identity.request": str(request),
         "/etc/btmux/config.yaml": str(tmp_path / "config.yaml"),
         "/var/lib/btmux/adapters.yaml": str(tmp_path / "adapters.yaml"),
-        "/run/btmux-identity/done": str(tmp_path / "run" / "done"),
     }
     argv = ["bash", str(SCRIPT), *(subst.get(x, x) for x in argv[1:])]
-    if "--wait" in argv:
-        argv[argv.index("--wait") + 1] = "0"
+    argv[argv.index("--wait") + 1] = "0"
     return argv
 
 
@@ -358,177 +355,3 @@ def test_service_reread_does_not_repeat_invalid_line_warnings(tmp_path: Path) ->
     proc, _ = _run_with_hook(tmp_path, request)
     assert proc.returncode == 0, proc.stderr
     assert proc.stderr.count("ligne(s) invalide(s)") == 1
-
-
-# --- Requête écrite après la dernière relecture (QA Pi 0.2.0.8, écart 1) : ExecStopPost ---
-# Le .path ne relance pas une unité encore active : une écriture entre la dernière relecture
-# et la sortie du script était perdue jusqu'à la réémission du daemon (+60 s). L'ExecStopPost
-# relit le fichier et relance l'unité (une fois, --no-block) s'il contient une MAC non lue
-# par l'exécution qui se termine.
-
-
-def _rearm(tmp_path: Path, request: Path) -> tuple[subprocess.CompletedProcess[str], list[str]]:
-    """ExecStopPost de l'unité ; faux systemctl qui journalise ses appels."""
-    bindir = tmp_path / "fakebin"
-    bindir.mkdir(exist_ok=True)
-    slog = tmp_path / "systemctl.log"
-    _exe(bindir / "systemctl", f'echo "systemctl $*" >> "{slog}"\n')
-    for fake in ("btmgmt", "busctl", "python"):  # le contrôle ne doit rien toucher d'autre
-        _exe(bindir / fake, f'echo "{fake} $*" >> "{tmp_path / "forbidden.log"}"\nexit 1\n')
-    env = {
-        **os.environ,
-        "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}",
-        "BTMUX_SYSTEMCTL": str(bindir / "systemctl"),
-        "BTMUX_BTMGMT": str(bindir / "btmgmt"),
-        "BTMUX_BUSCTL": str(bindir / "busctl"),
-        "BTMUX_PYTHON": str(bindir / "python"),
-    }
-    proc = subprocess.run(
-        _service_command(tmp_path, request, "ExecStopPost="),
-        capture_output=True,
-        text=True,
-        env=env,
-        cwd=tmp_path,
-        timeout=30,
-        check=False,
-    )
-    assert not (tmp_path / "forbidden.log").exists()
-    calls = slog.read_text().splitlines() if slog.exists() else []
-    slog.unlink(missing_ok=True)
-    return proc, calls
-
-
-RELAUNCH = "systemctl start --no-block btmux-adapters-identity.service"
-
-
-def test_unit_closes_the_window_after_the_last_reread_with_a_post_exit_check() -> None:
-    unit = SERVICE.read_text()
-    assert unit.count("ExecStopPost=") == 1
-    assert "--rearm btmux-adapters-identity.service" in unit
-    assert "RuntimeDirectory=btmux-identity\n" in unit and "RuntimeDirectoryMode=0700\n" in unit
-    start = next(x for x in unit.splitlines() if x.startswith("ExecStart="))
-    stop = next(x for x in unit.splitlines() if x.startswith("ExecStopPost="))
-    assert (
-        "--done-file /run/btmux-identity/done" in start
-        and "--done-file /run/btmux-identity/done" in stop
-    )
-
-
-def test_request_written_after_the_last_reread_relaunches_the_unit_once(tmp_path: Path) -> None:
-    """Course QA 0.2.0.8 : 2e requête 16 ms après la dernière relecture -> relance, pas +60 s."""
-    request = tmp_path / "identity.request"
-    request.write_text(_req("AA:BB:CC:00:00:01"))
-    proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
-    assert proc.returncode == 0, proc.stderr
-    assert "relecture" not in proc.stdout and not _touched(calls, "2")
-    # écriture après la dernière relecture, avant la sortie de l'unité (événement .path perdu)
-    request.write_text(request.read_text() + _req("AA:BB:CC:00:00:02").replace("hci0", "hci2"))
-    post, systemctl = _rearm(tmp_path, request)
-    assert post.returncode == 0, post.stderr
-    assert systemctl == [RELAUNCH]
-    assert "AA:BB:CC:00:00:02 arrivée(s) après la dernière relecture" in post.stdout
-    # exécution relancée : traite la nouvelle MAC ; son contrôle ne relance plus (fichier inchangé)
-    (tmp_path / "fake.log").unlink()
-    proc, calls = _run(tmp_path, cmd=_service_command(tmp_path, request))
-    assert proc.returncode == 0, proc.stderr
-    assert "btmgmt -i 2 class 1 12" in calls
-    post, systemctl = _rearm(tmp_path, request)
-    assert post.returncode == 0 and systemctl == [] and post.stdout == ""
-
-
-def test_post_exit_check_without_new_request_does_not_relaunch(tmp_path: Path) -> None:
-    """Fichier inchangé, MAC en attente d'acquittement ou lignes invalides : aucune relance."""
-    request = tmp_path / "identity.request"
-    request.write_text(_req("AA:BB:CC:00:00:01", "AA:BB:CC:00:00:02"))
-    proc, _ = _run(tmp_path, cmd=_service_command(tmp_path, request))
-    assert proc.returncode == 0, proc.stderr
-    assert sorted((tmp_path / "run" / "done").read_text().split()) == [
-        "AA:BB:CC:00:00:01",
-        "AA:BB:CC:00:00:02",
-    ]
-    for content in (
-        request.read_text(),
-        _req("aa:bb:cc:00:00:02"),  # réécriture du daemon sans la MAC acquittée
-        "garbage\n" + _req("AA:BB:CC:00:00:01"),
-        "",
-    ):
-        request.write_text(content)
-        post, systemctl = _rearm(tmp_path, request)
-        assert post.returncode == 0, post.stderr
-        assert systemctl == [], content
-    request.unlink()
-    post, systemctl = _rearm(tmp_path, request)
-    assert post.returncode == 0 and systemctl == []
-
-
-def test_post_exit_check_relaunches_for_a_request_on_an_initially_empty_file(
-    tmp_path: Path,
-) -> None:
-    """Sortie anticipée (aucune MAC valide) : suivi écrit quand même, requête tardive vue."""
-    request = tmp_path / "identity.request"
-    request.write_text("")
-    proc, _ = _run(tmp_path, cmd=_service_command(tmp_path, request))
-    assert proc.returncode == 0, proc.stderr
-    assert (tmp_path / "run" / "done").read_text().strip() == ""
-    request.write_text(_req("AA:BB:CC:00:00:02"))
-    _, systemctl = _rearm(tmp_path, request)
-    assert systemctl == [RELAUNCH]
-
-
-def test_post_exit_check_takes_over_macs_left_by_the_reread_bound(tmp_path: Path) -> None:
-    """Borne de relecture atteinte : la MAC laissée est relancée tout de suite (pas +60 s)."""
-    request = tmp_path / "identity.request"
-    request.write_text(_req("AA:BB:CC:00:00:01"))
-    _append_on_class(
-        tmp_path,
-        request,
-        [_req("AA:BB:CC:00:00:02"), _req("B8:27:EB:00:00:09"), _req("AA:BB:CC:00:00:07")],
-    )
-    (tmp_path / "hook.sh").write_text(
-        (tmp_path / "hook.sh").read_text().replace('*" class "*', '*" class "*|*" bondable "*')
-    )
-    proc, _ = _run_with_hook(tmp_path, request, {"BTMUX_REQUESTS_REREAD": "1"})
-    assert "borne de 1 relecture(s) atteinte" in proc.stderr
-    _, systemctl = _rearm(tmp_path, request)
-    assert systemctl == [RELAUNCH]
-
-
-def test_post_exit_check_without_done_file_warns_and_does_not_relaunch(tmp_path: Path) -> None:
-    request = tmp_path / "identity.request"
-    request.write_text(_req("AA:BB:CC:00:00:02"))
-    (tmp_path / "run").mkdir()
-    post, systemctl = _rearm(tmp_path, request)
-    assert post.returncode == 0 and systemctl == []
-    assert "absent — pas de relance" in post.stderr
-
-
-def test_post_exit_check_survives_a_failing_systemctl(tmp_path: Path) -> None:
-    request = tmp_path / "identity.request"
-    (tmp_path / "run").mkdir()
-    (tmp_path / "run" / "done").write_text("\n")
-    request.write_text(_req("AA:BB:CC:00:00:02"))
-    bindir = tmp_path / "fakebin"
-    bindir.mkdir()
-    _exe(bindir / "systemctl", "exit 1\n")
-    env = {**os.environ, "BTMUX_SYSTEMCTL": str(bindir / "systemctl")}
-    proc = subprocess.run(
-        _service_command(tmp_path, request, "ExecStopPost="),
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=30,
-        check=False,
-    )
-    assert proc.returncode == 0
-    assert "relance de btmux-adapters-identity.service impossible" in proc.stderr
-
-
-def test_rearm_requires_requests_and_done_file(tmp_path: Path) -> None:
-    proc = subprocess.run(
-        ["bash", str(SCRIPT), "--rearm", "x.service"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
-    assert proc.returncode == 2 and "--rearm exige" in proc.stderr

@@ -387,8 +387,7 @@ def test_identity_service_replays_the_identity_pass_without_restarting_btmuxd() 
     # seuls les contrôleurs réapparus (3e champ de chaque ligne), lus par le script lui-même (#23)
     assert (
         "ExecStart=/usr/lib/btmux/btmux-adapters.sh "
-        f"--state {STATE} --config /etc/btmux/config.yaml --wait 5 --requests {REQUEST} "
-        "--done-file /run/btmux-identity/done\n" in unit
+        f"--state {STATE} --config /etc/btmux/config.yaml --wait 5 --requests {REQUEST}\n" in unit
     )
     assert "/bin/sh" not in unit and "head -n" not in unit  # plus de lecture shell dans l'unité
     assert "StartLimitIntervalSec=0\n" in unit  # un dongle instable ne suspend pas la surveillance

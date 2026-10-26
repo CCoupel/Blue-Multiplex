@@ -5,8 +5,6 @@ Documentation=https://github.com/CCoupel/Blue-Multiplex
 # API et SSE restent disponibles. Passe idempotente (≈ 4 s) ; toutes les MAC en attente sont traitées en une passe.
 # Le .path ne relance pas l'unité tant qu'elle est active : le script relit donc identity.request en fin de passe et
 # traite aussitôt les MAC arrivées entre-temps (3 relectures au plus, MAC déjà traitées ignorées — contrat 20261025-d).
-# Reste une fenêtre entre la dernière relecture et la sortie de l'unité (QA 0.2.0.8, écart 1) : l'ExecStopPost la ferme
-# (voir plus bas) ; une écriture plus tardive (unité en arrêt) met le start du .path en attente de la fin de l'arrêt.
 After=bluetooth.service btmux-adapters.service
 # Pas de limite de démarrage : un dongle instable (rebranchements répétés) ne doit pas faire passer l'unité en
 # « start-limit-hit », ce qui suspendrait la surveillance jusqu'au prochain reset-failed.
@@ -22,14 +20,7 @@ Environment=BTMUX_TRIGGER=hotplug
 # la MAC fait foi, lignes dédoublonnées (#23). Les autres contrôleurs ne sont pas touchés (une fenêtre d'appairage ouverte
 # ailleurs reste ouverte). Le fichier n'est lu que s'il est un fichier régulier (lien symbolique -> ignoré) ; ligne
 # invalide -> ignorée, contenu jamais reproduit au journal. Fichier absent, vide ou sans MAC valide : avertissement, code 0.
-# --done-file : MAC lues par cette exécution (dans /run/btmux-identity, supprimé à l'arrêt de l'unité), pour l'ExecStopPost.
-ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5 --requests /var/lib/btmux/identity.request --done-file /run/btmux-identity/done
-# Contrôle post-sortie (#23) : l'unité n'est plus active, donc un start est mis en file et rejoué après l'arrêt. Relance
-# (--no-block, une seule) uniquement si identity.request contient une MAC valide non lue par l'exécution qui se termine ;
-# fichier inchangé ou MAC déjà traitées (en attente d'acquittement) : aucune relance — jamais de boucle.
-ExecStopPost=/usr/lib/btmux/btmux-adapters.sh --rearm btmux-adapters-identity.service --requests /var/lib/btmux/identity.request --done-file /run/btmux-identity/done
-RuntimeDirectory=btmux-identity
-RuntimeDirectoryMode=0700
+ExecStart=/usr/lib/btmux/btmux-adapters.sh --state /var/lib/btmux/adapters.yaml --config /etc/btmux/config.yaml --wait 5 --requests /var/lib/btmux/identity.request
 # Code 2 (configuration invalide, déjà journalisée par le script) : l'unité ne doit jamais échouer — la surveillance
 # continue et la prochaine requête rejoue la passe une fois la configuration corrigée.
 SuccessExitStatus=2
