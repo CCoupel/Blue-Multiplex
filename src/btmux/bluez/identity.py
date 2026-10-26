@@ -34,6 +34,9 @@ def expected_class(roles: tuple[str, ...]) -> int:
     return CLASS_SOURCES if "sources" in roles else CLASS_HEADSETS
 
 
+# Marqueur interne : contenu inconnu hérité d'une exécution précédente (jamais une MAC)
+_RESIDUAL = ""
+
 Sleep = Callable[[float], Awaitable[None]]
 Writer = Callable[[Path, Sequence[tuple[str, str, str]]], Awaitable[None]]
 
@@ -87,6 +90,23 @@ class IdentityRequester:
         incorrecte ne déclenche rien ici : seule la vérification différée bornée peut réémettre (pas de boucle)."""
         if (value & CLASS_MASK) == expected_class(roles):
             self._ack(mac)
+
+    def reconcile_startup(self) -> None:
+        """Démarrage : le fichier doit refléter l'état réel (#23). Un résidu d'une exécution précédente
+        (aucune MAC en attente dans CE processus) est vidé par le flush habituel (débounce, écriture
+        atomique) ; aucune passe, aucune vérification, aucune boucle n'est déclenchée. Les MAC réellement
+        en attente (hotplug survenu pendant le démarrage) sont portées par le même flush."""
+        try:
+            residual = self._target.stat().st_size > 0
+        except OSError:
+            return  # fichier absent / illisible : rien à réconcilier
+        if not residual:
+            return
+        # le fichier contient autre chose que l'état connu : le réécrire
+        self._written.add(_RESIDUAL)
+        self._dirty = True
+        if self._flusher is None or self._flusher.done():
+            self._flusher = asyncio.ensure_future(self._flush())
 
     def reset(self) -> None:
         """Arrêt / reconnexion BlueZ : plus rien en attente."""

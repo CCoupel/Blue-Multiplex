@@ -172,6 +172,7 @@ class BluezService:
         # BlueZ passe Pairable à vrai dès qu'un agent est enregistré : l'état sûr (alimenté, appairage et
         # découverte fermés) doit donc être posé APRÈS l'enregistrement, et vérifié.
         await self._close_adapters()
+        self.identity.reconcile_startup()
         log.info(kv("bluez_ready", adapters=sum(i.present for i in self.registry.infos)))
         return []
 

@@ -365,3 +365,60 @@ async def test_request_issued_during_a_slow_write_is_not_lost(config, bus, tmp_p
     await clock.advance(3 * VERIFY)
     assert count(caplog, "identity_requested") == 3  # 3 tentatives exactement, puis abandon
     assert count(caplog, "identity_giving_up") == 1
+
+
+RESIDUE = "2026-10-25T10:00:00Z\thci1\tAA:BB:CC:00:00:01\n"
+
+
+async def test_startup_empties_a_residual_request_file_without_any_pass(
+    config, bus, tmp_path, caplog
+):
+    """#23 : résidu d'une exécution précédente, rien en attente → fichier vidé (0 octet), une seule
+    écriture, ni requête, ni vérification différée, ni boucle (même garantie que S6.11)."""
+    caplog.set_level(logging.INFO)
+    service, request, clock = make(config, bus, tmp_path)
+    request.write_text(RESIDUE)
+    writes: list[list[tuple[str, str, str]]] = []
+
+    async def counting_write(path: Path, entries: Sequence[tuple[str, str, str]]) -> None:
+        writes.append(list(entries))
+        write_identity_requests(path, entries)
+
+    service.identity.write = counting_write
+    await start(service)
+    assert request.read_text() == RESIDUE  # écriture différée par le débounce
+    await clock.advance(DEBOUNCE)
+    assert request.exists() and request.stat().st_size == 0
+    await clock.advance(10 * VERIFY)
+    assert writes == [[]]  # une seule écriture, vide
+    assert count(caplog, "identity_requested") == 0 and not service.identity._verifiers
+
+
+async def test_startup_leaves_an_already_empty_or_missing_file_alone(config, bus, tmp_path):
+    service, request, clock = make(config, bus, tmp_path)
+    writes: list[int] = []
+
+    async def counting_write(path: Path, entries: Sequence[tuple[str, str, str]]) -> None:
+        writes.append(len(entries))
+        write_identity_requests(path, entries)
+
+    service.identity.write = counting_write
+    await start(service)
+    await clock.advance(10 * VERIFY)
+    assert writes == [] and not request.exists()
+    request.write_text("")
+    await start(service)
+    await clock.advance(10 * VERIFY)
+    assert writes == [] and request.read_text() == ""
+
+
+async def test_startup_keeps_a_really_pending_request(config, bus, tmp_path):
+    """Un hotplug survenu pendant le débounce de démarrage reste en attente : le résidu est remplacé
+    par la seule requête réelle (pas vidé)."""
+    service, request, clock = make(config, bus, tmp_path)
+    request.write_text("2026-10-25T10:00:00Z\thci0\tAA:BB:CC:00:00:99\n")
+    await start(service)
+    replug(bus, SRC_PATH, SRC, Class=0x0)
+    await clock.advance(DEBOUNCE)
+    [[_, hci, mac]] = lines(request)
+    assert (hci, mac) == ("hci1", SRC)
