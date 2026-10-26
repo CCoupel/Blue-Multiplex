@@ -57,6 +57,23 @@ préparation sans matériel, puis campagne de spikes. Pas de daemon fonctionnel 
 - Environnement QUALIF : companions `deploy.qualif.md` et `qualif.env.example` avec `FORBIDDEN_HOSTS` (hôtes interdits :
   jamais de `ssh`/`scp` vers un Pi en service) (#18).
 
+### Fixed (#23, 0.2.0.8 → 0.2.0.12)
+- Identité des contrôleurs au hotplug : le `identity.request` résiduel est vidé au démarrage du daemon quand rien n'est en
+  attente ; un résidu déjà traité n'est plus réécrit, et l'échec du vidage est journalisé.
+- Permutation des rôles (`PUT /api/controllers/roles`) avec `confirm` : les appareils connectés sur les rôles modifiés sont
+  déconnectés **en parallèle et confirmés avant** l'écriture de l'état (délai borné, ≲ 5 s au total) ; un appareil déjà
+  déconnecté compte comme succès. Échec de déconnexion, ou reconnexion avant écriture : **502 `disconnect_failed`** (`details`
+  = appareils encore connectés), rien n'est écrit, pas de redémarrage. Les contrôles `change_pending` et `pairing_open` sont
+  rejoués après les déconnexions.
+- Web UI : attente affichée pendant le `PUT` des rôles (libellé ≲ 5 s), message dédié au 502 `disconnect_failed`, garde
+  anti double envoi (l'état « occupé » des rôles est conservé pendant le PUT confirmé).
+
+### Changed (#23)
+- Limite de rattrapage acceptée : quand deux dongles apparaissent à quelques secondes d'écart, le second peut recevoir son
+  identité (nom `btmux` / `btmux-hp`, classe) **≈ 60–70 s** plus tard (réémission btmuxd) au lieu de quelques secondes. Rien n'est perdu.
+  Consigne d'exploitation : brancher ou rebrancher **un dongle à la fois** et attendre ≈ 10 s entre deux (`docs/install-pi.md` §6.5).
+- Contrats : `contracts/CHANGELOG.md` entrées `[20261026-a]` à `[20261026-d]` (contrôle post-sortie retiré, S3 alignée sur l'implémentation).
+
 ### Reporté
 - Policy D-Bus de l'utilisateur de service : resserrement des droits à faire avant la mise en production (#20, M3).
 - Plafond du nombre de flux SSE simultanés (F6).
