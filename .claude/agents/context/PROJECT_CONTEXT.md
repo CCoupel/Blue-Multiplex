@@ -67,7 +67,7 @@ Marqueurs pytest : `slow`, `smoke`, `critical`, `hardware` (nécessite BlueZ/Pip
 
 | Env | Machine | Publish | Deploy |
 |-----|---------|---------|--------|
-| QUALIF | Pi de qualification (`ubuntu@btmux-qualif.local`) | promote (wheel dans `build/qualif_v<X.Y.Z>/`) | SSH + `scripts/deploy.sh` |
+| QUALIF | Pi de qualification (`ubuntu@pi-qualif.local`) | promote (wheel dans `build/qualif_v<X.Y.Z>/`) | SSH + `scripts/deploy.sh` |
 | PROD | Pi de production (`ubuntu@btmux.local`) | rebuild-ci (tag `vX.Y.Z` → `.github/workflows/release.yml` → `.deb`) | SSH + `dpkg -i` |
 
 Procédures détaillées : `.claude/agents/environments/{publish,deploy}.{qualif,prod}.template.md`, complétées par les compagnons

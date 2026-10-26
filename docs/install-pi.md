@@ -31,7 +31,7 @@ vérifiée au §6 (non vérifiable sans le matériel).
 ## 3. Image et système
 
 1. Dans Raspberry Pi Imager : **Ubuntu Server 26.04 LTS (64-bit)**. Dans les options de personnalisation
-   (cloud-init) : hostname `btmux-qualif`, utilisateur (le script de ce document suppose `ubuntu`, UID 1000, mais tout
+   (cloud-init) : hostname `pi-qualif`, utilisateur (le script de ce document suppose `ubuntu`, UID 1000, mais tout
    utilisateur convient), **clé SSH publique**, authentification par mot de passe désactivée, **pas de Wi-Fi**.
 2. Désactiver le Bluetooth intégré et le Wi-Fi dans `/boot/firmware/config.txt` (section `[all]`) :
 
@@ -42,7 +42,7 @@ vérifiée au §6 (non vérifiable sans le matériel).
 
 3. Vérifier qu'aucun Wi-Fi n'est configuré : `ls /etc/netplan/` ne doit pas contenir de bloc `wifis:`
    (sinon le retirer, puis `sudo netplan apply`). Seul Ethernet reste actif.
-4. Redémarrer ; le Pi doit être joignable : `ssh <utilisateur>@btmux-qualif.local` (nécessite `avahi-daemon`, installé
+4. Redémarrer ; le Pi doit être joignable : `ssh <utilisateur>@pi-qualif.local` (nécessite `avahi-daemon`, installé
    au §4 — sinon utiliser l'adresse IP du routeur pour la première connexion).
 
 ## 4. Paquets
