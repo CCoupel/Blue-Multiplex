@@ -7,7 +7,8 @@
 
 ## 1. Matériel
 
-- Raspberry Pi 4 (préféré) ; Pi 3 ou Pi 5 possibles. Alimentation officielle, carte SD ≥ 16 Go, câble Ethernet.
+- **Raspberry Pi 4 Model B** : Pi de qualif (`pi-qualif`) depuis le 2026-10-26 (nouvelle alimentation officielle). Pi 5 possible ;
+  Pi 3 B uniquement pour la variante provisoire historique (§10). Alimentation officielle, carte SD ≥ 16 Go, câble Ethernet.
 - **2 dongles USB Bluetooth TP-Link UB500** (puce Realtek RTL8761BU, USB `2357:0604`), chacun sur une **rallonge USB**, éloignés des
   ports USB 3 (cible v0.2.0, §6). La v0.1.0 n'en utilisait qu'un (ou le Bluetooth interne du Pi 3, §10).
 
@@ -132,10 +133,13 @@ jamais des index `hciN` (qui changent) : l'identification se fait par **adresse 
 ### 6.1 Branchement
 
 - Chaque dongle sur une **rallonge USB** (≈ 20 cm ou plus), éloigné des ports USB 3 et de l'antenne Wi-Fi.
-- **Les deux dongles sur le même hub USB 2.0 du Pi** (ports USB 2.0 ; sur un Pi 3 les ports USB partagent un unique contrôleur
-  avec l'Ethernet). C'est la configuration des mesures du double saut (#8) : noter dans les relevés qu'ils partagent un seul
-  hub USB 2.0 (480 Mbit/s partagés), ce qui est une limite à rappeler dans les résultats.
-- Ethernet branché ; Wi-Fi désactivé (`dtoverlay=disable-wifi`) pour les mesures.
+- **Les deux dongles sur le même hub USB 2.0 du Pi** : sur Pi 4, les ports USB 2.0 du hub interne (bus 001, 480 Mbit/s) ;
+  le bus USB 3 (5000 Mbit/s) reste vide. Les UB500 sont des périphériques USB 1.1 (12 Mbit/s) : le débit du hub n'est pas le
+  facteur limitant. C'est la configuration des mesures du double saut (#8) : noter dans les relevés qu'ils partagent un seul
+  hub USB 2.0 (480 Mbit/s partagés), ce qui est une limite à rappeler dans les résultats. Pi 3 : les ports partagent un unique
+  contrôleur avec l'Ethernet (variante historique).
+- Ethernet branché ; Wi-Fi désactivé (`dtoverlay=disable-wifi`) pour les mesures. **Au 2026-10-26, pi-qualif n'a pas
+  `disable-wifi`** : `wlan0` reste actif (SSH par Wi-Fi), à consigner dans les relevés (§9.1).
 
 ### 6.2 Checklist de réception (avant tout appairage)
 
@@ -147,12 +151,16 @@ ls /lib/firmware/rtl_bt/ | grep 8761bu      # rtl8761bu_fw.bin(.zst), rtl8761bu_
 bluetoothctl list                           # 2 contrôleurs : "Controller <MAC> ... "
 sudo btmgmt info                            # 2 index, version Bluetooth 5.x
 hciconfig -a | grep -E "^hci|Bus|BD Address" # 2 × « Bus: USB », aucun « Bus: UART »
+# Sous-tension : vcgencmd est indisponible sur Ubuntu 26.04 (/dev/vcio absent) → capteur hwmon rpi_volt
+for d in /sys/class/hwmon/hwmon*; do [ "$(cat "$d/name" 2>/dev/null)" = rpi_volt ] && echo "in0_lcrit_alarm : $(cat "$d/in0_lcrit_alarm")"; done   # 0 attendu
+dmesg | grep -ci "under-voltage"            # 0 attendu
 ```
 
-- [ ] 2 dongles détectés (`2357:0604`), firmware `rtl8761bu` chargé pour les deux, 0 erreur `btusb`/`hci` dans `dmesg`.
-- [ ] 2 contrôleurs BlueZ, **tous deux sur le bus USB, aucun sur UART** (Bluetooth interne désactivé).
-- [ ] Rallonges en place, dongles éloignés de l'USB 3 ; hub USB 2.0 unique noté.
-- [ ] MAC des deux contrôleurs relevées (tableau 6.4) et reportées dans `adapters[].mac`.
+- [x] 2 dongles détectés (`2357:0604`), firmware `rtl8761bu` chargé pour les deux, 0 erreur USB (-110 / -71) — relevé V-0 du 2026-10-26 (§9.1).
+- [x] 2 contrôleurs BlueZ, **tous deux sur le bus USB, aucun sur UART** (`dtoverlay=disable-bt` présent).
+- [x] Pas de sous-tension : `in0_lcrit_alarm` = 0, aucune occurrence under-voltage dans `dmesg` (relevé du 2026-10-26).
+- [ ] Rallonges en place, dongles éloignés de l'USB 3 : **à confirmer physiquement** (le système ne lit pas le connecteur USB 2/3 utilisé). Hub USB 2.0 unique noté (§6.1, §9.1).
+- [x] MAC des deux contrôleurs relevées (tableau 6.4) et reportées dans `adapters[].mac`.
 
 ### 6.3 Bascule du Bluetooth interne vers les dongles
 
@@ -169,8 +177,11 @@ Port USB d'un contrôleur : `readlink -f /sys/class/bluetooth/hciN/device` (chem
 
 | Rôle (`roles`) | Nom annoncé | Index actuel | MAC du contrôleur | Port USB | Rallonge |
 |----------------|-------------|--------------|-------------------|----------|----------|
-| `sources` (`hci-src`) | `btmux` | hci? | à relever | à relever | |
-| `headsets` (`hci-hp`) | `btmux-hp` | hci? | à relever | à relever | |
+| `sources` (`hci-src`) | `btmux` | hci1 | `18:69:45:42:9D:E2` | `1-1.2` (hub USB 2 du Pi 4) | non relevée (connecteur non lisible) |
+| `headsets` (`hci-hp`) | `btmux-hp` | hci0 | `18:69:45:42:B5:54` | `1-1.1` (hub USB 2 du Pi 4) | non relevée (connecteur non lisible) |
+
+Relevé V-0 du 2026-10-26 sur `pi-qualif` (Pi 4). Les index `hciN` peuvent changer au reboot : la colonne « Index actuel » est
+indicative, la correspondance se fait par MAC.
 
 ### 6.5 Rebrancher un dongle : un à la fois (#23)
 
@@ -242,8 +253,29 @@ exit $fail
 
 ## 9. Versions installées
 
-Relevé du **2026-10-22** sur `pi-qualif` (`ubuntu@<IP-du-Pi>`), en **variante provisoire Bluetooth interne** (§10) :
-le dongle RTL8761B n'est pas disponible. Les valeurs de la cible (dongle) restent à relever le jour où il sera branché.
+### 9.1 Cible dongle — Raspberry Pi 4 Model B (relevé du 2026-10-26)
+
+Relevé lecture seule V-0 sur `pi-qualif` (`ubuntu@<IP-du-Pi>`), avec les deux dongles UB500 (cible v0.2.0, §6).
+
+| Élément | Relevé |
+|---------|--------|
+| Matériel | Raspberry Pi 4 Model B Rev 1.1 |
+| OS / noyau | Ubuntu 26.04.1 LTS, noyau 7.0.0-1020-raspi |
+| Dongles `2357:0604` | 2 (attendu 2) — ports : `1-1.1` (hci0, `headsets`) et `1-1.2` (hci1, `sources`), hub USB 2 du Pi 4 (bus 001, 480M) ; bus USB 3 (002) vide |
+| Contrôleurs | hci0 `18:69:45:42:B5:54` « btmux-hp » classe 0x6C010C (headsets) ; hci1 `18:69:45:42:9D:E2` « btmux » classe 0x6C0404 (sources) ; UP RUNNING, Realtek, **HCI/LMP 5.1**, SCO MTU 255:12 |
+| Firmware | `rtl8761bu` 0xdfc6d922, chargé sans erreur pour hci0 et hci1 |
+| Bus | 2 × USB, **0 contrôleur UART** ; `dtoverlay=disable-bt` présent |
+| `dtoverlay=disable-wifi` | **absent** : `wlan0` UP (192.168.1.51/24), `eth0` DOWN (pas de câble) — Wi-Fi actif, à consigner |
+| Sous-tension | `vcgencmd get_throttled` indisponible (`/dev/vcio` absent) ; équivalent : hwmon `rpi_volt` `in0_lcrit_alarm` = 0 ; 0 occurrence under-voltage dans `dmesg` (§6.2) |
+| Erreurs USB | 0 erreur -110 / -71 dans `dmesg` ; 2 ré-énumérations de dongles après boot (hci0 puis hci1), sans erreur |
+| Services | `btmuxd` actif ; `GET /api/controllers` : 2 contrôleurs présents, `roles` sources = `9D:E2`, headsets = `B5:54`, `pending=false` ; 1 appareil connecté sur `sources`, 0 sur `headsets` |
+
+Seules les MAC des dongles et du Pi sont citées ; aucune MAC d'appareil tiers n'a été relevée.
+
+### 9.2 Historique — Raspberry Pi 3 B, variante Bluetooth interne (relevé du 2026-10-22)
+
+Relevé du **2026-10-22** sur `pi-qualif`, alors en **variante provisoire Bluetooth interne** (§10) : le dongle RTL8761B
+n'était pas encore disponible. Ce relevé ne vaut plus pour la cible (Pi 4, dongles) ; conservé pour l'historique.
 
 | Élément | Relevé |
 |---------|--------|
@@ -273,10 +305,13 @@ le dongle RTL8761B n'est pas disponible. Les valeurs de la cible (dongle) resten
 > SSH), puis redémarrer.
 > `bluetoothctl list` attend indéfiniment quand aucun contrôleur n'existe : le script du §8 utilise `timeout`.
 
-## 10. Variante provisoire : Bluetooth interne (Pi 3)
+## 10. Variante provisoire historique : Bluetooth interne (Pi 3)
 
-Tant que le dongle RTL8761B n'est pas disponible, les spikes peuvent utiliser le Bluetooth intégré du Pi 3 Model B
-(Broadcom/Cypress 43438 sur UART). **Ce n'est pas la cible** : résultats de latence, de qualité et de nombre de liens
+> **Historique** : cette variante a servi avant la réception des dongles. Elle n'est plus utilisée sur `pi-qualif`
+> (Pi 4, deux UB500 depuis le 2026-10-26). Conservée pour référence.
+
+Tant que le dongle RTL8761B n'était pas disponible, les spikes ont pu utiliser le Bluetooth intégré du Pi 3 Model B
+(Broadcom/Cypress 43438 sur UART). **Ce n'était pas la cible** : résultats de latence, de qualité et de nombre de liens
 SCO à confirmer avec le dongle.
 
 Mise en place (Ubuntu 26.04 arm64) :

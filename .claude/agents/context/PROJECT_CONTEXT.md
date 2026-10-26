@@ -13,7 +13,7 @@
 | CLI `btmuxctl` | Python, consomme l'API |
 | Web UI | HTML/CSS/JS vanilla, statique, servie par l'API — `src/btmux/api/static/` |
 | Config | YAML `/etc/btmux/config.yaml` — aucune base de données |
-| Cible | Raspberry Pi (qualif : Pi 3 B), Ubuntu Server 26.04 LTS arm64, BlueZ, PipeWire ≥ 1.2, WirePlumber 0.5, systemd |
+| Cible | Raspberry Pi (qualif : Pi 4 Model B), Ubuntu Server 26.04 LTS arm64, BlueZ, PipeWire ≥ 1.2, WirePlumber 0.5, systemd |
 | Outillage | `uv`, `ruff`, `mypy`, `pytest` |
 
 ## Structure cible
