@@ -312,6 +312,7 @@ const detailLabel = (x) => (typeof x === "string" ? x : x && (x.alias || x.name 
 
 async function applyRoles(confirm) {
   const d = draftOrCurrent();
+  if (S.busy.has("roles")) return;
   S.busy.add("roles"); render();
   try {
     const roles = await api.putRoles({ sources: d.sources, headsets: d.headsets, confirm });
@@ -322,7 +323,7 @@ async function applyRoles(confirm) {
     if (e instanceof ApiError && e.status === 409 && e.code === "devices_connected" && !confirm) {
       const list = Array.isArray(e.details) ? e.details.map(detailLabel) : [];
       S.busy.delete("roles");
-      if (await confirmRoles(list)) return applyRoles(true);
+      if (await confirmRoles(list)) return await applyRoles(true);
     } else if (e instanceof ApiError && e.status === 409 && e.code === "pairing_open") {
       pushError(new ApiError(409, e.code, "Fermez d'abord la fenêtre d'appairage, puis réessayez."), { title: "Affectation refusée" });
     } else if (e instanceof ApiError && e.status === 409 && e.code === "change_pending") {
