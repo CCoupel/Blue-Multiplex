@@ -85,3 +85,7 @@
 ## [20261025-e] — arbitrage rejeu idempotent (`infra-20261025-104500` § Conformité) — non BREAKING
 
 - **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : « MAC déjà traitées ignorées » s'entend **au sein d'une exécution** ; aucun état persistant côté root — une exécution déclenchée par la réécriture du daemon peut **rejouer une fois** une MAC encore en attente (passe idempotente ≈ 4 s, le script n'écrit jamais le fichier → pas de boucle) ; `TimeoutStartSec=60` et pire cas `btmgmt` (10 s/appel) notés.
+
+## [20261026-a] — contrôle post-sortie de l'unité identité (`infra-20261026-114500`, QA 0.2.0.8 écart 1, SHA `adb1837`) — non BREAKING
+
+- **[CHANGED]** `contracts/config-schema.md` — § identité au hotplug : `btmux-adapters-identity.service` consigne les MAC lues (`--done-file /run/btmux-identity/done`, `RuntimeDirectory=`) et porte un **`ExecStopPost=btmux-adapters.sh --rearm …`** qui relit `identity.request` après la sortie du script : une MAC valide **non lue** par l'exécution → **une seule** relance `systemctl start --no-block` (mise en file en état `stop-post`, jamais fusionnée) ; sinon rien. Ferme la fenêtre « écriture entre la dernière relecture et la sortie » ; **jamais de boucle** (relance seulement sur MAC nouvelle, l'exécution relancée lit tout le fichier) ; les MAC laissées par la borne de 3 relectures sont relancées immédiatement. Format de `identity.request` et délai (≤ ~10 s) **inchangés** ; aucun changement de `btmuxd` ni du packaging.
