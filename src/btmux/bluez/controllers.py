@@ -50,43 +50,51 @@ class RoleManager:
         self.disconnect_poll = DISCONNECT_POLL_S
 
     async def _disconnect_all(self, connected: list[Any]) -> None:
-        """Déconnecte chaque appareil et attend `Connected=false` (délai borné) : AVANT toute écriture, le bus
-        étant encore ouvert (le redémarrage le fermerait). Échec ou délai → `DisconnectFailed`, rien n'est écrit."""
-        failed: list[dict[str, object]] = []
-        for device in connected:
-            info = {
-                "mac": device.mac,
-                "alias": device.alias,
-                "name": device.name,
-                "adapter": device.adapter,
-            }
-            try:
-                await self._pairing.disconnect(device.mac)
-            except BluezError as exc:
-                log.warning(kv("disconnect_failed", mac=device.mac, error=exc))
-                failed.append(info)
-                continue
-            if not await self._wait_disconnected(device.mac):
-                log.warning(kv("disconnect_failed", mac=device.mac, error="timeout"))
-                failed.append(info)
+        """Déconnecte les appareils EN PARALLÈLE et attend `Connected=false` : AVANT toute écriture, le bus
+        étant encore ouvert (le redémarrage le fermerait). Chaque appareil dispose de `disconnect_timeout`
+        au total (appel + confirmation), donc le pire cas global reste ≈ ce délai. Échec ou délai → l'inventaire
+        est re-testé (un appareil déjà déconnecté, ex. `NotConnected`, est un succès) ; sinon `DisconnectFailed`."""
+        results = await asyncio.gather(*(self._disconnect_one(d.mac) for d in connected))
+        failed = [
+            {"mac": d.mac, "alias": d.alias, "name": d.name, "adapter": d.adapter}
+            for d, ok in zip(connected, results, strict=True)
+            if not ok
+        ]
         if failed:
             raise DisconnectFailed(
                 "cannot disconnect all devices: roles unchanged, nothing written", failed
             )
 
-    async def _wait_disconnected(self, mac: str) -> bool:
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + self.disconnect_timeout
-        while True:
-            if not any(d.mac == mac and d.connected for d in self._inventory.devices()):
-                return True
-            if loop.time() >= deadline:
-                return False
+    def _is_connected(self, mac: str) -> bool:
+        return any(d.mac == mac and d.connected for d in self._inventory.devices())
+
+    async def _disconnect_one(self, mac: str) -> bool:
+        error: object = "timeout"
+        try:
+            await asyncio.wait_for(self._disconnect_and_wait(mac), self.disconnect_timeout)
+            return True
+        except BluezError as exc:
+            error = exc
+        except TimeoutError:
+            pass
+        if not self._is_connected(mac):  # déjà déconnecté (NotConnected, signal tardif) : succès
+            return True
+        log.warning(kv("disconnect_failed", mac=mac, error=error))
+        return False
+
+    async def _disconnect_and_wait(self, mac: str) -> None:
+        await self._pairing.disconnect(mac)
+        while self._is_connected(mac):
             await asyncio.sleep(self.disconnect_poll)
 
     def check_writable(self) -> None:
         if self._inventory.roles_pending:
             raise ChangePending("role change in progress: the service is about to restart")
+
+    def _check_state(self) -> None:
+        self.check_writable()  # 409 change_pending
+        if self._pairing.window_open:
+            raise WindowOpen("close the pairing window before changing roles")
 
     def _parse(self, body: Any) -> tuple[dict[str, str | None], bool]:
         if not isinstance(body, dict) or set(body) - {"sources", "headsets", "confirm"}:
@@ -143,9 +151,7 @@ class RoleManager:
             affected = [r for r in ROLES if wanted[r] != current[r]]
             if not affected:  # no-op 200, avant change_pending et pairing_open
                 return 200, self._inventory.roles()
-            self.check_writable()  # 409 change_pending
-            if self._pairing.window_open:
-                raise WindowOpen("close the pairing window before changing roles")
+            self._check_state()  # 409 change_pending, 409 pairing_open
             connected = [
                 d for d in self._inventory.devices() if d.connected and d.adapter in affected
             ]
@@ -161,6 +167,19 @@ class RoleManager:
                 connected
             ):  # confirm:true — d'abord les déconnexions (bus ouvert), échec → rien d'écrit
                 await self._disconnect_all(connected)
+                # l'état a pu changer pendant les déconnexions (attente : jusqu'à `disconnect_timeout`)
+                self._check_state()
+                back = [
+                    d for d in self._inventory.devices() if d.connected and d.adapter in affected
+                ]
+                if back:  # reconnecté entre-temps : 502 déterministe, le client peut réessayer
+                    raise DisconnectFailed(
+                        "devices reconnected during the change: roles unchanged, nothing written",
+                        [
+                            {"mac": d.mac, "alias": d.alias, "name": d.name, "adapter": d.adapter}
+                            for d in back
+                        ],
+                    )
             path = self._config.state_path
             try:  # puis l'état : en cas d'échec, pas de `pending`
                 await asyncio.to_thread(write_state_atomic, path, self._adapters_for(wanted))

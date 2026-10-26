@@ -267,14 +267,13 @@ async def test_confirm_disconnects_and_confirms_before_writing_state(
 
         a.bus.handlers[("org.bluez.Device1", "Disconnect")] = disconnect
         written_at_confirm: list[bool] = []
-        orig = a.service.roles._wait_disconnected
+        orig = a.service.roles._disconnect_and_wait
 
-        async def spy(mac: str) -> bool:
-            ok = await orig(mac)
+        async def spy(mac: str) -> None:
+            await orig(mac)
             written_at_confirm.append(state_file.exists())
-            return ok
 
-        a.service.roles._wait_disconnected = spy  # type: ignore[method-assign]
+        a.service.roles._disconnect_and_wait = spy  # type: ignore[method-assign]
         status, _ = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
         assert status == 202
         assert seen == {"state_written_at_disconnect": False}
@@ -304,6 +303,92 @@ async def test_confirm_disconnect_timeout_writes_nothing(api: _AsyncCtx, state_f
         a.service.roles.disconnect_poll = 0.02
         status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
         assert (status, body["error"]) == (502, "disconnect_failed")
+        assert not state_file.exists() and not a.service.inventory.roles_pending
+
+
+async def test_blocking_disconnect_call_is_bounded(api: _AsyncCtx, state_file: Path):
+    """Réserve 1 : `Disconnect` muet : borné par `disconnect_timeout`, en parallèle."""
+    async with api as a:
+        for mac in (PHONE_MAC, HEADSET_MAC):
+            a.bus.add_device(SRC_PATH, mac, name=mac, Paired=True, Connected=True)
+
+        async def hang(p: str, body: list[Any]) -> list[Any]:
+            await asyncio.sleep(3600)
+            return []
+
+        a.bus.handlers[("org.bluez.Device1", "Disconnect")] = hang
+        a.service.roles.disconnect_timeout = 0.2
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert (status, body["error"]) == (502, "disconnect_failed")
+        assert (
+            len(body["details"]) == 2 and loop.time() - start < 0.2 * 2 + 1
+        )  # parallèle, pas 2 × délai
+        assert not state_file.exists() and not a.service.inventory.roles_pending
+
+
+async def test_not_connected_error_is_a_success_when_already_disconnected(
+    api: _AsyncCtx, state_file: Path
+):
+    """Réserve 2 : NotConnected alors que l'appareil est déjà tombé → pas de faux échec."""
+    from btmux.bluez.bus import DBusCallError
+
+    async with api as a:
+        path = a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+
+        async def not_connected(p: str, body: list[Any]) -> list[Any]:
+            a.bus.change(p, "org.bluez.Device1", Connected=False)  # tombé juste avant l'appel
+            raise DBusCallError("org.bluez.Error.NotConnected", "Not connected")
+
+        a.bus.handlers[("org.bluez.Device1", "Disconnect")] = not_connected
+        status, _ = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert status == 202 and state_file.exists()
+        assert a.bus.objects[path]["org.bluez.Device1"]["Connected"] is False
+
+
+async def test_window_opened_during_disconnection_refuses_without_writing(
+    api: _AsyncCtx, state_file: Path
+):
+    """Réserve 3 : les contrôles sont rejoués après les déconnexions."""
+    from unittest.mock import PropertyMock, patch
+
+    from btmux.bluez.pairing import PairingManager
+
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        opened = PropertyMock(return_value=False)
+
+        async def disconnect(p: str, body: list[Any]) -> list[Any]:
+            opened.return_value = True  # une fenêtre s'ouvre pendant la déconnexion
+            a.bus.change(p, "org.bluez.Device1", Connected=False)
+            return []
+
+        a.bus.handlers[("org.bluez.Device1", "Disconnect")] = disconnect
+        with patch.object(PairingManager, "window_open", opened):
+            status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert (status, body["error"]) == (409, "pairing_open")
+        assert not state_file.exists() and not a.service.inventory.roles_pending
+
+
+async def test_device_reconnected_during_disconnection_is_a_502(api: _AsyncCtx, state_file: Path):
+    """Réserve 3 : appareil reconnecté entre-temps → 502 déterministe, rien d'écrit."""
+    async with api as a:
+        a.bus.add_device(SRC_PATH, PHONE_MAC, name="PC", Paired=True, Connected=True)
+        a.bus.add_device(SRC_PATH, HEADSET_MAC, name="Tel", Paired=True, Connected=False)
+
+        async def disconnect(p: str, body: list[Any]) -> list[Any]:
+            a.bus.change(p, "org.bluez.Device1", Connected=False)
+            other = next(
+                q for q in a.bus.objects if q != p and q.endswith(HEADSET_MAC.replace(":", "_"))
+            )
+            a.bus.change(other, "org.bluez.Device1", Connected=True)
+            return []
+
+        a.bus.handlers[("org.bluez.Device1", "Disconnect")] = disconnect
+        status, body = await _put(a, {"sources": HP, "headsets": SRC, "confirm": True})
+        assert (status, body["error"]) == (502, "disconnect_failed")
+        assert [d["mac"] for d in body["details"]] == [HEADSET_MAC]
         assert not state_file.exists() and not a.service.inventory.roles_pending
 
 
