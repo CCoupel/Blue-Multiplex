@@ -280,7 +280,7 @@ function renderControllers() {
     changed() ? h("div", { class: "pair" },
       h("span", { class: "status info" }, "Modification en attente : ", draftSummary()),
       h("button", { disabled: locked, onclick: () => { S.draft = null; render(); } }, "Annuler"),
-      h("button", { class: "primary", disabled: locked || S.busy.has("roles"), onclick: () => applyRoles(false) }, S.busy.has("roles") ? "Application en cours… (déconnexion des appareils, jusqu'à ~5 s par appareil)" : "Appliquer")) : null,
+      h("button", { class: "primary", disabled: locked || S.busy.has("roles"), onclick: () => applyRoles(false) }, S.busy.has("roles") ? "Application en cours… (déconnexion des appareils, ≲ 5 s)" : "Appliquer")) : null,
   ].filter(Boolean));
 }
 
