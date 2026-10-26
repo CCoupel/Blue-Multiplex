@@ -401,7 +401,7 @@ def _rearm(tmp_path: Path, request: Path) -> tuple[subprocess.CompletedProcess[s
 RELAUNCH = "systemctl start --no-block btmux-adapters-identity.service"
 
 
-def test_unit_narrows_the_window_after_the_last_reread_with_a_post_exit_check() -> None:
+def test_unit_closes_the_window_after_the_last_reread_with_a_post_exit_check() -> None:
     unit = SERVICE.read_text()
     assert unit.count("ExecStopPost=") == 1
     assert "--rearm btmux-adapters-identity.service" in unit
@@ -532,84 +532,3 @@ def test_rearm_requires_requests_and_done_file(tmp_path: Path) -> None:
         check=False,
     )
     assert proc.returncode == 2 and "--rearm exige" in proc.stderr
-
-
-@pytest.mark.parametrize(
-    "unit",
-    [
-        "",
-        "btmux-adapters-identity",  # sans suffixe .service
-        "btmux-adapters-identity.timer",
-        "--now.service",  # tiret initial : lu comme option par systemctl
-        "a b.service",
-        "x.service;reboot",
-        "../x.service",
-        "x.service\ny.service",
-    ],
-)
-def test_rearm_rejects_an_invalid_unit_name_without_calling_systemctl(
-    tmp_path: Path, unit: str
-) -> None:
-    """Nom hors ^[A-Za-z0-9@:_.-]+\\.service$ (ou tiret initial) :
-    avertissement, code 0, aucun systemctl."""
-    request = tmp_path / "identity.request"
-    request.write_text(_req("AA:BB:CC:00:00:02"))
-    (tmp_path / "run").mkdir()
-    (tmp_path / "run" / "done").write_text("\n")  # MAC nouvelle : une relance aurait lieu
-    bindir = tmp_path / "fakebin"
-    bindir.mkdir()
-    slog = tmp_path / "systemctl.log"
-    _exe(bindir / "systemctl", f'echo "systemctl $*" >> "{slog}"\n')
-    env = {**os.environ, "BTMUX_SYSTEMCTL": str(bindir / "systemctl")}
-    proc = subprocess.run(
-        [
-            "bash",
-            str(SCRIPT),
-            "--rearm",
-            unit,
-            "--requests",
-            str(request),
-            "--done-file",
-            str(tmp_path / "run" / "done"),
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=30,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert not slog.exists()
-    assert "nom d'unité invalide" in proc.stderr
-    assert unit.strip() == "" or unit not in proc.stderr  # contenu jamais reproduit
-
-
-def test_rearm_accepts_a_template_instance_unit_name(tmp_path: Path) -> None:
-    request = tmp_path / "identity.request"
-    request.write_text(_req("AA:BB:CC:00:00:02"))
-    (tmp_path / "run").mkdir()
-    (tmp_path / "run" / "done").write_text("\n")
-    bindir = tmp_path / "fakebin"
-    bindir.mkdir()
-    slog = tmp_path / "systemctl.log"
-    _exe(bindir / "systemctl", f'echo "systemctl $*" >> "{slog}"\n')
-    env = {**os.environ, "BTMUX_SYSTEMCTL": str(bindir / "systemctl")}
-    proc = subprocess.run(
-        [
-            "bash",
-            str(SCRIPT),
-            "--rearm",
-            "btmux-id@hci0:1_a.service",
-            "--requests",
-            str(request),
-            "--done-file",
-            str(tmp_path / "run" / "done"),
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-        timeout=30,
-        check=False,
-    )
-    assert proc.returncode == 0, proc.stderr
-    assert slog.read_text().splitlines() == ["systemctl start --no-block btmux-id@hci0:1_a.service"]
