@@ -102,3 +102,10 @@
 ## [20261026-d] — S3 alignée sur l'implémentation `1471056` (`dev-backend-20261026-150333` « Impact contrat ») — précise [20261026-c], non BREAKING
 
 - **[CHANGED]** `contracts/config-schema.md` / `contracts/http-endpoints.md` — `PUT /api/controllers/roles` avec `confirm` : déconnexions **en parallèle**, délai borné **≲ 5 s au total** (au lieu de ≤ 5 s × N) ; appareil déjà déconnecté (`NotConnected`) = succès ; contrôles 409 `change_pending` / `pairing_open` **rejoués après les déconnexions** ; 502 `disconnect_failed` aussi quand un appareil **se reconnecte** sur un rôle modifié avant l'écriture (`details` = appareils reconnectés), rien d'écrit.
+
+## [20261026-e] — routage : bascule automatique, choix manuel (#29, LOT-4.1) ; appel HFP (#30, LOT-4.2) — validé au GATE 2 du 2026-10-26 — non BREAKING
+
+- **[NEW]** `contracts/models.md` — modèles `Route` et `RouteSet` ; `State.route` (toujours présent) ; `Device.streaming` et `Device.profile` ; événement SSE `route`.
+- **[NEW]** `contracts/http-endpoints.md` — `GET /api/route`, `POST /api/route` (choix manuel tenu jusqu'au prochain démarrage d'une source ; 400 `invalid_body`, 409 `routing_disabled`, 404 `unknown_source`, no-op 200, 503 `pipewire_unavailable`), `DELETE /api/route` (retour à l'automatique) ; CLI `btmuxctl route [set <MAC|alias> | auto]`.
+- **[NEW]** `contracts/config-schema.md` — clé optionnelle `routing` (`auto`, `pause_previous`, `debounce_ms` = 0, `pause_timeout_s` = 10, `cut_ignored_pause`), règle V13, § « Routage » (démarrage, bascule, pause AVRCP puis coupure A2DP si ignorée, HFP #30). `default_routes` / `priority` : acceptés, sans effet.
+- Rétrocompatibilité : ajouts uniquement (clé `route` nouvelle dans `State`, champs nouveaux dans `Device`, clé de config optionnelle) ; les clients existants (Web UI, `btmuxctl state`) ignorent les clés inconnues. **Changement de comportement** à l'installation de #29 : WirePlumber ne lie plus automatiquement les flux A2DP entrants (fragment `53-btmux-no-autoconnect.conf`) — c'est btmuxd qui route.

@@ -24,6 +24,12 @@ api:                                   # optionnel ; défauts ci-dessous
   token_file: /etc/btmux/token         # défaut /etc/btmux/token — chemin absolu
 mqtt:                                  # optionnel ; défaut { enabled: false }
   enabled: false
+routing:                               # optionnel (#29) ; défauts ci-dessous — voir § Routage
+  auto: true
+  pause_previous: true
+  debounce_ms: 0
+  pause_timeout_s: 10
+  cut_ignored_pause: true
 ```
 
 ## Règles de validation (code retour `--check-config` = 2 si l'une échoue)
@@ -43,6 +49,8 @@ mqtt:                                  # optionnel ; défaut { enabled: false }
 | V12 | `adapters[].mac` **uniques** entre adaptateurs ; `adapters[].name` : 1..248 octets UTF-8, **sans caractère de contrôle ni séparateur** (catégories Unicode `Cc Cf Cs Co Cn Zl Zp` refusées) — ajouté le 2026-10-23 (#14, f554edb) | `config: adapters[1].mac: duplicate adapter mac 'AA:..'` · `config: adapters[0].name: required, 1..248 bytes (UTF-8), no control characters` |
 
 Toutes les erreurs sont collectées et affichées (une par ligne) avant de sortir en code 2 — pas d'arrêt à la première.
+
+| V13 | `routing` (#29) : `auto`, `pause_previous`, `cut_ignored_pause` booléens ; `debounce_ms` entier 0..5000 ; `pause_timeout_s` entier 2..60 ; clés inconnues refusées (V9) | `config: routing.debounce_ms: expected an integer 0..5000` · `config: routing.pause_timeout_s: expected an integer 2..60` · `config: routing.auto: expected a boolean` |
 
 ## Interface CLI
 
@@ -205,3 +213,36 @@ Règles :
 - Un contrôleur configuré mais absent (`present:false`) n'empêche plus le démarrage : le code de sortie 3 (« adaptateur introuvable ») est
   **remplacé** par l'état `role_unassigned` + journal `adapter_missing` (CHANGED — permet de réaffecter via l'API/Web UI).
 - `btmux-adapters.sh` lit la liste effective (état puis config) et ferme (`pairable off`, `discoverable no`) **tous** les autres contrôleurs.
+
+## Routage (#29 LOT-4.1, #30 LOT-4.2 — validé au GATE 2 du 2026-10-26 : D1–D8, interprétations §1 du plan `planner-20261026-175437`)
+
+Une **seule** source vers **tous** les casques connectés, jamais de mélange (sauf `auto:false`). Règle n° 3 du cadrage (dernière source
+qui démarre) + choix manuel ; groupes, poids et mixage hors périmètre (#24, #26, #27). `default_routes` et `devices[].priority` restent
+acceptés (V6/V7) **sans effet** en v0.2.0.
+
+| Clé `routing` | Défaut | Effet |
+|---------------|--------|-------|
+| `auto` | `true` | `false` : btmuxd lie **toutes** les sources connectées à tous les casques (mix, mode de dépannage) ; `Route.mode:"disabled"` ; `POST/DELETE /api/route` → 409 `routing_disabled` |
+| `pause_previous` | `true` | « pause » AVRCP (`MediaPlayer1.Pause`, repli `MediaControl1.Pause`) à la source quittée après chaque bascule |
+| `debounce_ms` | `0` | durée minimale (0..5000 ms) pendant laquelle un flux doit rester actif avant de prendre le casque ; 0 = immédiat (un son de notification peut prendre le casque) |
+| `pause_timeout_s` | `10` | délai (2..60 s) après la pause au-delà duquel un flux encore actif est considéré comme « pause ignorée » |
+| `cut_ignored_pause` | `true` | pause ignorée → `Device1.DisconnectProfile(A2DP)` sur la source quittée, puis `ConnectProfile(A2DP)` par le Pi 3 s plus tard |
+
+Règles :
+- **Démarrage** d'une source = un de ses transports passe à `active` (`MediaTransport1.State`) et le reste `debounce_ms`, ou son lecteur AVRCP
+  passe à `Status: playing`. A2DP en #29 ; **HFP** (rôle HF du Pi sur `sources`) aussi à partir de #30. La fin d'un flux ne déclenche
+  **jamais** de bascule. Les transports des casques ne sont pas des démarrages.
+- **Bascule** : liens de l'ancienne source supprimés puis liens de la nouvelle créés (break-before-make, FL/FR en un seul envoi à la session
+  `pw-cli`), puis action sur la source quittée (pause → éventuelle coupure). L'autoconnexion WirePlumber des flux entrants est désactivée
+  (fragment installé par le paquet) et tout lien tiers vers le sink d'un casque est supprimé.
+- **Choix manuel** (`POST /api/route`) : tenu jusqu'au prochain démarrage d'une source quelconque ; `DELETE /api/route` revient à l'automatique.
+- **Source routée déconnectée** → source encore `streaming` la plus récemment démarrée, sinon `source:null` (`reason:"source_lost"`) ;
+  **casque connecté** → reçoit la source routée (`reason:"headset_connected"`) ; restart PipeWire/WirePlumber → route reconstruite.
+- **Pause ignorée** (`cut_ignored_pause`) : coupure A2DP **uniquement** (jamais d'une source en HFP → `paused.result:"skipped_hfp"`), au plus
+  **une coupure par source et par 5 min** (au-delà : `ignored`, journal) ; un démarrage de la source dans les 5 s suivant la reconnexion du
+  profil n'est pas un démarrage. Effet connu : Windows peut basculer sa sortie sur ses haut-parleurs.
+- **HFP (#30)** : la voix de la source va à tous les casques ; **un seul** casque (le premier connecté) passe en profil HFP et son micro est relié à
+  la source (`Route.mic_headset`), les autres restent en A2DP (voix seule). Fin du flux HFP → casque remis en A2DP, **pas de retour automatique**
+  à la source précédente. Sans relais du contrôle d'appel (sonnerie, décrocher/raccrocher : #10).
+- Journal : `route_changed from= to= profile= mode= reason= detect_ms= link_ms=`, `avrcp_pause result= mac=`, `avrcp_pause_ignored`,
+  `a2dp_profile_cut`, `a2dp_profile_reconnected`, `a2dp_cut_skipped reason=hfp|rate_limit`, `route_relinked`, `autoconnect_guard`, `headset_profile` (#30).

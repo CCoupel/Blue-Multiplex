@@ -4,7 +4,8 @@
 
 ```jsonc
 State      { "version": "0.2.0.0", "adapters": [Adapter], "devices": [Device], "pairing": PairingWindow,   // pairing : toujours un objet
-             "controllers": [Controller], "roles": Roles }                                                 // #23 (validé GATE 2 avenant 2026-10-24)
+             "controllers": [Controller], "roles": Roles,                                                  // #23 (validé GATE 2 avenant 2026-10-24)
+             "route": Route }                                                                               // #29 (GATE 2 du 2026-10-26) — toujours présent
 Controller { "mac": "18:69:45:42:9D:E2", "hci": "hci1", "name": "btmux", "bus": "usb" | "uart" | "unknown",   // #23
              "usb_id": "2357:0604" | null, "role": "sources" | "headsets" | null, "powered": true, "pairable": false,
              "discoverable": false, "connected_devices": 0, "present": true }           // present:false = MAC affectée mais absente ; tout contrôleur présent est affectable (UART compris)
@@ -20,13 +21,26 @@ Device     { "mac": "..", "adapter": "sources" | "headsets", "alias": "pc-pro" |
              "name": "MSI-PC", "kind": "source" | "headset" | "unknown",                    // config si connu, sinon déduit de la classe/UUIDs
              "paired": true, "trusted": true, "connected": false, "blocked": false,
              "uuids": ["0000110b-..."], "profiles": ["a2dp_sink","hfp_hf"], "last_seen": "2026-10-23T15:50:00Z" | null,
-             "in_config": true }
+             "in_config": true,
+             "streaming": false,                       // #29 : un transport de l'appareil est `active` (MediaTransport1.State), sources et casques
+             "profile": "a2dp" | "hfp" | null }        // #29 : profil du transport courant ; null = aucun transport
 Discovered { "mac": "..", "adapter": "headsets", "name": "Bose QC45", "rssi": -60, "class": "0x240404" }
 PairingWindow { "open": true,  "adapter": "sources" | "headsets", "opened_at": "ISO-8601", "expires_at": "ISO-8601", "remaining_s": 42 }
            |  { "open": false, "adapter": "sources" | "headsets" | null, "closed_at": "ISO-8601" | null,
                 "reason": "expired" | "closed" | "replaced" | "startup" | null }                       // fermée : objet explicite, JAMAIS null
 DeviceRemoved { "mac": "..", "adapter": "sources" | "headsets" }
-Event (SSE) event: adapter|device|pairing|discovered|device.removed|state|controllers|roles   data: <modèle complet>   id: <compteur>
+Route      { "mode": "auto" | "manual" | "disabled",              // #29 — disabled = routing.auto:false (btmuxd lie toutes les sources : mix)
+             "source": "MAC" | null, "source_alias": "pc-pro" | null,   // source liée aux casques ; null = silence (et toujours null si disabled)
+             "profile": "a2dp" | "hfp" | null,                    // profil du flux routé ; "hfp" à partir de #30
+             "headsets": ["MAC"],                                 // casques connectés recevant la source (tous)
+             "mic_headset": "MAC" | null,                         // #30 : casque passé en HFP dont le micro va à la source ; null sinon
+             "reason": "started" | "manual" | "auto_resumed" | "source_lost" | "headset_connected" | "none" | "disabled",
+             "since": "ISO-8601" | null,
+             "paused": { "mac": "MAC", "result": "sent" | "unsupported" | "failed" | "ignored" | "profile_cut" | "skipped_hfp" } | null }
+                                                                  // dernière action envoyée à la source quittée (pause AVRCP, puis coupure A2DP si ignorée)
+RouteSet   { "source": "MAC" | "alias" }                          // #29 — corps de POST /api/route (strict : autre clé ou source absente → 400 invalid_body)
+Event (SSE) event: adapter|device|pairing|discovered|device.removed|state|controllers|roles|route   data: <modèle complet>   id: <compteur>
+  - `route` (#29) : Route complet à chaque changement de route, de `mode`, de `headsets`/`mic_headset` ou de `paused`
   - `controllers` (#23) : Controller[] complet à chaque apparition/disparition/changement d'un contrôleur (hotplug USB, powered…)
   - `roles` (#23) : Roles `pending:true, restart_expected:true` juste après l'écriture de l'état (dernier événement avant la coupure) ; après le
     redémarrage, le premier événement de toute connexion est un `state` complet (`roles.pending:false`, `source:"state"`). Le compteur `id`
